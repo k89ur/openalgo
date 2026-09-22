@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta, datetime
 from typing import Literal
 
 import requests
@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="PIPSGOX API", version="0.3.0")
+app = FastAPI(title="PIPSGOX API", version="0.3.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,7 +53,7 @@ def require_upstox() -> None:
     if not UPSTOX_TOKEN:
         raise HTTPException(
             status_code=503,
-            detail="UPSTOX_ACCESS_TOKEN is not configured. Add it as a Codespaces secret/environment variable.",
+            detail="UPSTOX_ACCESS_TOKEN is not configured.",
         )
 
 
@@ -69,19 +69,17 @@ def upstox_get(path: str, params: dict[str, str]) -> dict:
         timeout=20,
     )
     if not response.ok:
-        detail = response.text[:500]
         raise HTTPException(
             status_code=502,
-            detail=f"Upstox API error ({response.status_code}): {detail}",
+            detail=f"Upstox API error ({response.status_code}): {response.text[:500]}",
         )
     return response.json()
 
 
 def resolve_instrument(symbol: str) -> str:
     symbol = symbol.upper().strip()
-    cached = SYMBOL_CACHE.get(symbol)
-    if cached:
-        return cached
+    if symbol in SYMBOL_CACHE:
+        return SYMBOL_CACHE[symbol]
 
     payload = upstox_get(
         "/instruments/search",
@@ -95,31 +93,24 @@ def resolve_instrument(symbol: str) -> str:
     )
 
     matches = payload.get("data") or []
-    exact = [
-        item for item in matches
-        if item.get("segment") == "NSE_EQ"
-        and item.get("instrument_type") == "EQ"
-        and str(item.get("trading_symbol", "")).upper() == symbol
-    ]
-    chosen = exact[0] if exact else next(
+    chosen = next(
         (
             item for item in matches
             if item.get("segment") == "NSE_EQ"
             and item.get("instrument_type") == "EQ"
+            and str(item.get("trading_symbol", "")).upper() == symbol
         ),
         None,
     )
-
     if not chosen:
         raise HTTPException(status_code=404, detail=f"NSE equity symbol not found: {symbol}")
 
-    key = chosen["instrument_key"]
-    SYMBOL_CACHE[symbol] = key
-    return key
+    SYMBOL_CACHE[symbol] = chosen["instrument_key"]
+    return chosen["instrument_key"]
 
 
 def timeframe_request(timeframe: Timeframe) -> tuple[str, str]:
-    mapping = {
+    return {
         "1m": ("minutes", "1"),
         "3m": ("minutes", "3"),
         "5m": ("minutes", "5"),
@@ -129,13 +120,12 @@ def timeframe_request(timeframe: Timeframe) -> tuple[str, str]:
         "D": ("days", "1"),
         "W": ("weeks", "1"),
         "M": ("months", "1"),
-    }
-    return mapping[timeframe]
+    }[timeframe]
 
 
 def default_from_date(timeframe: Timeframe, limit: int) -> date:
     today = date.today()
-    if timeframe in {"D"}:
+    if timeframe == "D":
         return today - timedelta(days=max(limit * 2, 365))
     if timeframe == "W":
         return today - timedelta(days=max(limit * 10, 3650))
@@ -147,19 +137,15 @@ def default_from_date(timeframe: Timeframe, limit: int) -> date:
 
 
 def parse_candles(payload: dict, limit: int) -> list[Candle]:
-    raw = payload.get("data", {}).get("candles") or []
     candles: list[Candle] = []
-
-    for row in raw:
+    for row in payload.get("data", {}).get("candles") or []:
         if len(row) < 6:
             continue
         timestamp = row[0]
         if isinstance(timestamp, str):
-            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            epoch = int(dt.timestamp())
+            epoch = int(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp())
         else:
             epoch = int(timestamp)
-
         candles.append(
             Candle(
                 time=epoch,
@@ -170,9 +156,47 @@ def parse_candles(payload: dict, limit: int) -> list[Candle]:
                 volume=int(row[5] or 0),
             )
         )
-
     candles.sort(key=lambda item: item.time)
     return candles[-limit:]
+
+
+def get_history(symbol: str, timeframe: Timeframe, limit: int) -> list[Candle]:
+    unit, interval = timeframe_request(timeframe)
+    instrument_key = resolve_instrument(symbol)
+    to_date = date.today()
+    from_date = default_from_date(timeframe, limit)
+
+    if unit == "minutes":
+        from_date = max(from_date, to_date - timedelta(days=30))
+    elif unit == "hours":
+        from_date = max(from_date, to_date - timedelta(days=90))
+    elif unit == "days":
+        from_date = max(from_date, to_date - timedelta(days=3650))
+
+    encoded_key = requests.utils.quote(instrument_key, safe="")
+    payload = upstox_get(
+        f"/historical-candle/{encoded_key}/{unit}/{interval}/{to_date.isoformat()}/{from_date.isoformat()}",
+        {},
+    )
+    candles = parse_candles(payload, limit)
+    if not candles:
+        raise HTTPException(status_code=404, detail=f"No historical data returned for {symbol.upper()}")
+    return candles
+
+
+def quote_from_ltp(symbol: str, item: dict) -> Quote:
+    last = float(item.get("last_price", 0))
+    previous_close = float(item.get("cp", 0))
+    change = last - previous_close
+    change_percent = (change / previous_close * 100) if previous_close else 0.0
+    return Quote(
+        symbol=symbol,
+        exchange="NSE",
+        last=last,
+        change=change,
+        change_percent=change_percent,
+        source="Upstox V3",
+    )
 
 
 @app.get("/health")
@@ -191,61 +215,53 @@ def history(
     timeframe: Timeframe = "D",
     limit: int = Query(default=260, ge=50, le=2000),
 ) -> list[Candle]:
-    unit, interval = timeframe_request(timeframe)
-    instrument_key = resolve_instrument(symbol)
-    from_date = default_from_date(timeframe, limit)
-    to_date = date.today()
-
-    # Upstox V3 has different maximum retrieval windows by unit.
-    if unit == "minutes":
-        from_date = max(from_date, to_date - timedelta(days=30))
-    elif unit == "hours":
-        from_date = max(from_date, to_date - timedelta(days=90))
-    elif unit == "days":
-        from_date = max(from_date, to_date - timedelta(days=3650))
-
-    payload = upstox_get(
-        f"/historical-candle/{requests.utils.quote(instrument_key, safe='')}/{unit}/{interval}/{to_date.isoformat()}/{from_date.isoformat()}",
-        {},
-    )
-    candles = parse_candles(payload, limit)
-    if not candles:
-        raise HTTPException(status_code=404, detail=f"No historical data returned for {symbol.upper()}")
-    return candles
+    return get_history(symbol.upper(), timeframe, limit)
 
 
 @app.get("/api/quote", response_model=Quote)
-def quote(
-    symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
-) -> Quote:
+def quote(symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40)) -> Quote:
     symbol = symbol.upper().strip()
     instrument_key = resolve_instrument(symbol)
-
-    ltp_payload = upstox_get(
-        "/market-quote/ltp",
-        {"instrument_key": instrument_key},
-    )
-    data = ltp_payload.get("data") or {}
+    payload = upstox_get("/market-quote/ltp", {"instrument_key": instrument_key})
+    data = payload.get("data") or {}
     item = next(iter(data.values()), None)
     if not item:
         raise HTTPException(status_code=404, detail=f"No quote returned for {symbol}")
 
-    last = float(item.get("last_price", 0))
-    previous_close = float(item.get("cp", 0))
-    change = last - previous_close
-    change_percent = (change / previous_close * 100) if previous_close else 0.0
-
-    daily = history(symbol=symbol, timeframe="D", limit=2)
+    result = quote_from_ltp(symbol, item)
+    daily = get_history(symbol, "D", 2)
     current = daily[-1]
-
-    return Quote(
-        symbol=symbol,
-        exchange="NSE",
-        last=last,
-        change=change,
-        change_percent=change_percent,
-        open=current.open,
-        high=current.high,
-        low=current.low,
-        volume=current.volume,
+    return result.model_copy(
+        update={
+            "open": current.open,
+            "high": current.high,
+            "low": current.low,
+            "volume": current.volume,
+        }
     )
+
+
+@app.get("/api/quotes", response_model=list[Quote])
+def quotes(
+    symbols: str = Query(..., min_length=1, max_length=4000),
+) -> list[Quote]:
+    requested = [item.strip().upper() for item in symbols.split(",") if item.strip()]
+    if not requested:
+        return []
+
+    keys = [(symbol, resolve_instrument(symbol)) for symbol in requested]
+    payload = upstox_get(
+        "/market-quote/ltp",
+        {"instrument_key": ",".join(key for _, key in keys)},
+    )
+    data = payload.get("data") or {}
+
+    results: list[Quote] = []
+    for symbol, key in keys:
+        item = next(
+            (value for value in data.values() if value.get("instrument_token") == key),
+            None,
+        )
+        if item:
+            results.append(quote_from_ltp(symbol, item))
+    return results
