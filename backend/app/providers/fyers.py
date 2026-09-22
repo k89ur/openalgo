@@ -101,7 +101,11 @@ class FyersMarketDataProvider:
         today = date.today()
 
         if resolution in {"D", "1W", "1M"}:
-            lookback_days = max(limit * (35 if resolution == "1M" else 10), 366)
+            # Estimate calendar days needed for the requested number of bars.
+            # FYERS allows up to 366 days per daily/weekly/monthly request,
+            # so avoid making dozens of unnecessary requests for old data.
+            days_per_bar = {"D": 2, "1W": 8, "1M": 32}[resolution]
+            lookback_days = max(limit * days_per_bar, 366)
             chunk_days = 366
         else:
             bars_per_day = {
