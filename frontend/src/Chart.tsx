@@ -10,7 +10,7 @@ function createSampleData(): Candle[] {
   let close = 1438;
   const start = new Date("2026-01-05T00:00:00Z");
 
-  for (let i = 0; i < 180; i += 1) {
+  for (let i = 0; i < 260; i += 1) {
     const date = new Date(start);
     date.setUTCDate(start.getUTCDate() + i);
     const drift = Math.sin(i / 12) * 3.2 + (i % 31 === 0 ? 8 : 0);
@@ -73,7 +73,7 @@ export function Chart({ chartType }: Props) {
     ma50.setData(movingAverage(sampleData, 50));
 
     const ma200 = chart.addSeries(LineSeries, { color: "#c084fc", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
-    ma200.setData(movingAverage(sampleData, 100));
+    ma200.setData(movingAverage(sampleData, 200));
 
     const volume = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" }, priceScaleId: "volume", color: "rgba(56, 189, 248, 0.35)", lastValueVisible: true,
