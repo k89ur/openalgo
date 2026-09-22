@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type PointerEvent } from "react";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType } from "./Chart";
 import "./styles.css";
@@ -63,7 +63,7 @@ function App() {
     if (match) selectSymbol(match.symbol);
   };
 
-  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+  const startResize = (event: PointerEvent<HTMLDivElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     const startX = event.clientX;
     const startWidth = watchWidth;
