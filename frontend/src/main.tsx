@@ -227,11 +227,6 @@ function App() {
                   {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} ({changePercent.toFixed(2)}%)
                 </span>
               </div>
-              <div className="plotted-indicators">
-                <span className="ma20">MA 20 <b>1,701.42</b></span>
-                <span className="ma50">MA 50 <b>1,658.27</b></span>
-                <span className="ma200">MA 200 <b>1,584.61</b></span>
-              </div>
             </div>
           </div>
 
