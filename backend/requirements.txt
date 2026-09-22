@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 pydantic
 requests
+python-dotenv
+fyers-apiv3
