@@ -82,17 +82,17 @@ function App() {
   return (
     <main className={`app ${dark ? "theme-dark" : "theme-light"} `}>
       <header className="topbar">
-        <div className="brand"><span className="brand-mark">▮▮</span><span>PIPSGOX</span></div>
+        <div className="brand"><span>PIPSGOX</span></div>
 
         <div className="top-search">
-          <span className="search-icon">⌕</span>
+          
           <input value={search} placeholder={selected.symbol} aria-label="Search symbol"
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") submitSearch(); }} />
-          <span className="search-chevron">⌄</span>
+          
         </div>
 
-        <button className="square-add" aria-label="Add symbol">＋</button>
+        <button className="square-add" aria-label="Add symbol">ADD</button>
 
         <div className="timeframe-row">
           {["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"].map((item) => (
@@ -104,35 +104,29 @@ function App() {
 
         <div className="toolbar-group chart-types">
           {([
-            ["candles", "▥"],
-            ["bars", "▤"],
-            ["line", "⌁"],
-          ] as Array<[ChartType, string]>).map(([type, icon]) => (
+            ["candles", "CANDLE"],
+            ["bars", "BAR"],
+            ["line", "LINE"],
+          ] as Array<[ChartType, string]>).map(([type, label]) => (
             <button key={type} className={chartType === type ? "active" : ""} onClick={() => setChartType(type)}>
-              {icon}
+              {label}
             </button>
           ))}
         </div>
 
-        <button className="top-action">⌁ Indicators</button>
-        <button className="top-action">⌘ Builder</button>
-        <button className="top-action compact">◷ Alert</button>
-        <button className="top-action compact">‹‹ Replay</button>
+        <button className="top-action">INDICATORS</button>
+        <button className="top-action">BUILDER</button>
+        <button className="top-action compact">ALERT</button>
+        <button className="top-action compact">REPLAY</button>
         <div className="top-spacer" />
         <button className="icon-button" aria-label="Toggle theme" onClick={() => setDark((value) => !value)}>
-          {dark ? "☀" : "☾"}
+          {dark ? "LIGHT" : "DARK"}
         </button>
-        <button className="icon-button" aria-label="Fullscreen">⛶</button>
-        <button className="icon-button" aria-label="Settings">⚙</button>
+        <button className="icon-button" aria-label="Fullscreen">FULL</button>
+        <button className="icon-button" aria-label="Settings">SET</button>
       </header>
 
       <section className="workspace">
-        <div className="drawing-toolbar" aria-label="Chart tools">
-          {["＋", "╱", "☷", "⌁", "⌘", "⌒", "T", "◉", "◇", "⌕", "⌂", "♧", "▣", "◉", "⌫"].map((tool, index) => (
-            <button key={index} title="Chart tool">{tool}</button>
-          ))}
-        </div>
-
         <section className="chart-workspace">
           <div className="chart-container">
             <Chart chartType={chartType} dark={dark} />
@@ -171,12 +165,12 @@ function App() {
           <aside className="watchlist" style={{ width: watchWidth }}>
             <div className="watch-resize-handle" onPointerDown={startResize} />
             <div className="watchlist-heading">
-              <button className="watch-collapse" onClick={() => setWatchOpen(false)} aria-label="Hide watchlist">›</button>
+              <button className="watch-collapse" onClick={() => setWatchOpen(false)} aria-label="Hide watchlist">HIDE</button>
               <strong>Watchlist</strong>
-              <span>⌄</span>
+              <span>WATCH</span>
               <div className="watch-heading-spacer" />
-              <button aria-label="Add symbol">＋</button>
-              <button aria-label="More">⋮</button>
+              <button aria-label="Add symbol">ADD</button>
+              <button aria-label="More">MORE</button>
             </div>
 
             <input className="watch-search" placeholder="Search symbols..." value={watchSearch}
@@ -197,12 +191,12 @@ function App() {
               ))}
             </div>
 
-            <div className="watchlist-footer"><span>＋ Add Symbol</span><b>{watchlist.length} / 250</b></div>
+            <div className="watchlist-footer"><span>ADD SYMBOL</span><b>{watchlist.length} / 250</b></div>
           </aside>
         )}
 
         {!watchOpen && (
-          <button className="watch-open" onClick={() => setWatchOpen(true)} aria-label="Show watchlist">‹</button>
+          <button className="watch-open" onClick={() => setWatchOpen(true)} aria-label="Show watchlist">SHOW</button>
         )}
       </section>
     </main>
