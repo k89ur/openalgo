@@ -129,7 +129,7 @@ function App() {
             </div>
 
             <div className="chart-controls">
-              {["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"].map((item) => (
+              {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
                 <button key={item} className={timeframe === item ? "active" : ""} onClick={() => setTimeframe(item)}>
                   {item}
                 </button>
