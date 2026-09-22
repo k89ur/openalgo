@@ -1,15 +1,19 @@
 {
-  "name": "OpenAlgo Codespace",
+  "name": "ChartLab",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
-  "forwardPorts": [5000, 8765],
-  "portsAttributes": {
-    "5000": {
-      "label": "OpenAlgo Web App",
-      "onAutoForward": "openBrowser"
-    },
-    "8765": {
-      "label": "OpenAlgo WebSocket"
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
     }
   },
-  "postCreateCommand": "git clone --depth=1 https://github.com/marketcalls/openalgo.git /workspaces/openalgo-runtime && bash /workspaces/openalgo/.devcontainer/setup.sh"
+  "forwardPorts": [5173, 8000],
+  "portsAttributes": {
+    "5173": {
+      "label": "ChartLab Web",
+      "onAutoForward": "openBrowser"
+    },
+    "8000": {
+      "label": "ChartLab API"
+    }
+  }
 }
