@@ -30,7 +30,7 @@ const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
 
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
-  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
+  const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [symbol, setSymbol] = useState("BHARTIARTL");
   const [search, setSearch] = useState("");
   const [watchSearch, setWatchSearch] = useState("");
@@ -38,7 +38,13 @@ function App() {
   const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | null>(null);
-  const [quote, setQuote] = useState<{ last: number; change: number; change_percent: number } | null>(null);
+  const [quote, setQuote] = useState<{
+    last: number; change: number; change_percent: number;
+    open?: number; high?: number; low?: number; volume?: number;
+  } | null>(null);
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, {
+    last: number; change: number; change_percent: number;
+  }>>({});
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState(false);
   const [pipscript, setPipscript] = useState(
@@ -52,13 +58,35 @@ function App() {
     fetch("/api/quote?symbol=" + encodeURIComponent(symbol))
       .then((response) => {
         if (!response.ok) throw new Error("quote request failed");
-        return response.json() as Promise<{ last: number; change: number; change_percent: number }>;
+        return response.json() as Promise<{
+          last: number; change: number; change_percent: number;
+          open?: number; high?: number; low?: number; volume?: number;
+        }>;
       })
       .then((data) => { if (!cancelled) setQuote(data); })
       .catch(() => { if (!cancelled) { setQuote(null); setQuoteError(true); } })
       .finally(() => { if (!cancelled) setQuoteLoading(false); });
     return () => { cancelled = true; };
   }, [symbol]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const symbols = watchlist.map((item) => item.symbol).join(",");
+    fetch("/api/quotes?symbols=" + encodeURIComponent(symbols))
+      .then((response) => {
+        if (!response.ok) throw new Error("quotes request failed");
+        return response.json() as Promise<Array<{ symbol: string; last: number; change: number; change_percent: number }>>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const next: Record<string, { last: number; change: number; change_percent: number }> = {};
+        data.forEach((item) => { next[item.symbol] = item; });
+        setLiveQuotes(next);
+      })
+      .catch(() => { if (!cancelled) setLiveQuotes({}); });
+    return () => { cancelled = true; };
+  }, []);
+
   const selected = useMemo(
     () => watchlist.find((item) => item.symbol === symbol) ?? watchlist[0],
     [symbol],
@@ -68,12 +96,14 @@ function App() {
     item.symbol.toLowerCase().includes(watchSearch.trim().toLowerCase()),
   );
 
-  const price = quote?.last ?? Number(selected.price.replace(/,/g, ""));
-  const changePercent = quote?.change_percent ?? Number(selected.change.replace("%", ""));
-  const changeAmount = price * (changePercent / 100);
-  const open = price - changeAmount * 0.35;
-  const high = Math.max(price, open) + Math.abs(changeAmount) * 0.22 + 2.15;
-  const low = Math.min(price, open) - Math.abs(changeAmount) * 0.55 - 2.4;
+  const liveSelected = liveQuotes[selected.symbol];
+  const price = quote?.last ?? liveSelected?.last ?? Number(selected.price.replace(/,/g, ""));
+  const changePercent = quote?.change_percent ?? liveSelected?.change_percent ?? Number(selected.change.replace("%", ""));
+  const changeAmount = quote?.change ?? liveSelected?.change ?? price * (changePercent / 100);
+  const open = quote?.open;
+  const high = quote?.high;
+  const low = quote?.low;
+  const volume = quote?.volume;
 
   const selectSymbol = (next: string) => {
     setSymbol(next);
@@ -172,28 +202,28 @@ function App() {
 
             <div className="quote-panel">
               <div className="quote-title">{selected.symbol}</div>
-              <div className="quote-price">{selected.price}</div>
+              <div className="quote-price">{quote ? quote.last.toFixed(2) : liveSelected ? liveSelected.last.toFixed(2) : "—"}</div>
               <div className={`quote-change ${changePercent < 0 ? "negative" : "positive"}`}>
                 {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} {quote ? `(${quote.change_percent.toFixed(2)}%)` : selected.change}
               </div>
               <dl>
-                <div><dt>Bid</dt><dd>{(price - 0.25).toFixed(2)}</dd></div>
-                <div><dt>Ask</dt><dd>{(price + 0.25).toFixed(2)}</dd></div>
-                <div><dt>Open</dt><dd>{open.toFixed(2)}</dd></div>
-                <div><dt>High</dt><dd>{high.toFixed(2)}</dd></div>
-                <div><dt>Low</dt><dd>{low.toFixed(2)}</dd></div>
-                <div><dt>Volume</dt><dd>2.34M</dd></div>
+                <div><dt>Bid</dt><dd>—</dd></div>
+                <div><dt>Ask</dt><dd>—</dd></div>
+                <div><dt>Open</dt><dd>{open != null ? open.toFixed(2) : "—"}</dd></div>
+                <div><dt>High</dt><dd>{high != null ? high.toFixed(2) : "—"}</dd></div>
+                <div><dt>Low</dt><dd>{low != null ? low.toFixed(2) : "—"}</dd></div>
+                <div><dt>Volume</dt><dd>{volume != null ? volume.toLocaleString() : "—"}</dd></div>
               </dl>
             </div>
 
             <div className="chart-overlay">
               <div className="ohlc-line">
-                <span>O <b>{open.toFixed(2)}</b></span>
-                <span>H <b>{high.toFixed(2)}</b></span>
-                <span>L <b>{low.toFixed(2)}</b></span>
-                <span>C <b>{price.toFixed(2)}</b></span>
+                <span>O <b>{open != null ? open.toFixed(2) : "—"}</b></span>
+                <span>H <b>{high != null ? high.toFixed(2) : "—"}</b></span>
+                <span>L <b>{low != null ? low.toFixed(2) : "—"}</b></span>
+                <span>C <b>{quote ? quote.last.toFixed(2) : liveSelected ? liveSelected.last.toFixed(2) : "—"}</b></span>
                 <span className={changePercent < 0 ? "negative" : "positive"}>
-                  {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} ({selected.change})
+                  {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} ({changePercent.toFixed(2)}%)
                 </span>
               </div>
               <div className="plotted-indicators">
@@ -235,8 +265,10 @@ function App() {
                 <button key={item.symbol} className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}
                   onClick={() => selectSymbol(item.symbol)}>
                   <span className="watch-symbol">{item.symbol}</span>
-                  <span className="watch-price">{item.price}</span>
-                  <span className={`watch-change ${item.change.startsWith("-") ? "negative" : "positive"}`}>{item.change}</span>
+                  <span className="watch-price">{liveQuotes[item.symbol] ? liveQuotes[item.symbol].last.toFixed(2) : "—"}</span>
+                  <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
+                    {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
+                  </span>
                 </button>
               ))}
             </div>
