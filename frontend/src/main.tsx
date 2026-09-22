@@ -54,20 +54,46 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    setQuoteLoading(true);
-    setQuoteError(false);
-    fetch("/api/quote?symbol=" + encodeURIComponent(symbol))
-      .then((response) => {
+    let firstLoad = true;
+
+    const loadQuote = async () => {
+      if (firstLoad) {
+        setQuoteLoading(true);
+        setQuoteError(false);
+      }
+
+      try {
+        const response = await fetch(
+          "/api/quote?symbol=" + encodeURIComponent(symbol),
+          { cache: "no-store" },
+        );
         if (!response.ok) throw new Error("quote request failed");
-        return response.json() as Promise<{
+
+        const data = await response.json() as {
           last: number; change: number; change_percent: number;
           open?: number; high?: number; low?: number; volume?: number;
-        }>;
-      })
-      .then((data) => { if (!cancelled) setQuote(data); })
-      .catch(() => { if (!cancelled) { setQuote(null); setQuoteError(true); } })
-      .finally(() => { if (!cancelled) setQuoteLoading(false); });
-    return () => { cancelled = true; };
+          bid?: number; ask?: number;
+        };
+
+        if (!cancelled) {
+          setQuote(data);
+          setQuoteError(false);
+        }
+      } catch {
+        if (!cancelled) setQuoteError(true);
+      } finally {
+        if (!cancelled && firstLoad) setQuoteLoading(false);
+        firstLoad = false;
+      }
+    };
+
+    void loadQuote();
+    const timer = window.setInterval(() => void loadQuote(), 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [symbol]);
 
   useEffect(() => {
@@ -86,6 +112,38 @@ function App() {
       })
       .catch(() => { if (!cancelled) setLiveQuotes({}); });
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshWatchlist = async () => {
+      try {
+        const symbols = watchlist.map((item) => item.symbol).join(",");
+        const response = await fetch(
+          "/api/quotes?symbols=" + encodeURIComponent(symbols),
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("watchlist quotes request failed");
+
+        const data = await response.json() as Array<{
+          symbol: string; last: number; change: number; change_percent: number;
+        }>;
+
+        if (cancelled) return;
+        const next: Record<string, { last: number; change: number; change_percent: number }> = {};
+        data.forEach((item) => { next[item.symbol] = item; });
+        setLiveQuotes(next);
+      } catch {
+        // Keep the last successful watchlist snapshot visible.
+      }
+    };
+
+    const timer = window.setInterval(() => void refreshWatchlist(), 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   const selected = useMemo(
