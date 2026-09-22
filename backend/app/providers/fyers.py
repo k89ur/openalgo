@@ -28,6 +28,9 @@ class FyersMarketDataProvider:
     def configured(self) -> bool:
         return bool(self.client_id and self.access_token)
 
+    def set_access_token(self, access_token: str) -> None:
+        self.access_token = access_token.strip()
+
     def _headers(self) -> dict[str, str]:
         if not self.configured:
             raise RuntimeError("FYERS_CLIENT_ID and FYERS_ACCESS_TOKEN are not configured.")
