@@ -1,6 +1,6 @@
 import { useMemo, useState, type PointerEvent } from "react";
 import ReactDOM from "react-dom/client";
-import { Chart, type ChartType } from "./Chart";
+import { Chart, type ChartType, type Timeframe } from "./Chart";
 import "./styles.css";
 
 type WatchItem = { symbol: string; price: string; change: string };
@@ -30,7 +30,7 @@ const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
 
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
-  const [timeframe, setTimeframe] = useState("5m");
+  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
   const [symbol, setSymbol] = useState("BHARTIARTL");
   const [search, setSearch] = useState("");
   const [watchSearch, setWatchSearch] = useState("");
@@ -151,7 +151,7 @@ function App() {
           </div>
 
           <div className="chart-container">
-            <Chart chartType={chartType} dark={dark} />
+            <Chart chartType={chartType} dark={dark} symbol={symbol} timeframe={timeframe} />
 
             <div className="quote-panel">
               <div className="quote-title">{selected.symbol}</div>
