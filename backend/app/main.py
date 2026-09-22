@@ -7,12 +7,15 @@ from typing import Literal
 from urllib.parse import urlencode
 
 import requests
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.providers.fyers import FyersMarketDataProvider
+
+load_dotenv()
 
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
 
