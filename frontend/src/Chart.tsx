@@ -114,7 +114,6 @@ export function Chart({ chartType }: Props) {
       const series = chart.addSeries(BarSeries, {
         upColor: "#22c55e",
         downColor: "#ef4444",
-        thinBars: false,
       });
       series.setData(
         sampleData.map(({ time, open, high, low, close }) => ({
@@ -157,7 +156,7 @@ export function Chart({ chartType }: Props) {
       })),
     );
 
-    chart.priceScale("volume").applyOptions({
+    chart.priceScale("volume", 1).applyOptions({
       scaleMargins: { top: 0.15, bottom: 0 },
       borderVisible: false,
     });
