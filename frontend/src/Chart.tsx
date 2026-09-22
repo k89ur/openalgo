@@ -68,7 +68,7 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
     const load = async () => {
       try {
         const response = await fetch(
-          `/api/history?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${timeframe === "D" ? 1000 : timeframe === "W" ? 500 : timeframe === "M" ? 300 : 500}`,
+          `/api/history?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${timeframe === "D" ? 500 : timeframe === "W" ? 250 : timeframe === "M" ? 120 : 500}`,
         );
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
