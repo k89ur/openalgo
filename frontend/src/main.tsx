@@ -76,7 +76,7 @@ function App() {
             ["candles", "▥", "Candles"],
             ["bars", "▤", "Bars"],
             ["line", "⌁", "Line"],
-          ]).map(([type, icon, label]) => (
+          ] as Array<[ChartType, string, string]>).map(([type, icon, label]) => (
             <button key={type}
               className={`toolbar-button chart-type-button ${chartType === type ? "active" : ""}`}
               onClick={() => setChartType(type)}><span>{icon}</span>{label}</button>
