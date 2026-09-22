@@ -1,4 +1,4 @@
-import { useMemo, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useState, type PointerEvent } from "react";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe } from "./Chart";
 import "./styles.css";
@@ -38,10 +38,27 @@ function App() {
   const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | null>(null);
+  const [quote, setQuote] = useState<{ last: number; change: number; change_percent: number } | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState(false);
   const [pipscript, setPipscript] = useState(
     "def calculate(data):\n    close = data.close\n    ma20 = close.sma(20)\n    return {\n        \"MA20\": ma20\n    }",
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    setQuoteLoading(true);
+    setQuoteError(false);
+    fetch("/api/quote?symbol=" + encodeURIComponent(symbol))
+      .then((response) => {
+        if (!response.ok) throw new Error("quote request failed");
+        return response.json() as Promise<{ last: number; change: number; change_percent: number }>;
+      })
+      .then((data) => { if (!cancelled) setQuote(data); })
+      .catch(() => { if (!cancelled) { setQuote(null); setQuoteError(true); } })
+      .finally(() => { if (!cancelled) setQuoteLoading(false); });
+    return () => { cancelled = true; };
+  }, [symbol]);
   const selected = useMemo(
     () => watchlist.find((item) => item.symbol === symbol) ?? watchlist[0],
     [symbol],
@@ -51,8 +68,8 @@ function App() {
     item.symbol.toLowerCase().includes(watchSearch.trim().toLowerCase()),
   );
 
-  const price = Number(selected.price.replace(/,/g, ""));
-  const changePercent = Number(selected.change.replace("%", ""));
+  const price = quote?.last ?? Number(selected.price.replace(/,/g, ""));
+  const changePercent = quote?.change_percent ?? Number(selected.change.replace("%", ""));
   const changeAmount = price * (changePercent / 100);
   const open = price - changeAmount * 0.35;
   const high = Math.max(price, open) + Math.abs(changeAmount) * 0.22 + 2.15;
@@ -124,8 +141,8 @@ function App() {
             <div className="instrument-main">
               <strong>{selected.symbol === "BHARTIARTL" ? "BHARTI AIRTEL LTD" : selected.symbol}</strong>
               <span>NSE</span>
-              <b className={changePercent < 0 ? "negative" : "positive"}>{selected.price}</b>
-              <span className={changePercent < 0 ? "negative" : "positive"}>{selected.change}</span>
+              <b className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : quote ? quote.last.toFixed(2) : selected.price}</b>
+              <span className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : quote ? `${quote.change >= 0 ? "+" : ""}${quote.change.toFixed(2)} (${quote.change_percent.toFixed(2)}%)` : selected.change}</span>
             </div>
 
             <div className="chart-controls">
@@ -157,7 +174,7 @@ function App() {
               <div className="quote-title">{selected.symbol}</div>
               <div className="quote-price">{selected.price}</div>
               <div className={`quote-change ${changePercent < 0 ? "negative" : "positive"}`}>
-                {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} {selected.change}
+                {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} {quote ? `(${quote.change_percent.toFixed(2)}%)` : selected.change}
               </div>
               <dl>
                 <div><dt>Bid</dt><dd>{(price - 0.25).toFixed(2)}</dd></div>
