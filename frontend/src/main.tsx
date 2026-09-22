@@ -97,9 +97,10 @@ function App() {
   );
 
   const liveSelected = liveQuotes[selected.symbol];
-  const price = quote?.last ?? liveSelected?.last ?? Number(selected.price.replace(/,/g, ""));
-  const changePercent = quote?.change_percent ?? liveSelected?.change_percent ?? Number(selected.change.replace("%", ""));
-  const changeAmount = quote?.change ?? liveSelected?.change ?? price * (changePercent / 100);
+  const hasLiveData = Boolean(quote || liveSelected);
+  const price = quote?.last ?? liveSelected?.last ?? 0;
+  const changePercent = quote?.change_percent ?? liveSelected?.change_percent ?? 0;
+  const changeAmount = quote?.change ?? liveSelected?.change ?? 0;
   const open = quote?.open;
   const high = quote?.high;
   const low = quote?.low;
@@ -141,7 +142,7 @@ function App() {
           <button>Help</button>
         </div>
         <div className="menu-center">PIPSGOX WEB TERMINAL</div>
-        <div className="menu-right"><span className="status-dot" /> Data: Sample</div>
+        <div className="menu-right"><span className="status-dot" /> Data: Upstox V3</div>
       </div>
 
       <header className="topbar">
@@ -171,8 +172,8 @@ function App() {
             <div className="instrument-main">
               <strong>{selected.symbol === "BHARTIARTL" ? "BHARTI AIRTEL LTD" : selected.symbol}</strong>
               <span>NSE</span>
-              <b className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : quote ? quote.last.toFixed(2) : selected.price}</b>
-              <span className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : quote ? `${quote.change >= 0 ? "+" : ""}${quote.change.toFixed(2)} (${quote.change_percent.toFixed(2)}%)` : selected.change}</span>
+              <b className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : hasLiveData ? price.toFixed(2) : "—"}</b>
+              <span className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : hasLiveData ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)` : "No data"}</span>
             </div>
 
             <div className="chart-controls">
@@ -204,7 +205,7 @@ function App() {
               <div className="quote-title">{selected.symbol}</div>
               <div className="quote-price">{quote ? quote.last.toFixed(2) : liveSelected ? liveSelected.last.toFixed(2) : "—"}</div>
               <div className={`quote-change ${changePercent < 0 ? "negative" : "positive"}`}>
-                {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} {quote ? `(${quote.change_percent.toFixed(2)}%)` : selected.change}
+                {hasLiveData ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)` : "No live quote"}
               </div>
               <dl>
                 <div><dt>Bid</dt><dd>—</dd></div>
