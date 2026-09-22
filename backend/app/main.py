@@ -153,6 +153,7 @@ def fyers_callback(auth_code: str | None = None, state: str | None = None) -> HT
         raise HTTPException(status_code=502, detail=message)
 
     _fyers_access_token = str(payload["access_token"])
+    provider.set_access_token(_fyers_access_token)
 
     return HTMLResponse(
         """
