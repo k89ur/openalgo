@@ -26,15 +26,21 @@ const watchlist: WatchItem[] = [
   { symbol: "NIFTY", price: "24,198.85", change: "-0.12%" },
 ];
 
+const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
+
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
-  const [timeframe, setTimeframe] = useState("D");
+  const [timeframe, setTimeframe] = useState("5m");
   const [symbol, setSymbol] = useState("BHARTIARTL");
   const [search, setSearch] = useState("");
   const [watchSearch, setWatchSearch] = useState("");
   const [watchOpen, setWatchOpen] = useState(true);
-  const [watchWidth, setWatchWidth] = useState(300);
+  const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
+  const [panel, setPanel] = useState<"indicators" | "pipscript" | null>(null);
+  const [pipscript, setPipscript] = useState(
+    "def calculate(data):\n    close = data.close\n    ma20 = close.sma(20)\n    return {\n        \"MA20\": ma20\n    }",
+  );
 
   const selected = useMemo(
     () => watchlist.find((item) => item.symbol === symbol) ?? watchlist[0],
@@ -68,8 +74,7 @@ function App() {
     const startX = event.clientX;
     const startWidth = watchWidth;
     const move = (moveEvent: PointerEvent) => {
-      const next = Math.min(460, Math.max(220, startWidth + (startX - moveEvent.clientX)));
-      setWatchWidth(next);
+      setWatchWidth(Math.min(480, Math.max(240, startWidth + startX - moveEvent.clientX)));
     };
     const stop = () => {
       window.removeEventListener("pointermove", move);
@@ -80,62 +85,91 @@ function App() {
   };
 
   return (
-    <main className={`app ${dark ? "theme-dark" : "theme-light"} `}>
+    <main className={`app ${dark ? "theme-dark" : "theme-light"}`}>
+      <div className="menu-bar">
+        <div className="menu-left">
+          <span className="brand">PIPSGOX</span>
+          <button>File</button>
+          <button>Account</button>
+          <button>Help</button>
+        </div>
+        <div className="menu-center">PIPSGOX WEB TERMINAL</div>
+        <div className="menu-right"><span className="status-dot" /> Data: Sample</div>
+      </div>
+
       <header className="topbar">
-        <div className="brand"><span>PIPSGOX</span></div>
+        <button className="top-command">NEW WINDOW</button>
+        <button className="top-command">MARKET</button>
+        <button className="top-command">WATCHLIST</button>
+        <button className="top-command">ORDERS</button>
 
         <div className="top-search">
-          
           <input value={search} placeholder={selected.symbol} aria-label="Search symbol"
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") submitSearch(); }} />
-          
+          <button onClick={submitSearch}>GO</button>
         </div>
 
-        <button className="square-add" aria-label="Add symbol">ADD</button>
-
-        <div className="timeframe-row">
-          {["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"].map((item) => (
-            <button key={item} className={timeframe === item ? "active" : ""} onClick={() => setTimeframe(item)}>
-              {item}
-            </button>
-          ))}
-        </div>
-
-        <div className="toolbar-group chart-types">
-          {([
-            ["candles", "CANDLE"],
-            ["bars", "BAR"],
-            ["line", "LINE"],
-          ] as Array<[ChartType, string]>).map(([type, label]) => (
-            <button key={type} className={chartType === type ? "active" : ""} onClick={() => setChartType(type)}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <button className="top-action">INDICATORS</button>
-        <button className="top-action">BUILDER</button>
-        <button className="top-action compact">ALERT</button>
-        <button className="top-action compact">REPLAY</button>
         <div className="top-spacer" />
-        <button className="icon-button" aria-label="Toggle theme" onClick={() => setDark((value) => !value)}>
+
+        <button className="top-command" onClick={() => setDark((value) => !value)}>
           {dark ? "LIGHT" : "DARK"}
         </button>
-        <button className="icon-button" aria-label="Fullscreen">FULL</button>
-        <button className="icon-button" aria-label="Settings">SET</button>
+        <button className="top-command">SETTINGS</button>
       </header>
 
       <section className="workspace">
         <section className="chart-workspace">
+          <div className="instrument-bar">
+            <div className="instrument-main">
+              <strong>{selected.symbol === "BHARTIARTL" ? "BHARTI AIRTEL LTD" : selected.symbol}</strong>
+              <span>NSE</span>
+              <b className={changePercent < 0 ? "negative" : "positive"}>{selected.price}</b>
+              <span className={changePercent < 0 ? "negative" : "positive"}>{selected.change}</span>
+            </div>
+
+            <div className="chart-controls">
+              {["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"].map((item) => (
+                <button key={item} className={timeframe === item ? "active" : ""} onClick={() => setTimeframe(item)}>
+                  {item}
+                </button>
+              ))}
+              <span className="control-divider" />
+              {([
+                ["candles", "CANDLE"],
+                ["bars", "BAR"],
+                ["line", "LINE"],
+              ] as Array<[ChartType, string]>).map(([type, label]) => (
+                <button key={type} className={chartType === type ? "active" : ""} onClick={() => setChartType(type)}>
+                  {label}
+                </button>
+              ))}
+              <span className="control-divider" />
+              <button onClick={() => setPanel("indicators")}>INDICATORS</button>
+              <button onClick={() => setPanel("pipscript")}>PIPSCRIPT</button>
+            </div>
+          </div>
+
           <div className="chart-container">
             <Chart chartType={chartType} dark={dark} />
 
-            <div className="chart-overlay">
-              <div className="instrument-line">
-                <strong>{selected.symbol === "BHARTIARTL" ? "BHARTI AIRTEL LTD" : selected.symbol}</strong>
-                <span>{timeframe} · NSE</span>
+            <div className="quote-panel">
+              <div className="quote-title">{selected.symbol}</div>
+              <div className="quote-price">{selected.price}</div>
+              <div className={`quote-change ${changePercent < 0 ? "negative" : "positive"}`}>
+                {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} {selected.change}
               </div>
+              <dl>
+                <div><dt>Bid</dt><dd>{(price - 0.25).toFixed(2)}</dd></div>
+                <div><dt>Ask</dt><dd>{(price + 0.25).toFixed(2)}</dd></div>
+                <div><dt>Open</dt><dd>{open.toFixed(2)}</dd></div>
+                <div><dt>High</dt><dd>{high.toFixed(2)}</dd></div>
+                <div><dt>Low</dt><dd>{low.toFixed(2)}</dd></div>
+                <div><dt>Volume</dt><dd>2.34M</dd></div>
+              </dl>
+            </div>
+
+            <div className="chart-overlay">
               <div className="ohlc-line">
                 <span>O <b>{open.toFixed(2)}</b></span>
                 <span>H <b>{high.toFixed(2)}</b></span>
@@ -151,54 +185,83 @@ function App() {
                 <span className="ma200">MA 200 <b>1,584.61</b></span>
               </div>
             </div>
-            <div className="volume-label"><strong>Volume</strong><span>2.34M</span></div>
           </div>
 
-          <div className="bottom-toolbar">
-            <button>1D</button><button>5D</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button>5Y</button><button>All</button>
+          <div className="bottom-bar">
+            <button className="active">1D</button><button>5D</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button>5Y</button><button>ALL</button>
             <span className="bottom-spacer" />
-            <span>auto</span>
+            <button onClick={() => setPanel("indicators")}>INDICATORS</button>
+            <button onClick={() => setPanel("pipscript")}>PIPSCRIPT</button>
           </div>
         </section>
 
-        {watchOpen && (
+        {watchOpen ? (
           <aside className="watchlist" style={{ width: watchWidth }}>
             <div className="watch-resize-handle" onPointerDown={startResize} />
-            <div className="watchlist-heading">
-              <button className="watch-collapse" onClick={() => setWatchOpen(false)} aria-label="Hide watchlist">HIDE</button>
-              <strong>Watchlist</strong>
-              <span>WATCH</span>
-              <div className="watch-heading-spacer" />
-              <button aria-label="Add symbol">ADD</button>
-              <button aria-label="More">MORE</button>
+            <div className="watch-tabs">
+              <button className="active">WATCHLIST</button>
+              <button>MARKET</button>
+              <button>MOVERS</button>
             </div>
-
+            <div className="watch-header">
+              <strong>My Watchlist</strong>
+              <span>{watchlist.length} / 250</span>
+              <div className="watch-spacer" />
+              <button onClick={() => setWatchOpen(false)}>HIDE</button>
+              <button>ADD</button>
+            </div>
             <input className="watch-search" placeholder="Search symbols..." value={watchSearch}
               onChange={(event) => setWatchSearch(event.target.value)} />
-
-            <div className="watch-columns"><span>Symbol</span><span>LTP</span><span>Chg%</span></div>
-
+            <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span></div>
             <div className="watch-items">
               {filteredWatchlist.map((item) => (
-                <button key={item.symbol}
-                  className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}
+                <button key={item.symbol} className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}
                   onClick={() => selectSymbol(item.symbol)}>
                   <span className="watch-symbol">{item.symbol}</span>
                   <span className="watch-price">{item.price}</span>
-                  <span className={`watch-change ${item.change.startsWith("-") ? "negative" : ""}`}>{item.change}</span>
-                  <span className="row-more">⋮</span>
+                  <span className={`watch-change ${item.change.startsWith("-") ? "negative" : "positive"}`}>{item.change}</span>
                 </button>
               ))}
             </div>
-
-            <div className="watchlist-footer"><span>ADD SYMBOL</span><b>{watchlist.length} / 250</b></div>
+            <div className="watch-footer">Click a symbol to load chart</div>
           </aside>
-        )}
-
-        {!watchOpen && (
-          <button className="watch-open" onClick={() => setWatchOpen(true)} aria-label="Show watchlist">SHOW</button>
+        ) : (
+          <button className="watch-open" onClick={() => setWatchOpen(true)}>SHOW WATCHLIST</button>
         )}
       </section>
+
+      {panel && (
+        <div className="modal-backdrop" onClick={() => setPanel(null)}>
+          <section className={`modal ${panel === "pipscript" ? "pipscript-modal" : ""}`} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <strong>{panel === "pipscript" ? "PIPSGOX PIPSCRIPT BUILDER" : "INDICATORS"}</strong>
+              <button onClick={() => setPanel(null)}>CLOSE</button>
+            </div>
+
+            {panel === "indicators" ? (
+              <div className="indicator-panel">
+                <p>Select indicators to display on the active chart.</p>
+                {indicators.map((item) => (
+                  <button key={item} className="indicator-row">
+                    <span>{item}</span><span>ADD</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="builder-panel">
+                <div className="builder-toolbar">
+                  <span>Python</span><button>JavaScript</button><span className="builder-spacer" /><button>LOAD</button><button>SAVE</button><button>RUN</button>
+                </div>
+                <textarea value={pipscript} onChange={(event) => setPipscript(event.target.value)} spellCheck={false} />
+                <div className="builder-output">
+                  <strong>Output</strong>
+                  <span>Lines, values, markers and tables will appear here.</span>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </main>
   );
 }
