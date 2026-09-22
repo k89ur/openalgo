@@ -41,6 +41,7 @@ function App() {
   const [quote, setQuote] = useState<{
     last: number; change: number; change_percent: number;
     open?: number; high?: number; low?: number; volume?: number;
+    bid?: number; ask?: number;
   } | null>(null);
   const [liveQuotes, setLiveQuotes] = useState<Record<string, {
     last: number; change: number; change_percent: number;
@@ -142,7 +143,7 @@ function App() {
           <button>Help</button>
         </div>
         <div className="menu-center">PIPSGOX WEB TERMINAL</div>
-        <div className="menu-right"><span className="status-dot" /> Data: Upstox V3</div>
+        <div className="menu-right"><span className="status-dot" /> Data: FYERS API V3</div>
       </div>
 
       <header className="topbar">
@@ -208,8 +209,8 @@ function App() {
                 {hasLiveData ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)` : "No live quote"}
               </div>
               <dl>
-                <div><dt>Bid</dt><dd>—</dd></div>
-                <div><dt>Ask</dt><dd>—</dd></div>
+                <div><dt>Bid</dt><dd>{quote?.bid != null ? quote.bid.toFixed(2) : "—"}</dd></div>
+                <div><dt>Ask</dt><dd>{quote?.ask != null ? quote.ask.toFixed(2) : "—"}</dd></div>
                 <div><dt>Open</dt><dd>{open != null ? open.toFixed(2) : "—"}</dd></div>
                 <div><dt>High</dt><dd>{high != null ? high.toFixed(2) : "—"}</dd></div>
                 <div><dt>Low</dt><dd>{low != null ? low.toFixed(2) : "—"}</dd></div>
