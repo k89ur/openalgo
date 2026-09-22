@@ -25,6 +25,8 @@ class Quote:
     high: float | None = None
     low: float | None = None
     volume: int | None = None
+    bid: float | None = None
+    ask: float | None = None
 
 
 class MarketDataProvider(Protocol):
