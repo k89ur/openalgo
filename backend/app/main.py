@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import os
-from datetime import date, timedelta
 from typing import Literal
 
-import requests
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -95,14 +92,20 @@ def history(
     timeframe: Timeframe = "D",
     limit: int = Query(default=260, ge=50, le=2000),
 ) -> list[Candle]:
-    return [to_candle(item) for item in provider.get_history(symbol.upper(), timeframe, limit)]
+    try:
+        return [to_candle(item) for item in provider.get_history(symbol.upper(), timeframe, limit)]
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/quote", response_model=Quote)
 def quote(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
 ) -> Quote:
-    return to_quote(provider.get_quote(symbol.upper()))
+    try:
+        return to_quote(provider.get_quote(symbol.upper()))
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/quotes", response_model=list[Quote])
@@ -113,8 +116,10 @@ def quotes(
     if not requested:
         return []
 
-    results = []
-    for start in range(0, len(requested), 50):
-        results.extend(provider.get_quotes(requested[start:start + 50]))
-
-    return [to_quote(item) for item in results]
+    try:
+        results = []
+        for start in range(0, len(requested), 50):
+            results.extend(provider.get_quotes(requested[start:start + 50]))
+        return [to_quote(item) for item in results]
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
