@@ -1,25 +1,8 @@
 import { useEffect, useRef } from "react";
-import {
-  BarSeries,
-  CandlestickSeries,
-  ColorType,
-  HistogramSeries,
-  LineSeries,
-  createChart,
-  type UTCTimestamp,
-} from "lightweight-charts";
+import { dispose, init } from "klinecharts";
 
 export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
-
-type Candle = {
-  time: UTCTimestamp;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-};
 
 type Props = {
   chartType: ChartType;
@@ -28,19 +11,28 @@ type Props = {
   timeframe: Timeframe;
 };
 
-function movingAverage(data: Candle[], period: number) {
-  const output: { time: UTCTimestamp; value: number }[] = [];
-  let sum = 0;
+type HistoryCandle = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
 
-  data.forEach((item, index) => {
-    sum += item.close;
-    if (index >= period) sum -= data[index - period].close;
-    if (index >= period - 1) {
-      output.push({ time: item.time, value: Number((sum / period).toFixed(2)) });
-    }
-  });
-
-  return output;
+function periodFor(timeframe: Timeframe) {
+  const map: Record<Timeframe, { span: number; type: "minute" | "hour" | "day" | "week" | "month" }> = {
+    "1m": { span: 1, type: "minute" },
+    "3m": { span: 3, type: "minute" },
+    "5m": { span: 5, type: "minute" },
+    "15m": { span: 15, type: "minute" },
+    "30m": { span: 30, type: "minute" },
+    "1h": { span: 1, type: "hour" },
+    D: { span: 1, type: "day" },
+    W: { span: 1, type: "week" },
+    M: { span: 1, type: "month" },
+  };
+  return map[timeframe];
 }
 
 export function Chart({ chartType, dark, symbol, timeframe }: Props) {
@@ -50,138 +42,128 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
     const container = containerRef.current;
     if (!container) return;
 
-    let cancelled = false;
-
-    const bg = dark ? "#050a0f" : "#f7f9fb";
-    const text = dark ? "#8d9aaa" : "#566273";
-    const grid = dark ? "#121d27" : "#e4e9ef";
-    const border = dark ? "#2a3543" : "#cfd7e2";
-
-    const chart = createChart(container, {
-      layout: { background: { type: ColorType.Solid, color: bg }, textColor: text },
-      grid: { vertLines: { color: grid }, horzLines: { color: grid } },
-      rightPriceScale: { borderColor: border, scaleMargins: { top: 0.08, bottom: 0.08 } },
-      timeScale: { borderColor: border, timeVisible: timeframe !== "D" && timeframe !== "W" && timeframe !== "M", secondsVisible: false, rightOffset: 5, barSpacing: 7 },
-      crosshair: { vertLine: { color: dark ? "#5b6879" : "#9aa7b7" }, horzLine: { color: dark ? "#5b6879" : "#9aa7b7" } },
-    });
-
-    const load = async () => {
-      try {
-        const response = await fetch(
-          `/api/history?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${timeframe === "D" ? 500 : timeframe === "W" ? 250 : timeframe === "M" ? 120 : 500}`,
-        );
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const raw = (await response.json()) as Array<{
-          time: number;
-          open: number;
-          high: number;
-          low: number;
-          close: number;
-          volume: number;
-        }>;
-
-        if (cancelled || raw.length === 0) return;
-
-        const data: Candle[] = raw.map((item) => ({
-          ...item,
-          time: item.time as UTCTimestamp,
-        }));
-
-        const priceOptions = {
-          upColor: "#12d98b",
-          downColor: "#ff4d5a",
-          borderVisible: false,
-          wickUpColor: "#12d98b",
-          wickDownColor: "#ff4d5a",
-        };
-
-        if (chartType === "candles") {
-          const series = chart.addSeries(CandlestickSeries, priceOptions);
-          series.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
-        } else if (chartType === "bars") {
-          const series = chart.addSeries(BarSeries, {
+    const chart = init(container, {
+      locale: "en-US",
+      timezone: "Asia/Kolkata",
+      layout: {
+        barSpaceLimit: { min: 2, max: 14 },
+        yAxis: {
+          position: "right",
+          inside: false,
+          scrollZoomEnabled: true,
+        },
+      },
+      styles: {
+        grid: {
+          horizontal: {
+            color: dark ? "#121d27" : "#e4e9ef",
+          },
+          vertical: {
+            color: dark ? "#121d27" : "#e4e9ef",
+          },
+        },
+        candle: {
+          type: chartType === "bars" ? "ohlc" : chartType === "line" ? "area" : "candle_solid",
+          bar: {
             upColor: "#12d98b",
             downColor: "#ff4d5a",
-          });
-          series.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
-        } else {
-          const series = chart.addSeries(LineSeries, {
-            color: "#38bdf8",
-            lineWidth: 2,
-            priceLineVisible: false,
-          });
-          series.setData(data.map(({ time, close }) => ({ time, value: close })));
-        }
-
-        const ma20 = chart.addSeries(LineSeries, {
-          color: "#22d3ee",
-          lineWidth: 2,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        });
-        ma20.setData(movingAverage(data, 20));
-
-        const ma50 = chart.addSeries(LineSeries, {
-          color: "#f59e0b",
-          lineWidth: 2,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        });
-        ma50.setData(movingAverage(data, 50));
-
-        const ma200 = chart.addSeries(LineSeries, {
-          color: "#c084fc",
-          lineWidth: 2,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        });
-        ma200.setData(movingAverage(data, 200));
-
-        const volume = chart.addSeries(
-          HistogramSeries,
-          {
-            priceFormat: { type: "volume" },
-            priceScaleId: "volume",
-            color: "rgba(56, 189, 248, 0.35)",
-            base: 0,
-            priceLineVisible: false,
-            lastValueVisible: true,
+            noChangeColor: "#8d9aaa",
+            upBorderColor: "#12d98b",
+            downBorderColor: "#ff4d5a",
+            noChangeBorderColor: "#8d9aaa",
+            upWickColor: "#12d98b",
+            downWickColor: "#ff4d5a",
+            noChangeWickColor: "#8d9aaa",
           },
-          1,
-        );
+          area: {
+            lineColor: "#38bdf8",
+            lineSize: 2,
+            backgroundColor: [
+              { offset: 0, color: "rgba(56, 189, 248, 0.08)" },
+              { offset: 1, color: "rgba(56, 189, 248, 0)" },
+            ],
+          },
+        },
+        xAxis: {
+          tickText: {
+            color: dark ? "#8d9aaa" : "#566273",
+          },
+        },
+        yAxis: {
+          tickText: {
+            color: dark ? "#8d9aaa" : "#566273",
+          },
+        },
+        crosshair: {
+          horizontal: {
+            line: { color: dark ? "#5b6879" : "#9aa7b7" },
+          },
+          vertical: {
+            line: { color: dark ? "#5b6879" : "#9aa7b7" },
+          },
+        },
+      },
+    });
 
-        volume.setData(
-          data.map(({ time, volume: value, close, open }) => ({
-            time,
-            value,
-            color: close >= open ? "rgba(18, 217, 139, 0.72)" : "rgba(255, 77, 90, 0.72)",
-          })),
-        );
+    chart.setSymbol({
+      ticker: symbol,
+      pricePrecision: 2,
+      volumePrecision: 0,
+    });
+    chart.setPeriod(periodFor(timeframe));
 
-        chart.priceScale("volume", 1).applyOptions({
-          scaleMargins: { top: 0.55, bottom: 0.02 },
-          borderVisible: false,
-          visible: true,
-        });
+    chart.setDataLoader({
+      getBars: async ({ callback }) => {
+        try {
+          const limit =
+            timeframe === "D" ? 500 :
+            timeframe === "W" ? 250 :
+            timeframe === "M" ? 120 : 500;
 
-        chart.timeScale().fitContent();
-      } catch (error) {
-        console.error("PIPSGOX chart data error", error);
-      }
-    };
+          const response = await fetch(
+            `/api/history?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${limit}`,
+          );
 
-    void load();
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const raw = (await response.json()) as HistoryCandle[];
+
+          const bars = raw
+            .map((item) => ({
+              timestamp: item.time * 1000,
+              open: Number(item.open),
+              high: Number(item.high),
+              low: Number(item.low),
+              close: Number(item.close),
+              volume: Number(item.volume || 0),
+            }))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+          callback(bars, { forward: false, backward: false });
+        } catch (error) {
+          console.error("PIPSGOX KLineChart data error", error);
+          callback([], { forward: false, backward: false });
+        }
+      },
+    });
+
+    // Use KLineChart's built-in indicators for the first stable prototype.
+    chart.createIndicator(
+      { name: "MA", paneId: "candle_pane", calcParams: [20, 50, 200] },
+      true,
+    );
+    chart.createIndicator("VOL");
 
     const resizeObserver = new ResizeObserver(() => {
-      chart.resize(container.clientWidth, container.clientHeight);
+      chart.resize();
     });
     resizeObserver.observe(container);
 
     return () => {
-      cancelled = true;
       resizeObserver.disconnect();
-      chart.remove();
+      dispose(chart);
     };
   }, [chartType, dark, symbol, timeframe]);
 
