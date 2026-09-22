@@ -2,14 +2,13 @@ import { useEffect, useRef } from "react";
 import { BarSeries, CandlestickSeries, ColorType, HistogramSeries, LineSeries, createChart, type UTCTimestamp } from "lightweight-charts";
 
 export type ChartType = "candles" | "bars" | "line";
-type Props = { chartType: ChartType };
+type Props = { chartType: ChartType; dark: boolean };
 type Candle = { time: UTCTimestamp; open: number; high: number; low: number; close: number; volume: number };
 
 function createSampleData(): Candle[] {
   const result: Candle[] = [];
   let close = 1438;
   const start = new Date("2026-01-05T00:00:00Z");
-
   for (let i = 0; i < 260; i += 1) {
     const date = new Date(start);
     date.setUTCDate(start.getUTCDate() + i);
@@ -38,19 +37,24 @@ function movingAverage(data: Candle[], period: number) {
 
 const sampleData = createSampleData();
 
-export function Chart({ chartType }: Props) {
+export function Chart({ chartType, dark }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    const bg = dark ? "#050a0f" : "#f7f9fb";
+    const text = dark ? "#8d9aaa" : "#566273";
+    const grid = dark ? "#121d27" : "#e4e9ef";
+    const border = dark ? "#2a3543" : "#cfd7e2";
+
     const chart = createChart(container, {
-      layout: { background: { type: ColorType.Solid, color: "#0a111a" }, textColor: "#7f8b9d" },
-      grid: { vertLines: { color: "#14202c" }, horzLines: { color: "#14202c" } },
-      rightPriceScale: { borderColor: "#2a3543", scaleMargins: { top: 0.08, bottom: 0.08 } },
-      timeScale: { borderColor: "#2a3543", timeVisible: false, secondsVisible: false, rightOffset: 5, barSpacing: 7 },
-      crosshair: { vertLine: { color: "#5b6879" }, horzLine: { color: "#5b6879" } },
+      layout: { background: { type: ColorType.Solid, color: bg }, textColor: text },
+      grid: { vertLines: { color: grid }, horzLines: { color: grid } },
+      rightPriceScale: { borderColor: border, scaleMargins: { top: 0.08, bottom: 0.08 } },
+      timeScale: { borderColor: border, timeVisible: false, secondsVisible: false, rightOffset: 5, barSpacing: 7 },
+      crosshair: { vertLine: { color: dark ? "#5b6879" : "#9aa7b7" }, horzLine: { color: dark ? "#5b6879" : "#9aa7b7" } },
     });
 
     const priceOptions = { upColor: "#12d98b", downColor: "#ff4d5a", borderVisible: false, wickUpColor: "#12d98b", wickDownColor: "#ff4d5a" };
@@ -68,10 +72,8 @@ export function Chart({ chartType }: Props) {
 
     const ma20 = chart.addSeries(LineSeries, { color: "#22d3ee", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
     ma20.setData(movingAverage(sampleData, 20));
-
     const ma50 = chart.addSeries(LineSeries, { color: "#f59e0b", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
     ma50.setData(movingAverage(sampleData, 50));
-
     const ma200 = chart.addSeries(LineSeries, { color: "#c084fc", lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
     ma200.setData(movingAverage(sampleData, 200));
 
@@ -89,9 +91,8 @@ export function Chart({ chartType }: Props) {
     const resizeObserver = new ResizeObserver(() => chart.resize(container.clientWidth, container.clientHeight));
     resizeObserver.observe(container);
     chart.timeScale().fitContent();
-
     return () => { resizeObserver.disconnect(); chart.remove(); };
-  }, [chartType]);
+  }, [chartType, dark]);
 
   return <div ref={containerRef} className="chart-canvas" />;
 }
