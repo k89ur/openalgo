@@ -144,6 +144,8 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
             priceFormat: { type: "volume" },
             priceScaleId: "volume",
             color: "rgba(56, 189, 248, 0.35)",
+            base: 0,
+            priceLineVisible: false,
             lastValueVisible: true,
           },
           1,
@@ -158,8 +160,9 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
         );
 
         chart.priceScale("volume", 1).applyOptions({
-          scaleMargins: { top: 0.15, bottom: 0 },
+          scaleMargins: { top: 0.55, bottom: 0.02 },
           borderVisible: false,
+          visible: true,
         });
 
         chart.timeScale().fitContent();
