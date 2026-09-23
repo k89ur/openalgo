@@ -45,9 +45,9 @@ type CrosshairData = {
   ma200?: number;
 };
 
-type HistoricalPePoint = {
+type HistoricalEpsPoint = {
   time: number;
-  value: number;
+  ttm_eps: number;
 };
 
 function movingAverage(data: Array<{ close: number }>, endIndex: number, period: number) {
@@ -140,7 +140,7 @@ export function Chart({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [crosshairData, setCrosshairData] = useState<CrosshairData | null>(null);
-  const [historicalPe, setHistoricalPe] = useState<HistoricalPePoint[]>([]);
+  const [historicalPe, setHistoricalPe] = useState<Array<{ time: number; value: number }>>([]);
   const [historicalPeStatus, setHistoricalPeStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const chartRef = useRef<KLineChartInstance | null>(null);
 
@@ -490,17 +490,56 @@ export function Chart({
         setHistoricalPeStatus("loading");
         void (async () => {
           try {
-            const response = await fetch("/api/fundamentals/pe?symbol=" + encodeURIComponent(symbol) + "&limit=40", { cache: "no-store" });
-            if (!response.ok) throw new Error("Historical P/E unavailable");
-            const raw = (await response.json()) as HistoricalPePoint[];
-            const points = raw.map((item) => ({ time: Number(item.time), value: Number(item.value) }))
-              .filter((item) => Number.isFinite(item.time) && Number.isFinite(item.value) && item.value > 0)
+            const response = await fetch("/api/fundamentals/eps?symbol=" + encodeURIComponent(symbol) + "&limit=40", { cache: "no-store" });
+            if (!response.ok) throw new Error("Historical EPS unavailable");
+
+            const raw = (await response.json()) as HistoricalEpsPoint[];
+            const epsPoints = raw
+              .map((item) => ({
+                time: Number(item.time),
+                ttmEps: Number(item.ttm_eps),
+              }))
+              .filter((item) => Number.isFinite(item.time) && Number.isFinite(item.ttmEps))
               .sort((a, b) => a.time - b.time);
+
             if (disposed) return;
-            setHistoricalPe(points);
-            setHistoricalPeStatus(points.length ? "ready" : "unavailable");
-            if (!points.length) return;
-            const latestByDate = new Map(points.map((point) => [new Date(point.time * 1000).toISOString().slice(0, 10), point.value]));
+
+            if (!epsPoints.length) {
+              setHistoricalPe([]);
+              setHistoricalPeStatus("unavailable");
+              return;
+            }
+
+            // EPS becomes usable only from its filing/effective date onward.
+            // P/E is then calculated against each chart candle's close.
+            const candles = chart.getDataList();
+            const calculated = candles
+              .map((candle) => {
+                let applicable: { time: number; ttmEps: number } | undefined;
+                for (const point of epsPoints) {
+                  if (point.time * 1000 <= candle.timestamp) {
+                    applicable = point;
+                  } else {
+                    break;
+                  }
+                }
+
+                if (!applicable || applicable.ttmEps <= 0 || candle.close <= 0) {
+                  return { time: candle.timestamp, value: NaN };
+                }
+
+                return {
+                  time: candle.timestamp,
+                  value: candle.close / applicable.ttmEps,
+                };
+              })
+              .filter((point) => Number.isFinite(point.value));
+
+            setHistoricalPe(calculated);
+            setHistoricalPeStatus(calculated.length ? "ready" : "unavailable");
+
+            if (!calculated.length) return;
+
             chart.createIndicator({
               name: "PIPSGOX_PE",
               shortName: "P/E",
@@ -512,24 +551,46 @@ export function Chart({
               styles: { lines: [{ style: "solid", color: "#c9a15a", size: 1 }] },
               minValue: 0,
               calc: (dataList) => {
-                let latest: number | null = null;
+                let epsIndex = 0;
+                let currentEps: number | null = null;
+
                 return dataList.map((candle) => {
-                  const exact = latestByDate.get(new Date(candle.timestamp).toISOString().slice(0, 10));
-                  if (exact != null) latest = exact;
-                  return { pe: latest };
+                  while (
+                    epsIndex < epsPoints.length &&
+                    epsPoints[epsIndex].time * 1000 <= candle.timestamp
+                  ) {
+                    currentEps = epsPoints[epsIndex].ttmEps;
+                    epsIndex += 1;
+                  }
+
+                  if (currentEps == null || currentEps <= 0 || candle.close <= 0) {
+                    return { pe: null };
+                  }
+
+                  return { pe: candle.close / currentEps };
                 }) as any;
               },
             });
-            chart.setPaneOptions({ id: "pe_pane", height: 86, minHeight: 70, dragEnabled: false, order: 10 });
+
+            chart.setPaneOptions({
+              id: "pe_pane",
+              height: 86,
+              minHeight: 70,
+              dragEnabled: false,
+              order: 10,
+            });
           } catch (error) {
             if (!disposed) {
               setHistoricalPe([]);
               setHistoricalPeStatus("unavailable");
-              console.warn("PIPSGOX historical P/E unavailable:", error);
+              console.warn("PIPSGOX historical EPS/P/E unavailable:", error);
             }
           }
         })();
       } else {
+        setHistoricalPe([]);
+        setHistoricalPeStatus("idle");
+      }
         setHistoricalPe([]);
         setHistoricalPeStatus("idle");
       }
