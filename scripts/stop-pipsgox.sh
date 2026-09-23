@@ -1,12 +1,44 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -u
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT/.pipsgox"
-for item in "Frontend:$RUN_DIR/frontend.pid" "Backend:$RUN_DIR/backend.pid"; do
-  name="${item%%:*}"; pidfile="${item#*:}"
-  if [[ -f "$pidfile" ]]; then
-    pid="$(cat "$pidfile" 2>/dev/null || true)"
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null || true; echo "$name stopped"; else echo "$name not running"; fi
+
+stop_one() {
+  local name="$1" pidfile="$2"
+  if [[ ! -f "$pidfile" ]]; then
+    echo "$name not running"
+    return
+  fi
+
+  local pid
+  pid="$(cat "$pidfile" 2>/dev/null || true)"
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+    echo "$name not running (stale PID)"
     rm -f "$pidfile"
-  else echo "$name not running"; fi
-done
+    return
+  fi
+
+  echo "Stopping $name (PID $pid)..."
+  kill "$pid" 2>/dev/null || true
+
+  for _ in {1..10}; do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.5
+  done
+
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "$name did not stop cleanly; forcing it."
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+
+  rm -f "$pidfile"
+  echo "$name stopped"
+}
+
+stop_one "Frontend" "$RUN_DIR/frontend.pid"
+stop_one "Backend" "$RUN_DIR/backend.pid"
+
+echo
+echo "Remaining PIPSGOX ports:"
+ss -ltnp 2>/dev/null | grep -E ':3001|:8000' || echo "none"
