@@ -177,35 +177,59 @@ def search_nse_symbols(query: str, limit: int = 12) -> list[SymbolSearchResult]:
     return [item[1] for item in matches[:limit]]
 
 
-def resolve_api_symbol(symbol: str) -> str:
-    """Resolve a user-facing NSE ticker to the exact current FYERS API symbol."""
+def resolve_api_symbol(symbol: str) -> str | None:
+    """Resolve a user-facing symbol to an exact current FYERS API symbol.
+
+    Normal NSE tickers must exist in the current FYERS symbol master. We do
+    not fabricate an API symbol when the master has no matching instrument.
+    """
     clean = symbol.strip().upper()
     if not clean:
-        return clean
+        return None
     if ":" in clean:
         return clean
+
     alias_symbols = {"NIFTY", "NIFTY50", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"}
     if clean in alias_symbols:
         return provider.symbol_info(clean).api_symbol
+
     try:
         master = _load_nse_symbol_master()
-        for api_symbol, item in master.items():
-            if not isinstance(item, dict):
-                continue
-            ticker = str(item.get("symTicker") or "").strip().upper()
-            if ticker == clean:
-                return str(api_symbol).strip().upper()
     except ValueError:
-        pass
-    return provider.symbol_info(clean).api_symbol
+        return None
+
+    for api_symbol, item in master.items():
+        if not isinstance(item, dict):
+            continue
+        ticker = str(item.get("symTicker") or "").strip().upper()
+        if ticker == clean:
+            resolved = str(api_symbol or "").strip().upper()
+            if resolved:
+                return resolved
+
+    return None
+
+
+def unresolved_symbol_error(symbol: str) -> ValueError:
+    return ValueError(
+        f"Symbol '{symbol.strip().upper()}' was not found in the current FYERS NSE symbol master."
+    )
+
 
 def resolve_requested_symbols(symbols: list[str]) -> tuple[list[str], dict[str, str]]:
     api_symbols: list[str] = []
     api_to_original: dict[str, str] = {}
+
     for original in symbols:
-        api_symbol = resolve_api_symbol(original)
+        clean = original.strip().upper()
+        api_symbol = resolve_api_symbol(clean)
+        if not api_symbol:
+            # Keep one bad/stale watchlist symbol from blocking all valid symbols.
+            continue
+
         api_symbols.append(api_symbol)
-        api_to_original[api_symbol.upper()] = original
+        api_to_original[api_symbol.upper()] = clean
+
     return api_symbols, api_to_original
 
 class FyersWatchlistStream:
@@ -229,6 +253,8 @@ class FyersWatchlistStream:
         with self._symbol_lock:
             for symbol in symbols:
                 api_symbol = resolve_api_symbol(symbol)
+                if not api_symbol:
+                    continue
                 result.add(api_symbol)
                 self._api_to_app[api_symbol.upper()] = symbol
         return result
@@ -523,6 +549,8 @@ def history(
 ) -> list[Candle]:
     try:
         api_symbol = resolve_api_symbol(symbol)
+        if not api_symbol:
+            raise unresolved_symbol_error(symbol)
         return [to_candle(item) for item in provider.get_history(api_symbol, timeframe, limit)]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -535,6 +563,8 @@ def quote(
     try:
         original = symbol.strip().upper()
         api_symbol = resolve_api_symbol(original)
+        if not api_symbol:
+            raise unresolved_symbol_error(original)
         result = provider.get_quote(api_symbol)
         result = replace(result, symbol=original)
         return to_quote(result)
