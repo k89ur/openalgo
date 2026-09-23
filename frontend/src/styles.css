@@ -67,7 +67,29 @@ button { cursor: pointer; }
 .control-divider { height:20px; width:1px; background:var(--border); margin:0 5px; }
 
 .chart-container { flex:1; min-height:0; position:relative; overflow:hidden; }
+.chart-stage { position:relative; width:100%; height:100%; min-width:0; min-height:0; }
 .chart-canvas { width:100%; height:100%; }
+.chart-crosshair-data {
+  position:absolute; z-index:4; left:12px; top:30px;
+  display:flex; align-items:center; flex-wrap:wrap; gap:0 10px;
+  max-width:calc(100% - 24px); min-height:20px;
+  color:#8f98a3; font-size:9px; line-height:16px;
+  pointer-events:none; text-shadow:0 1px 3px #000;
+}
+.chart-crosshair-data span { white-space:nowrap; }
+.chart-crosshair-data b { color:#cfd4da; font-weight:500; }
+.chart-crosshair-data .chart-crosshair-date { color:#b1b8c0; }
+.chart-pane-label {
+  position:absolute; z-index:4; left:10px;
+  color:#737b84; font-size:8px; font-weight:600; letter-spacing:.08em;
+  pointer-events:none; text-shadow:0 1px 3px #000;
+}
+.volume-pane-label { bottom:76px; }
+.pe-pane-label { bottom:152px; }
+.chart-pane-status {
+  position:absolute; z-index:4; left:12px; bottom:152px;
+  color:#666; font-size:8px; pointer-events:none;
+}
 .chart-header-overlay {
   position:absolute; z-index:3; left:12px; top:9px;
   display:flex; align-items:baseline; gap:10px;
@@ -189,6 +211,7 @@ button { cursor: pointer; }
   .instrument-main span,.instrument-main b { display:none; }
   .chart-controls { max-width:62%; }
   .chart-header-overlay { left:8px; top:7px; gap:7px; font-size:8px; }
+  .chart-crosshair-data { left:8px; top:27px; max-width:calc(100% - 16px); gap:0 7px; font-size:8px; }
   .chart-header-price { font-size:9px; }
   .chart-header-change { font-size:8px; }
   .plotted-indicators { font-size:8px; }
