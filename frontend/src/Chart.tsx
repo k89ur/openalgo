@@ -41,10 +41,16 @@ function getPeriod(timeframe: Timeframe) {
 }
 
 function getLimit(timeframe: Timeframe) {
-  if (timeframe === "D") return 500;
-  if (timeframe === "W") return 250;
-  if (timeframe === "M") return 120;
+  if (timeframe === "D") return 800;
+  if (timeframe === "W") return 400;
+  if (timeframe === "M") return 240;
   return 500;
+}
+
+function dateBeforeTimestamp(timestamp: number) {
+  const date = new Date(timestamp);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
 }
 
 export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid, showCrosshair, showVolume }: Props) {
@@ -124,11 +130,23 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
       container.style.background = palette.background;
 
       chart.setDataLoader({
-        getBars: async ({ callback }) => {
+        getBars: async ({ type, timestamp, callback }) => {
           try {
-            const url =
-              `/api/history?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${getLimit(timeframe)}`;
+            const pageSize = getLimit(timeframe);
+            const params = new URLSearchParams({
+              symbol,
+              timeframe,
+              limit: String(pageSize),
+            });
 
+            // KLineChart calls "forward" when the user reaches the left
+            // boundary. In that direction we ask FYERS for candles strictly
+            // older than the current leftmost candle.
+            if (type === "forward" && timestamp) {
+              params.set("to_date", dateBeforeTimestamp(Number(timestamp)));
+            }
+
+            const url = `/api/history?${params.toString()}`;
             console.log("PIPSGOX history request:", url);
 
             const response = await fetch(url, { cache: "no-store" });
@@ -158,10 +176,17 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
 
             if (disposed) return;
 
-            console.log("PIPSGOX history bars:", bars.length);
+            console.log(
+              "PIPSGOX history bars:",
+              bars.length,
+              "direction:",
+              type,
+              "oldest:",
+              bars.length ? new Date(bars[0].timestamp).toISOString() : "none",
+            );
 
             callback(bars, {
-              forward: false,
+              forward: type === "backward" ? false : bars.length >= pageSize,
               backward: false,
             });
           } catch (error) {
