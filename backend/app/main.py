@@ -46,7 +46,41 @@ FYERS_REDIRECT_URI = os.getenv(
 FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: set[str] = set()
-_fyers_access_token = os.getenv("FYERS_ACCESS_TOKEN", "").strip()
+_fyers_token_lock = threading.Lock()
+FYERS_TOKEN_FILE = os.getenv(
+    "PIPSGOX_FYERS_TOKEN_FILE",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".pipsgox", "fyers_access_token"),
+).strip()
+
+
+def _load_saved_fyers_token() -> str:
+    try:
+        with open(FYERS_TOKEN_FILE, "r", encoding="utf-8") as handle:
+            return handle.read().strip()
+    except (FileNotFoundError, OSError):
+        return ""
+
+
+def _save_fyers_token(token: str) -> None:
+    token = token.strip()
+    if not token:
+        return
+
+    directory = os.path.dirname(FYERS_TOKEN_FILE)
+    os.makedirs(directory, exist_ok=True)
+    temporary = f"{FYERS_TOKEN_FILE}.tmp"
+
+    with _fyers_token_lock:
+        with open(temporary, "w", encoding="utf-8") as handle:
+            handle.write(token)
+        os.replace(temporary, FYERS_TOKEN_FILE)
+        try:
+            os.chmod(FYERS_TOKEN_FILE, 0o600)
+        except OSError:
+            pass
+
+
+_fyers_access_token = os.getenv("FYERS_ACCESS_TOKEN", "").strip() or _load_saved_fyers_token()
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,6 +128,8 @@ class SymbolSearchResult(BaseModel):
 
 
 provider = FyersMarketDataProvider()
+if _fyers_access_token:
+    provider.set_access_token(_fyers_access_token)
 
 
 _symbol_master_cache: dict[str, dict] = {}
@@ -518,6 +554,7 @@ def fyers_callback(
 
     _fyers_access_token = str(payload["access_token"])
     provider.set_access_token(_fyers_access_token)
+    _save_fyers_token(_fyers_access_token)
 
     # Return directly to the web terminal after OAuth so the normal startup
     # flow is: start PIPSGOX -> FYERS login if needed -> back to the chart.
