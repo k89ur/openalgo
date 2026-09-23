@@ -4,6 +4,31 @@ import { Chart, type ChartType, type Timeframe } from "./Chart";
 import "./styles.css";
 
 type WatchItem = { symbol: string; price: string; change: string };
+export type ChartTheme = "pipsgox" | "classic" | "light";
+
+type ChartSettings = {
+  theme: ChartTheme;
+  showGrid: boolean;
+  showCrosshair: boolean;
+  showVolume: boolean;
+};
+
+const DEFAULT_CHART_SETTINGS: ChartSettings = {
+  theme: "pipsgox",
+  showGrid: true,
+  showCrosshair: true,
+  showVolume: true,
+};
+
+function loadChartSettings(): ChartSettings {
+  try {
+    const raw = localStorage.getItem("pipsgox-chart-settings");
+    if (!raw) return DEFAULT_CHART_SETTINGS;
+    return { ...DEFAULT_CHART_SETTINGS, ...(JSON.parse(raw) as Partial<ChartSettings>) };
+  } catch {
+    return DEFAULT_CHART_SETTINGS;
+  }
+}
 
 const watchlist: WatchItem[] = [
   { symbol: "BHARTIARTL", price: "1,756.90", change: "+1.08%" },
@@ -37,7 +62,7 @@ function App() {
   const [watchOpen, setWatchOpen] = useState(true);
   const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
-  const [panel, setPanel] = useState<"indicators" | "pipscript" | null>(null);
+  const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
   const [quote, setQuote] = useState<{
     last: number; change: number; change_percent: number;
     open?: number; high?: number; low?: number; volume?: number;
@@ -48,6 +73,15 @@ function App() {
   }>>({});
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState(false);
+  const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
+  const updateChartSettings = (patch: Partial<ChartSettings>) => {
+    setChartSettings((current) => {
+      const next = { ...current, ...patch };
+      localStorage.setItem("pipsgox-chart-settings", JSON.stringify(next));
+      return next;
+    });
+  };
+
   const [pipscript, setPipscript] = useState(
     "def calculate(data):\n    close = data.close\n    ma20 = close.sma(20)\n    return {\n        \"MA20\": ma20\n    }",
   );
@@ -222,7 +256,7 @@ function App() {
         <button className="top-command" onClick={() => setDark((value) => !value)}>
           {dark ? "LIGHT" : "DARK"}
         </button>
-        <button className="top-command">SETTINGS</button>
+        <button className="top-command" onClick={() => setPanel("settings")}>SETTINGS</button>
       </header>
 
       <section className="workspace">
@@ -258,7 +292,16 @@ function App() {
           </div>
 
           <div className="chart-container">
-            <Chart chartType={chartType} dark={dark} symbol={symbol} timeframe={timeframe} />
+            <Chart
+              chartType={chartType}
+              dark={dark}
+              symbol={symbol}
+              timeframe={timeframe}
+              chartTheme={chartSettings.theme}
+              showGrid={chartSettings.showGrid}
+              showCrosshair={chartSettings.showCrosshair}
+              showVolume={chartSettings.showVolume}
+            />
 
             <div className="quote-panel">
               <div className="quote-title">{selected.symbol}</div>
@@ -338,7 +381,7 @@ function App() {
         <div className="modal-backdrop" onClick={() => setPanel(null)}>
           <section className={`modal ${panel === "pipscript" ? "pipscript-modal" : ""}`} onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
-              <strong>{panel === "pipscript" ? "PIPSGOX PIPSCRIPT BUILDER" : "INDICATORS"}</strong>
+              <strong>{panel === "pipscript" ? "PIPSGOX PIPSCRIPT BUILDER" : panel === "settings" ? "CHART SETTINGS" : "INDICATORS"}</strong>
               <button onClick={() => setPanel(null)}>CLOSE</button>
             </div>
 
@@ -351,7 +394,7 @@ function App() {
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : panel === "pipscript" ? (
               <div className="builder-panel">
                 <div className="builder-toolbar">
                   <span>Python</span><button>JavaScript</button><span className="builder-spacer" /><button>LOAD</button><button>SAVE</button><button>RUN</button>
@@ -361,6 +404,27 @@ function App() {
                   <strong>Output</strong>
                   <span>Lines, values, markers and tables will appear here.</span>
                 </div>
+              </div>
+            ) : (
+              <div className="settings-panel">
+                <div className="settings-section">
+                  <div className="settings-section-title">APPEARANCE</div>
+                  <label className="settings-field">
+                    <span>Chart theme</span>
+                    <select value={chartSettings.theme} onChange={(event) => updateChartSettings({ theme: event.target.value as ChartTheme })}>
+                      <option value="pipsgox">PIPSGOX Dark</option>
+                      <option value="classic">Classic Dark</option>
+                      <option value="light">Clean Light</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="settings-section">
+                  <div className="settings-section-title">CHART ELEMENTS</div>
+                  <label className="settings-toggle"><span>Grid</span><input type="checkbox" checked={chartSettings.showGrid} onChange={(event) => updateChartSettings({ showGrid: event.target.checked })} /><i /></label>
+                  <label className="settings-toggle"><span>Crosshair</span><input type="checkbox" checked={chartSettings.showCrosshair} onChange={(event) => updateChartSettings({ showCrosshair: event.target.checked })} /><i /></label>
+                  <label className="settings-toggle"><span>Volume pane</span><input type="checkbox" checked={chartSettings.showVolume} onChange={(event) => updateChartSettings({ showVolume: event.target.checked })} /><i /></label>
+                </div>
+                <div className="settings-note">Changes apply immediately and are saved in this browser.</div>
               </div>
             )}
           </section>
