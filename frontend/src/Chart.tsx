@@ -78,12 +78,21 @@ function parseCrosshairEvent(event: unknown) {
   const readNumber = (...keys: string[]) => {
     for (const key of keys) {
       const raw = value[key] ?? nested[key] ?? point[key];
+      if (raw == null) continue;
       const parsed = Number(raw);
       if (Number.isFinite(parsed)) return parsed;
     }
     return undefined;
   };
-  return { dataIndex: readNumber("dataIndex"), timestamp: readNumber("timestamp") };
+  return {
+    dataIndex: readNumber("dataIndex", "index"),
+    timestamp: readNumber("timestamp", "time"),
+    open: readNumber("open"),
+    high: readNumber("high"),
+    low: readNumber("low"),
+    close: readNumber("close"),
+    volume: readNumber("volume"),
+  };
 }
 
 function getPeriod(timeframe: Timeframe) {
@@ -221,30 +230,42 @@ export function Chart({
       const crosshairHandler = (event: unknown) => {
         const parsed = parseCrosshairEvent(event);
         const dataList = chart.getDataList();
+        if (!dataList.length) {
+          setCrosshairData(null);
+          return;
+        }
         let index = parsed.dataIndex != null ? Math.round(parsed.dataIndex) : -1;
-        if (index < 0 && parsed.timestamp != null && dataList.length) {
-          let bestIndex = 0;
+        if (index < 0 && parsed.timestamp != null) {
+          const eventTimestamp = parsed.timestamp < 100000000000 ? parsed.timestamp * 1000 : parsed.timestamp;
+          let bestIndex = -1;
           let bestDistance = Number.POSITIVE_INFINITY;
           dataList.forEach((item, itemIndex) => {
-            const distance = Math.abs(item.timestamp - parsed.timestamp!);
+            const distance = Math.abs(item.timestamp - eventTimestamp);
             if (distance < bestDistance) { bestDistance = distance; bestIndex = itemIndex; }
           });
-          index = bestIndex;
+          if (bestIndex >= 0 && bestDistance <= 3 * 24 * 60 * 60 * 1000) index = bestIndex;
         }
-        if (index < 0 || index >= dataList.length) { setCrosshairData(null); return; }
+        if (index < 0 || index >= dataList.length) {
+          setCrosshairData(null);
+          return;
+        }
         const candle = dataList[index];
         const previous = index > 0 ? dataList[index - 1] : undefined;
-        const change = previous ? candle.close - previous.close : 0;
+        const open = parsed.open ?? candle.open;
+        const high = parsed.high ?? candle.high;
+        const low = parsed.low ?? candle.low;
+        const close = parsed.close ?? candle.close;
+        const volume = parsed.volume ?? Number(candle.volume ?? 0);
+        if (![open, high, low, close].every((value) => Number.isFinite(value))) {
+          setCrosshairData(null);
+          return;
+        }
+        const change = previous ? close - previous.close : 0;
         const changePercent = previous && previous.close !== 0 ? (change / previous.close) * 100 : 0;
         setCrosshairData({
           timestamp: candle.timestamp,
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-          volume: Number(candle.volume ?? 0),
-          change,
-          changePercent,
+          open, high, low, close, volume,
+          change, changePercent,
           ma50: movingAverage(dataList, index, 50),
           ma200: movingAverage(dataList, index, 200),
         });
@@ -489,15 +510,14 @@ export function Chart({
               shouldOhlc: false,
               figures: [{ key: "pe", title: "P/E: ", type: "line" }],
               styles: { lines: [{ style: "solid", color: "#c9a15a", size: 1 }] },
+              minValue: 0,
               calc: (dataList) => {
-                const result: Record<number, { pe: number | null }> = {};
                 let latest: number | null = null;
-                for (const candle of dataList) {
+                return dataList.map((candle) => {
                   const exact = latestByDate.get(new Date(candle.timestamp).toISOString().slice(0, 10));
                   if (exact != null) latest = exact;
-                  result[candle.timestamp] = { pe: latest };
-                }
-                return result;
+                  return { pe: latest };
+                }) as any;
               },
             });
             chart.setPaneOptions({ id: "pe_pane", height: 86, minHeight: 70, dragEnabled: false, order: 10 });
