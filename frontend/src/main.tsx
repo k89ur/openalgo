@@ -141,6 +141,14 @@ function App() {
     return initial[0]?.symbol ?? "BHARTIARTL";
   });
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{
+    symbol: string;
+    name: string;
+    exchange: string;
+    api_symbol: string;
+  }>>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [watchSearch, setWatchSearch] = useState("");
   const [watchOpen, setWatchOpen] = useState(true);
   const [watchWidth, setWatchWidth] = useState(315);
@@ -235,7 +243,8 @@ function App() {
     setWatchlists((current) => ({ ...current, [name]: [] }));
     setActiveWatchlistName(name);
     setSymbol("BHARTIARTL");
-    setSearch("");
+    setSearch("BHARTIARTL");
+    setSearchOpen(false);
   };
 
   const deleteWatchlist = () => {
@@ -432,9 +441,53 @@ function App() {
   }, [watchlist]);
 
   const selected = useMemo(
-    () => watchlist.find((item) => item.symbol === symbol) ?? watchlist[0],
+    () =>
+      watchlist.find((item) => item.symbol === symbol) ??
+      watchlist[0] ??
+      { symbol: symbol || "BHARTIARTL", price: "—", change: "—" },
     [symbol, watchlist],
   );
+
+  useEffect(() => {
+    const query = search.trim();
+
+    if (!query) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchLoading(true);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          "/api/symbols/search?q=" + encodeURIComponent(query) + "&limit=12",
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("symbol search failed");
+
+        const data = await response.json() as Array<{
+          symbol: string;
+          name: string;
+          exchange: string;
+          api_symbol: string;
+        }>;
+
+        if (!cancelled) setSearchResults(data);
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearchLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [search]);
 
   const filteredWatchlist = watchlist.filter((item) =>
     item.symbol.toLowerCase().includes(watchSearch.trim().toLowerCase()),
@@ -457,8 +510,62 @@ function App() {
 
   const submitSearch = () => {
     const query = search.trim().toUpperCase();
-    const match = watchlist.find((item) => item.symbol === query);
-    if (match) selectSymbol(match.symbol);
+    const watchMatch = watchlist.find((item) => item.symbol === query);
+
+    if (watchMatch) {
+      selectSymbol(watchMatch.symbol);
+      setSearchOpen(false);
+      return;
+    }
+
+    const result = searchResults[0];
+    if (result) {
+      selectSymbol(result.symbol);
+      setSearchOpen(false);
+    }
+  };
+
+  const openSearchResult = (result: {
+    symbol: string;
+    name: string;
+    exchange: string;
+    api_symbol: string;
+  }) => {
+    selectSymbol(result.symbol);
+    setSearchOpen(false);
+    setWatchImportMessage(
+      watchlist.some((item) => item.symbol === result.symbol)
+        ? "Opened " + result.symbol
+        : result.symbol + " opened — use ADD to put it in " + activeWatchlistName,
+    );
+    window.setTimeout(() => setWatchImportMessage(""), 3000);
+  };
+
+  const addSearchResult = (result: {
+    symbol: string;
+    name: string;
+    exchange: string;
+    api_symbol: string;
+  }) => {
+    if (watchlist.some((item) => item.symbol === result.symbol)) {
+      openSearchResult(result);
+      return;
+    }
+
+    if (watchlist.length >= MAX_WATCHLIST_SIZE) {
+      setWatchImportMessage("Watchlist limit reached: 1000 symbols");
+      window.setTimeout(() => setWatchImportMessage(""), 2500);
+      return;
+    }
+
+    setWatchlist((current) => [
+      ...current,
+      { symbol: result.symbol, price: "—", change: "—" },
+    ]);
+    selectSymbol(result.symbol);
+    setSearchOpen(false);
+    setWatchImportMessage("Added " + result.symbol + " to " + activeWatchlistName);
+    window.setTimeout(() => setWatchImportMessage(""), 2500);
   };
 
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
@@ -495,11 +602,46 @@ function App() {
         <button className="top-command">WATCHLIST</button>
         <button className="top-command">ORDERS</button>
 
-        <div className="top-search">
-          <input value={search} placeholder={selected.symbol} aria-label="Search symbol"
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter") submitSearch(); }} />
-          <button onClick={submitSearch}>GO</button>
+        <div className="top-search-wrap">
+          <div className="top-search">
+            <input
+              value={search}
+              placeholder={selected.symbol}
+              aria-label="Search NSE symbol"
+              onFocus={() => setSearchOpen(true)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setSearchOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitSearch();
+                if (event.key === "Escape") setSearchOpen(false);
+              }}
+            />
+            <button onClick={submitSearch}>GO</button>
+          </div>
+
+          {searchOpen && search.trim() && (
+            <div className="symbol-search-results">
+              {searchLoading ? (
+                <div className="symbol-search-empty">Searching NSE symbols...</div>
+              ) : searchResults.length ? (
+                searchResults.map((result) => (
+                  <div key={result.api_symbol} className="symbol-search-row">
+                    <button className="symbol-search-main" onClick={() => openSearchResult(result)}>
+                      <strong>{result.symbol}</strong>
+                      <span>{result.name}</span>
+                    </button>
+                    <button className="symbol-search-add" onClick={() => addSearchResult(result)} aria-label={"Add " + result.symbol + " to watchlist"}>
+                      +
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="symbol-search-empty">No NSE symbols found</div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="top-spacer" />
@@ -664,7 +806,9 @@ function App() {
                 </div>
               ))}
             </div>
-            <div className="watch-footer">Click a symbol to load chart</div>
+            <div className="watch-footer">
+              {watchlist.length ? "Click a symbol to load chart" : "Watchlist empty — use symbol search or ADD"}
+            </div>
           </aside>
         ) : (
           <button className="watch-open" onClick={() => setWatchOpen(true)}>SHOW WATCHLIST</button>
