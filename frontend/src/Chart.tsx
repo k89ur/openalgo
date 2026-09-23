@@ -241,7 +241,7 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
       }
 
       chart.createIndicator(
-        { name: "MA", paneId: "candle_pane", calcParams: [20, 50, 200] },
+        { name: "MA", paneId: "candle_pane", calcParams: [50, 200] },
         true,
       );
       if (showVolume) {
@@ -249,6 +249,7 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
           name: "VOL",
           paneId: "volume_pane",
           series: "volume",
+          calcParams: [],
         });
         chart.setPaneOptions({
           id: "volume_pane",
