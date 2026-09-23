@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
+from app.providers.fmp import FmpFundamentalsProvider
 
 load_dotenv()
 
@@ -128,6 +129,7 @@ class SymbolSearchResult(BaseModel):
 
 
 provider = FyersMarketDataProvider()
+fundamentals_provider = FmpFundamentalsProvider()
 if _fyers_access_token:
     provider.set_access_token(_fyers_access_token)
 
@@ -614,6 +616,18 @@ def history(
                 end=to_date,
             )
         ]
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/fundamentals/pe")
+def historical_pe(
+    symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
+    limit: int = Query(default=40, ge=1, le=200),
+) -> list[dict[str, float]]:
+    try:
+        points = fundamentals_provider.get_historical_pe(symbol, limit)
+        return [{"time": point.time, "value": point.value} for point in points]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
