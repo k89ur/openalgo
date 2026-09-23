@@ -167,6 +167,7 @@ function App() {
   const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
   const [watchImportMessage, setWatchImportMessage] = useState("");
   const [draggedSymbol, setDraggedSymbol] = useState<string | null>(null);
+  const [fyersChecking, setFyersChecking] = useState(true);
   const watchImportRef = useRef<HTMLInputElement>(null);
   const updateChartSettings = (patch: Partial<ChartSettings>) => {
     setChartSettings((current) => {
@@ -179,6 +180,34 @@ function App() {
   useEffect(() => {
     localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlists));
   }, [watchlists]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const ensureFyersConnection = async () => {
+      try {
+        const response = await fetch("/api/fyers/status", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as { configured?: boolean; connected?: boolean };
+
+        if (cancelled) return;
+        if (data.configured && !data.connected) {
+          window.location.replace("/auth/fyers/login");
+          return;
+        }
+      } catch {
+        // Keep the terminal usable when the backend is temporarily unavailable.
+      } finally {
+        if (!cancelled) setFyersChecking(false);
+      }
+    };
+
+    void ensureFyersConnection();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
 
   const exportWatchlist = () => {
     const csv = ["symbol", ...watchlist.map((item) => item.symbol)].join("\n") + "\n";
@@ -645,7 +674,7 @@ function App() {
           <button>Help</button>
         </div>
         <div className="menu-center">PIPSGOX WEB TERMINAL</div>
-        <div className="menu-right"><span className="status-dot" /> Data: FYERS API V3</div>
+        <div className="menu-right"><span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}</div>
       </div>
 
       <header className="topbar">
