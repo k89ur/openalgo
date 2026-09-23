@@ -4,11 +4,17 @@ import { dispose, init, type Chart as KLineChartInstance } from "klinecharts";
 export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
 
+export type ChartTheme = "pipsgox" | "classic" | "light";
+
 type Props = {
   chartType: ChartType;
   dark: boolean;
   symbol: string;
   timeframe: Timeframe;
+  chartTheme: ChartTheme;
+  showGrid: boolean;
+  showCrosshair: boolean;
+  showVolume: boolean;
 };
 
 type HistoryCandle = {
@@ -41,7 +47,7 @@ function getLimit(timeframe: Timeframe) {
   return 500;
 }
 
-export function Chart({ chartType, dark, symbol, timeframe }: Props) {
+export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid, showCrosshair, showVolume }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<KLineChartInstance | null>(null);
 
@@ -61,6 +67,61 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
         volumePrecision: 0,
       });
       chart.setPeriod(getPeriod(timeframe));
+
+      const palette = chartTheme === "light"
+        ? {
+            background: "#ffffff",
+            grid: "#e5e7eb",
+            text: "#4b5563",
+            axis: "#9ca3af",
+            crosshair: "#94a3b8",
+            up: "#168a59",
+            down: "#c93643",
+          }
+        : chartTheme === "classic"
+          ? {
+              background: "#101317",
+              grid: "#28303a",
+              text: "#aeb7c2",
+              axis: "#697482",
+              crosshair: "#7c8794",
+              up: "#26a69a",
+              down: "#ef5350",
+            }
+          : {
+              background: "#090909",
+              grid: "#202020",
+              text: "#9aa3ad",
+              axis: "#626b75",
+              crosshair: "#707b87",
+              up: "#12d98b",
+              down: "#ff4d5a",
+            };
+
+      chart.setStyles({
+        grid: {
+          show: showGrid,
+          horizontal: { show: showGrid, color: palette.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
+          vertical: { show: showGrid, color: palette.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
+        },
+        crosshair: {
+          show: showCrosshair,
+          horizontal: { show: showCrosshair, line: { show: showCrosshair, color: palette.crosshair, size: 1, style: "dashed", dashedValue: [4, 2] } },
+          vertical: { show: showCrosshair, line: { show: showCrosshair, color: palette.crosshair, size: 1, style: "dashed", dashedValue: [4, 2] } },
+        },
+        xAxis: {
+          tickText: { color: palette.text },
+          axisLine: { color: palette.axis },
+          tickLine: { color: palette.axis },
+        },
+        yAxis: {
+          tickText: { color: palette.text },
+          axisLine: { color: palette.axis },
+          tickLine: { color: palette.axis },
+        },
+      });
+
+      container.style.background = palette.background;
 
       chart.setDataLoader({
         getBars: async ({ callback }) => {
@@ -126,10 +187,10 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
           candle: {
             type: "area",
             area: {
-              lineColor: dark ? "#38bdf8" : "#1976d2",
+              lineColor: chartTheme === "light" ? "#1976d2" : chartTheme === "classic" ? "#42a5f5" : "#38bdf8",
               lineSize: 2,
               backgroundColor: [
-                { offset: 0, color: dark ? "rgba(56,189,248,0.12)" : "rgba(25,118,210,0.12)" },
+                { offset: 0, color: chartTheme === "light" ? "rgba(25,118,210,0.10)" : chartTheme === "classic" ? "rgba(66,165,245,0.10)" : "rgba(56,189,248,0.12)" },
                 { offset: 1, color: "rgba(0,0,0,0)" },
               ],
             },
@@ -140,14 +201,14 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
           candle: {
             type: "candle_solid",
             bar: {
-              upColor: dark ? "#12d98b" : "#168a59",
-              downColor: dark ? "#ff4d5a" : "#c93643",
+              upColor: palette.up,
+              downColor: palette.down,
               noChangeColor: "#8d9aaa",
-              upBorderColor: dark ? "#12d98b" : "#168a59",
-              downBorderColor: dark ? "#ff4d5a" : "#c93643",
+              upBorderColor: palette.up,
+              downBorderColor: palette.down,
               noChangeBorderColor: "#8d9aaa",
-              upWickColor: dark ? "#12d98b" : "#168a59",
-              downWickColor: dark ? "#ff4d5a" : "#c93643",
+              upWickColor: palette.up,
+              downWickColor: palette.down,
               noChangeWickColor: "#8d9aaa",
             },
           },
@@ -158,7 +219,7 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
         { name: "MA", paneId: "candle_pane", calcParams: [20, 50, 200] },
         true,
       );
-      chart.createIndicator("VOL");
+      if (showVolume) chart.createIndicator("VOL");
 
       const resizeObserver = new ResizeObserver(() => {
         chart.resize();
@@ -177,7 +238,7 @@ export function Chart({ chartType, dark, symbol, timeframe }: Props) {
         chartRef.current = null;
       };
     }
-  }, [chartType, dark, symbol, timeframe]);
+  }, [chartType, dark, symbol, timeframe, chartTheme, showGrid, showCrosshair, showVolume]);
 
   return <div ref={containerRef} className="chart-canvas" />;
 }
