@@ -10,8 +10,8 @@ from urllib.parse import urlencode
 
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
@@ -398,12 +398,11 @@ def fyers_login() -> RedirectResponse:
     return RedirectResponse(url=login_url, status_code=302)
 
 
-@app.get("/auth/fyers/callback", response_class=HTMLResponse)
+@app.get("/auth/fyers/callback")
 def fyers_callback(
-    request: Request,
     auth_code: str | None = None,
     state: str | None = None,
-) -> HTMLResponse | RedirectResponse:
+) -> RedirectResponse:
     global _fyers_access_token
 
     if not auth_code:
