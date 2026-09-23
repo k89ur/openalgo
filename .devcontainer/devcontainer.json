@@ -1,19 +1,10 @@
 {
-  "name": "ChartLab",
+  "name": "PIPSGOX",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
-    }
-  },
-  "forwardPorts": [5173, 8000],
+  "features": {"ghcr.io/devcontainers/features/node:1": {"version": "22"}},
+  "forwardPorts": [3001, 8000],
   "portsAttributes": {
-    "5173": {
-      "label": "ChartLab Web",
-      "onAutoForward": "openBrowser"
-    },
-    "8000": {
-      "label": "ChartLab API"
-    }
+    "3001": {"label": "PIPSGOX Web", "onAutoForward": "openBrowser", "visibility": "public"},
+    "8000": {"label": "PIPSGOX API", "visibility": "public"}
   }
 }
