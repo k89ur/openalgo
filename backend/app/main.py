@@ -620,14 +620,27 @@ def history(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@app.get("/api/fundamentals/eps")
+def historical_eps(
+    symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
+    limit: int = Query(default=40, ge=4, le=200),
+) -> list[dict[str, float]]:
+    try:
+        points = fundamentals_provider.get_historical_eps(symbol, limit)
+        return [{"time": point.time, "ttm_eps": point.ttm_eps} for point in points]
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @app.get("/api/fundamentals/pe")
 def historical_pe(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
-    limit: int = Query(default=40, ge=1, le=200),
+    limit: int = Query(default=40, ge=4, le=200),
 ) -> list[dict[str, float]]:
+    """Compatibility endpoint; P/E itself is now calculated in the chart."""
     try:
-        points = fundamentals_provider.get_historical_pe(symbol, limit)
-        return [{"time": point.time, "value": point.value} for point in points]
+        points = fundamentals_provider.get_historical_eps(symbol, limit)
+        return [{"time": point.time, "value": point.ttm_eps} for point in points]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
