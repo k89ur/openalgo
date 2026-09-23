@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe } from "./Chart";
 import "./styles.css";
@@ -30,7 +30,10 @@ function loadChartSettings(): ChartSettings {
   }
 }
 
-const watchlist: WatchItem[] = [
+const MAX_WATCHLIST_SIZE = 1000;
+const WATCHLIST_STORAGE_KEY = "pipsgox-watchlist";
+
+const DEFAULT_WATCHLIST: WatchItem[] = [
   { symbol: "BHARTIARTL", price: "1,756.90", change: "+1.08%" },
   { symbol: "RELIANCE", price: "1,482.30", change: "+1.21%" },
   { symbol: "TCS", price: "4,021.50", change: "+0.64%" },
@@ -51,12 +54,58 @@ const watchlist: WatchItem[] = [
   { symbol: "NIFTY", price: "24,198.85", change: "-0.12%" },
 ];
 
+function loadWatchlist(): WatchItem[] {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    if (!raw) return DEFAULT_WATCHLIST;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return DEFAULT_WATCHLIST;
+
+    const symbols = parsed
+      .map((item) => (typeof item === "string" ? item : (item as Partial<WatchItem>)?.symbol))
+      .map((item) => String(item ?? "").trim().toUpperCase())
+      .filter(Boolean);
+
+    const unique = [...new Set(symbols)].slice(0, MAX_WATCHLIST_SIZE);
+    return unique.map((item) => ({ symbol: item, price: "—", change: "—" }));
+  } catch {
+    return DEFAULT_WATCHLIST;
+  }
+}
+
+function normalizeImportedSymbol(value: string): string {
+  return value
+    .replace(/^\uFEFF/, "")
+    .replace(/^["']|["']$/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+function parseWatchlistImport(text: string): string[] {
+  const rows = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const symbols: string[] = [];
+
+  for (const row of rows) {
+    const cells = row.split(/[,;\t]/).map((cell) => normalizeImportedSymbol(cell));
+    if (!cells.length) continue;
+
+    const header = cells[0].replace(/\s+/g, "").toLowerCase();
+    if (header === "symbol" || header === "ticker" || header === "tradingsymbol") continue;
+
+    const candidate = cells.find((cell) => cell && !/^(SYMBOL|TICKER|TRADINGSYMBOL)$/i.test(cell));
+    if (candidate) symbols.push(candidate);
+  }
+
+  return [...new Set(symbols)].slice(0, MAX_WATCHLIST_SIZE);
+}
+
 const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
 
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
-  const [symbol, setSymbol] = useState("BHARTIARTL");
+  const [watchlist, setWatchlist] = useState<WatchItem[]>(loadWatchlist);
+  const [symbol, setSymbol] = useState(() => loadWatchlist()[0]?.symbol ?? "BHARTIARTL");
   const [search, setSearch] = useState("");
   const [watchSearch, setWatchSearch] = useState("");
   const [watchOpen, setWatchOpen] = useState(true);
@@ -74,12 +123,86 @@ function App() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState(false);
   const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
+  const [watchImportMessage, setWatchImportMessage] = useState("");
+  const watchImportRef = useRef<HTMLInputElement>(null);
   const updateChartSettings = (patch: Partial<ChartSettings>) => {
     setChartSettings((current) => {
       const next = { ...current, ...patch };
       localStorage.setItem("pipsgox-chart-settings", JSON.stringify(next));
       return next;
     });
+  };
+
+  useEffect(() => {
+    localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist));
+  }, [watchlist]);
+
+  const exportWatchlist = () => {
+    const csv = ["symbol", ...watchlist.map((item) => item.symbol)].join("\n") + "\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "pipsgox-watchlist.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    setWatchImportMessage(`Exported ${watchlist.length} symbols`);
+    window.setTimeout(() => setWatchImportMessage(""), 2500);
+  };
+
+  const importWatchlist = async (file: File) => {
+    try {
+      const text = await file.text();
+      const imported = parseWatchlistImport(text);
+
+      if (!imported.length) {
+        setWatchImportMessage("No symbols found in the file");
+        return;
+      }
+
+      const limited = imported.slice(0, MAX_WATCHLIST_SIZE);
+      const next = limited.map((item) => ({ symbol: item, price: "—", change: "—" }));
+      setWatchlist(next);
+
+      if (!next.some((item) => item.symbol === symbol)) {
+        selectSymbol(next[0].symbol);
+      }
+
+      setWatchImportMessage(
+        imported.length > MAX_WATCHLIST_SIZE
+          ? `Imported ${MAX_WATCHLIST_SIZE} symbols (1000 maximum)`
+          : `Imported ${next.length} symbols`,
+      );
+    } catch {
+      setWatchImportMessage("Could not read the watchlist file");
+    } finally {
+      if (watchImportRef.current) watchImportRef.current.value = "";
+      window.setTimeout(() => setWatchImportMessage(""), 3500);
+    }
+  };
+
+  const addWatchSymbol = () => {
+    const value = window.prompt("Enter symbol to add");
+    const nextSymbol = normalizeImportedSymbol(value ?? "");
+    if (!nextSymbol) return;
+
+    if (watchlist.some((item) => item.symbol === nextSymbol)) {
+      selectSymbol(nextSymbol);
+      setWatchImportMessage(`${nextSymbol} is already in the watchlist`);
+      window.setTimeout(() => setWatchImportMessage(""), 2500);
+      return;
+    }
+
+    if (watchlist.length >= MAX_WATCHLIST_SIZE) {
+      setWatchImportMessage("Watchlist limit reached: 1000 symbols");
+      window.setTimeout(() => setWatchImportMessage(""), 2500);
+      return;
+    }
+
+    setWatchlist((current) => [...current, { symbol: nextSymbol, price: "—", change: "—" }]);
+    selectSymbol(nextSymbol);
+    setWatchImportMessage(`Added ${nextSymbol}`);
+    window.setTimeout(() => setWatchImportMessage(""), 2500);
   };
 
   const [pipscript, setPipscript] = useState(
@@ -133,6 +256,10 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     const symbols = watchlist.map((item) => item.symbol).join(",");
+    if (!symbols) {
+      setLiveQuotes({});
+      return () => { cancelled = true; };
+    }
     fetch("/api/quotes?symbols=" + encodeURIComponent(symbols))
       .then((response) => {
         if (!response.ok) throw new Error("quotes request failed");
@@ -146,7 +273,7 @@ function App() {
       })
       .catch(() => { if (!cancelled) setLiveQuotes({}); });
     return () => { cancelled = true; };
-  }, []);
+  }, [watchlist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,11 +305,11 @@ function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [watchlist]);
 
   const selected = useMemo(
     () => watchlist.find((item) => item.symbol === symbol) ?? watchlist[0],
-    [symbol],
+    [symbol, watchlist],
   );
 
   const filteredWatchlist = watchlist.filter((item) =>
@@ -350,13 +477,26 @@ function App() {
             </div>
             <div className="watch-header">
               <strong>My Watchlist</strong>
-              <span>{watchlist.length} / 250</span>
+              <span>{watchlist.length} / {MAX_WATCHLIST_SIZE}</span>
               <div className="watch-spacer" />
               <button onClick={() => setWatchOpen(false)}>HIDE</button>
-              <button>ADD</button>
+              <button onClick={() => watchImportRef.current?.click()}>IMPORT</button>
+              <button onClick={exportWatchlist}>EXPORT</button>
+              <button onClick={addWatchSymbol}>ADD</button>
+              <input
+                ref={watchImportRef}
+                className="watch-import-input"
+                type="file"
+                accept=".csv,.txt,text/csv,text/plain"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importWatchlist(file);
+                }}
+              />
             </div>
             <input className="watch-search" placeholder="Search symbols..." value={watchSearch}
               onChange={(event) => setWatchSearch(event.target.value)} />
+            {watchImportMessage && <div className="watch-message">{watchImportMessage}</div>}
             <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span></div>
             <div className="watch-items">
               {filteredWatchlist.map((item) => (
