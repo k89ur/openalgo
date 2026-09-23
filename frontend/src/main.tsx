@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type SetStateAction } from "react";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe } from "./Chart";
 import "./styles.css";
@@ -31,7 +31,10 @@ function loadChartSettings(): ChartSettings {
 }
 
 const MAX_WATCHLIST_SIZE = 1000;
-const WATCHLIST_STORAGE_KEY = "pipsgox-watchlist";
+const WATCHLIST_STORAGE_KEY = "pipsgox-watchlists";
+const LEGACY_WATCHLIST_STORAGE_KEY = "pipsgox-watchlist";
+const DEFAULT_WATCHLIST_NAME = "Main";
+const MAX_WATCHLISTS = 10;
 
 const DEFAULT_WATCHLIST: WatchItem[] = [
   { symbol: "BHARTIARTL", price: "1,756.90", change: "+1.08%" },
@@ -54,22 +57,40 @@ const DEFAULT_WATCHLIST: WatchItem[] = [
   { symbol: "NIFTY", price: "24,198.85", change: "-0.12%" },
 ];
 
-function loadWatchlist(): WatchItem[] {
+function normalizeWatchItems(value: unknown): WatchItem[] {
+  if (!Array.isArray(value)) return [];
+
+  const symbols = value
+    .map((item) => (typeof item === "string" ? item : (item as Partial<WatchItem>)?.symbol))
+    .map((item) => String(item ?? "").trim().toUpperCase())
+    .filter(Boolean);
+
+  const unique = [...new Set(symbols)].slice(0, MAX_WATCHLIST_SIZE);
+  return unique.map((item) => ({ symbol: item, price: "—", change: "—" }));
+}
+
+function loadWatchlists(): Record<string, WatchItem[]> {
   try {
     const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
-    if (!raw) return DEFAULT_WATCHLIST;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return DEFAULT_WATCHLIST;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const result: Record<string, WatchItem[]> = {};
 
-    const symbols = parsed
-      .map((item) => (typeof item === "string" ? item : (item as Partial<WatchItem>)?.symbol))
-      .map((item) => String(item ?? "").trim().toUpperCase())
-      .filter(Boolean);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [name, value] of Object.entries(parsed)) {
+          const cleanName = name.trim().slice(0, 24);
+          if (cleanName) result[cleanName] = normalizeWatchItems(value);
+        }
+      }
 
-    const unique = [...new Set(symbols)].slice(0, MAX_WATCHLIST_SIZE);
-    return unique.map((item) => ({ symbol: item, price: "—", change: "—" }));
+      if (Object.keys(result).length) return result;
+    }
+
+    const legacy = localStorage.getItem(LEGACY_WATCHLIST_STORAGE_KEY);
+    const migrated = legacy ? normalizeWatchItems(JSON.parse(legacy)) : DEFAULT_WATCHLIST;
+    return { [DEFAULT_WATCHLIST_NAME]: migrated };
   } catch {
-    return DEFAULT_WATCHLIST;
+    return { [DEFAULT_WATCHLIST_NAME]: DEFAULT_WATCHLIST };
   }
 }
 
@@ -104,8 +125,20 @@ const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
-  const [watchlist, setWatchlist] = useState<WatchItem[]>(loadWatchlist);
-  const [symbol, setSymbol] = useState(() => loadWatchlist()[0]?.symbol ?? "BHARTIARTL");
+  const [watchlists, setWatchlists] = useState<Record<string, WatchItem[]>>(loadWatchlists);
+  const [activeWatchlistName, setActiveWatchlistName] = useState(DEFAULT_WATCHLIST_NAME);
+  const watchlist = watchlists[activeWatchlistName] ?? [];
+  const setWatchlist = (update: SetStateAction<WatchItem[]>) => {
+    setWatchlists((current) => {
+      const currentList = current[activeWatchlistName] ?? [];
+      const nextList = typeof update === "function" ? update(currentList) : update;
+      return { ...current, [activeWatchlistName]: nextList };
+    });
+  };
+  const [symbol, setSymbol] = useState(() => {
+    const initial = loadWatchlists()[DEFAULT_WATCHLIST_NAME] ?? DEFAULT_WATCHLIST;
+    return initial[0]?.symbol ?? "BHARTIARTL";
+  });
   const [search, setSearch] = useState("");
   const [watchSearch, setWatchSearch] = useState("");
   const [watchOpen, setWatchOpen] = useState(true);
@@ -134,8 +167,8 @@ function App() {
   };
 
   useEffect(() => {
-    localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist));
-  }, [watchlist]);
+    localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlists));
+  }, [watchlists]);
 
   const exportWatchlist = () => {
     const csv = ["symbol", ...watchlist.map((item) => item.symbol)].join("\n") + "\n";
@@ -179,6 +212,58 @@ function App() {
       if (watchImportRef.current) watchImportRef.current.value = "";
       window.setTimeout(() => setWatchImportMessage(""), 3500);
     }
+  };
+
+  const createWatchlist = () => {
+    if (Object.keys(watchlists).length >= MAX_WATCHLISTS) {
+      setWatchImportMessage(`Maximum ${MAX_WATCHLISTS} watchlists`);
+      window.setTimeout(() => setWatchImportMessage(""), 2500);
+      return;
+    }
+
+    const value = window.prompt("New watchlist name");
+    const name = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, 24);
+    if (!name) return;
+
+    if (watchlists[name]) {
+      setActiveWatchlistName(name);
+      return;
+    }
+
+    setWatchlists((current) => ({ ...current, [name]: [] }));
+    setActiveWatchlistName(name);
+    setSymbol("BHARTIARTL");
+    setSearch("");
+  };
+
+  const deleteWatchlist = () => {
+    const names = Object.keys(watchlists);
+    if (names.length <= 1) {
+      setWatchImportMessage("Keep at least one watchlist");
+      window.setTimeout(() => setWatchImportMessage(""), 2500);
+      return;
+    }
+
+    if (!window.confirm(`Delete watchlist "${activeWatchlistName}"?`)) return;
+
+    const next = { ...watchlists };
+    delete next[activeWatchlistName];
+    const nextName = Object.keys(next)[0];
+    setWatchlists(next);
+    setActiveWatchlistName(nextName);
+    setSymbol(next[nextName]?.[0]?.symbol ?? "BHARTIARTL");
+    setSearch(next[nextName]?.[0]?.symbol ?? "");
+  };
+
+  const moveWatchSymbol = (currentIndex: number, direction: -1 | 1) => {
+    setWatchlist((current) => {
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+
+      const next = [...current];
+      [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+      return next;
+    });
   };
 
   const addWatchSymbol = () => {
@@ -471,15 +556,33 @@ function App() {
           <aside className="watchlist" style={{ width: watchWidth }}>
             <div className="watch-resize-handle" onPointerDown={startResize} />
             <div className="watch-tabs">
+              <select
+                className="watchlist-selector"
+                value={activeWatchlistName}
+                onChange={(event) => {
+                  const name = event.target.value;
+                  setActiveWatchlistName(name);
+                  const first = watchlists[name]?.[0]?.symbol;
+                  if (first) {
+                    setSymbol(first);
+                    setSearch(first);
+                  }
+                }}
+                aria-label="Select watchlist"
+              >
+                {Object.keys(watchlists).map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
               <button className="active">WATCHLIST</button>
               <button>MARKET</button>
               <button>MOVERS</button>
             </div>
             <div className="watch-header">
-              <strong>My Watchlist</strong>
+              <strong>{activeWatchlistName}</strong>
               <span>{watchlist.length} / {MAX_WATCHLIST_SIZE}</span>
               <div className="watch-spacer" />
               <button onClick={() => setWatchOpen(false)}>HIDE</button>
+              <button onClick={createWatchlist}>NEW</button>
+              <button onClick={deleteWatchlist}>DEL</button>
               <button onClick={() => watchImportRef.current?.click()}>IMPORT</button>
               <button onClick={exportWatchlist}>EXPORT</button>
               <button onClick={addWatchSymbol}>ADD</button>
@@ -497,17 +600,20 @@ function App() {
             <input className="watch-search" placeholder="Search symbols..." value={watchSearch}
               onChange={(event) => setWatchSearch(event.target.value)} />
             {watchImportMessage && <div className="watch-message">{watchImportMessage}</div>}
-            <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span></div>
+            <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span><span></span></div>
             <div className="watch-items">
               {filteredWatchlist.map((item) => (
-                <button key={item.symbol} className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}
-                  onClick={() => selectSymbol(item.symbol)}>
-                  <span className="watch-symbol">{item.symbol}</span>
-                  <span className="watch-price">{liveQuotes[item.symbol] ? liveQuotes[item.symbol].last.toFixed(2) : "—"}</span>
-                  <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
-                    {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
-                  </span>
-                </button>
+                <div key={item.symbol} className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}>
+                  <button className="watch-row-main" onClick={() => selectSymbol(item.symbol)}>
+                    <span className="watch-symbol">{item.symbol}</span>
+                    <span className="watch-price">{liveQuotes[item.symbol] ? liveQuotes[item.symbol].last.toFixed(2) : "—"}</span>
+                    <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
+                      {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
+                    </span>
+                  </button>
+                  <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), -1)} aria-label={`Move ${item.symbol} up`}>▲</button>
+                  <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), 1)} aria-label={`Move ${item.symbol} down`}>▼</button>
+                </div>
               ))}
             </div>
             <div className="watch-footer">Click a symbol to load chart</div>
