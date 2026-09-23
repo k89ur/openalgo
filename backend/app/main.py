@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import secrets
+import threading
 from typing import Literal
 from urllib.parse import urlencode
 
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -67,6 +69,182 @@ class QuotesRequest(BaseModel):
 
 
 provider = FyersMarketDataProvider()
+
+
+class FyersWatchlistStream:
+    """One shared FYERS data socket for all PIPSGOX browser clients."""
+
+    def __init__(self) -> None:
+        self._socket = None
+        self._connect_lock = threading.Lock()
+        self._symbol_lock = threading.Lock()
+        self._subscribed: set[str] = set()
+        self._client_symbols: dict[asyncio.Queue, set[str]] = {}
+        self._api_to_app: dict[str, str] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    @property
+    def connected(self) -> bool:
+        return self._socket is not None
+
+    def _api_symbols(self, symbols: set[str]) -> set[str]:
+        result = set()
+        with self._symbol_lock:
+            for symbol in symbols:
+                info = provider.symbol_info(symbol)
+                result.add(info.api_symbol)
+                self._api_to_app[info.api_symbol.upper()] = symbol
+        return result
+
+    def _connect(self) -> None:
+        if not provider.configured:
+            return
+        with self._connect_lock:
+            if self._socket is not None:
+                return
+
+            token = f"{provider.client_id}:{provider.access_token}"
+
+            def on_message(message) -> None:
+                if not isinstance(message, dict):
+                    return
+
+                api_symbol = str(message.get("symbol") or "").upper()
+                if not api_symbol:
+                    return
+
+                with self._symbol_lock:
+                    symbol = self._api_to_app.get(api_symbol)
+
+                if not symbol:
+                    return
+
+                payload = {
+                    "type": "quote",
+                    "symbol": symbol,
+                    "last": _float_value(message.get("ltp")),
+                    "change": _float_value(message.get("ch")),
+                    "change_percent": _float_value(message.get("chp")),
+                    "open": _float_value(message.get("open_price")),
+                    "high": _float_value(message.get("high_price")),
+                    "low": _float_value(message.get("low_price")),
+                    "volume": _int_value(message.get("vol_traded_today")),
+                    "bid": _float_value(message.get("bid_price")),
+                    "ask": _float_value(message.get("ask_price")),
+                }
+
+                loop = self._loop
+                if loop and not loop.is_closed():
+                    loop.call_soon_threadsafe(self._broadcast, payload)
+
+            def on_error(message) -> None:
+                loop = self._loop
+                if loop and not loop.is_closed():
+                    loop.call_soon_threadsafe(
+                        self._broadcast,
+                        {"type": "status", "status": "error", "message": str(message)},
+                    )
+
+            def on_close(message) -> None:
+                self._socket = None
+                loop = self._loop
+                if loop and not loop.is_closed():
+                    loop.call_soon_threadsafe(
+                        self._broadcast,
+                        {"type": "status", "status": "disconnected"},
+                    )
+
+            def on_connect() -> None:
+                with self._symbol_lock:
+                    symbols = set(self._subscribed)
+                if symbols:
+                    self._socket.subscribe(
+                        symbols=sorted(symbols),
+                        data_type="SymbolUpdate",
+                    )
+                self._socket.keep_running()
+
+            self._socket = data_ws.FyersDataSocket(
+                access_token=token,
+                log_path="",
+                litemode=False,
+                write_to_file=False,
+                reconnect=True,
+                on_connect=on_connect,
+                on_close=on_close,
+                on_error=on_error,
+                on_message=on_message,
+            )
+
+            self._socket.connect()
+
+    async def update_client(self, queue: asyncio.Queue, symbols: list[str]) -> None:
+        clean = {item.strip().upper() for item in symbols if item.strip()}
+        if len(clean) > 1000:
+            raise ValueError("A maximum of 1000 watchlist symbols is supported.")
+
+        self._loop = asyncio.get_running_loop()
+        previous = self._client_symbols.get(queue, set())
+        self._client_symbols[queue] = clean
+
+        union = set().union(*self._client_symbols.values()) if self._client_symbols else set()
+        add = union - self._subscribed
+        remove = self._subscribed - union
+        self._subscribed = union
+
+        self._api_symbols(union)
+
+        if add or remove:
+            if self._socket is None:
+                asyncio.create_task(asyncio.to_thread(self._connect))
+            else:
+                api_add = self._api_symbols(add)
+                api_remove = self._api_symbols(remove)
+                if api_add:
+                    await asyncio.to_thread(
+                        self._socket.subscribe,
+                        symbols=sorted(api_add),
+                        data_type="SymbolUpdate",
+                    )
+                if api_remove:
+                    await asyncio.to_thread(
+                        self._socket.unsubscribe,
+                        symbols=sorted(api_remove),
+                        data_type="SymbolUpdate",
+                    )
+
+        if previous != clean:
+            await queue.put({
+                "type": "status",
+                "status": "subscribed",
+                "count": len(clean),
+            })
+
+    def remove_client(self, queue: asyncio.Queue) -> None:
+        self._client_symbols.pop(queue, None)
+        union = set().union(*self._client_symbols.values()) if self._client_symbols else set()
+        remove = self._subscribed - union
+        self._subscribed = union
+
+        if self._socket is not None and remove:
+            api_remove = self._api_symbols(remove)
+            asyncio.create_task(asyncio.to_thread(
+                self._socket.unsubscribe,
+                symbols=sorted(api_remove),
+                data_type="SymbolUpdate",
+            ))
+
+    def _broadcast(self, payload: dict) -> None:
+        for queue in list(self._client_symbols):
+            if queue.full():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            queue.put_nowait(payload)
+
+
+watchlist_stream = FyersWatchlistStream()
 
 
 def to_candle(item) -> Candle:
@@ -212,6 +390,48 @@ def quote(
         return to_quote(provider.get_quote(symbol.upper()))
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.websocket("/api/ws/quotes")
+async def quotes_websocket(websocket: WebSocket) -> None:
+    await websocket.accept()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
+    watchlist_stream._client_symbols[queue] = set()
+    watchlist_stream._loop = asyncio.get_running_loop()
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            if not isinstance(message, dict):
+                continue
+
+            if message.get("action") == "subscribe":
+                symbols = message.get("symbols") or []
+                if not isinstance(symbols, list):
+                    await websocket.send_json({
+                        "type": "status",
+                        "status": "error",
+                        "message": "symbols must be an array",
+                    })
+                    continue
+
+                try:
+                    await watchlist_stream.update_client(queue, [str(item) for item in symbols])
+                except ValueError as exc:
+                    await websocket.send_json({
+                        "type": "status",
+                        "status": "error",
+                        "message": str(exc),
+                    })
+                    continue
+
+            while not queue.empty():
+                await websocket.send_json(queue.get_nowait())
+
+    except WebSocketDisconnect:
+        watchlist_stream.remove_client(queue)
+    finally:
+        watchlist_stream.remove_client(queue)
 
 
 @app.get("/api/quotes", response_model=list[Quote])
