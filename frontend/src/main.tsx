@@ -120,6 +120,22 @@ function parseWatchlistImport(text: string): string[] {
   return [...new Set(symbols)].slice(0, MAX_WATCHLIST_SIZE);
 }
 
+type LiveQuote = { symbol: string; last: number; change: number; change_percent: number };
+
+async function fetchWatchQuotes(symbols: string[]): Promise<LiveQuote[]> {
+  if (!symbols.length) return [];
+
+  const response = await fetch("/api/quotes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ symbols }),
+  });
+
+  if (!response.ok) throw new Error("watchlist quotes request failed");
+  return response.json() as Promise<LiveQuote[]>;
+}
+
 const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
 
 function App() {
@@ -345,11 +361,7 @@ function App() {
       setLiveQuotes({});
       return () => { cancelled = true; };
     }
-    fetch("/api/quotes?symbols=" + encodeURIComponent(symbols))
-      .then((response) => {
-        if (!response.ok) throw new Error("quotes request failed");
-        return response.json() as Promise<Array<{ symbol: string; last: number; change: number; change_percent: number }>>;
-      })
+    fetchWatchQuotes(watchlist.map((item) => item.symbol))
       .then((data) => {
         if (cancelled) return;
         const next: Record<string, { last: number; change: number; change_percent: number }> = {};
@@ -366,15 +378,7 @@ function App() {
     const refreshWatchlist = async () => {
       try {
         const symbols = watchlist.map((item) => item.symbol).join(",");
-        const response = await fetch(
-          "/api/quotes?symbols=" + encodeURIComponent(symbols),
-          { cache: "no-store" },
-        );
-        if (!response.ok) throw new Error("watchlist quotes request failed");
-
-        const data = await response.json() as Array<{
-          symbol: string; last: number; change: number; change_percent: number;
-        }>;
+        const data = await fetchWatchQuotes(watchlist.map((item) => item.symbol));
 
         if (cancelled) return;
         const next: Record<string, { last: number; change: number; change_percent: number }> = {};
