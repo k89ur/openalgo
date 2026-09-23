@@ -15,6 +15,11 @@ type Props = {
   showGrid: boolean;
   showCrosshair: boolean;
   showVolume: boolean;
+  showVwap: boolean;
+  show52WeekHigh: boolean;
+  show52WeekLow: boolean;
+  showPreviousClose: boolean;
+  previousClose?: number;
 };
 
 type HistoryCandle = {
@@ -53,7 +58,21 @@ function dateBeforeTimestamp(timestamp: number) {
   return date.toISOString().slice(0, 10);
 }
 
-export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid, showCrosshair, showVolume }: Props) {
+export function Chart({
+  chartType,
+  dark,
+  symbol,
+  timeframe,
+  chartTheme,
+  showGrid,
+  showCrosshair,
+  showVolume,
+  showVwap,
+  show52WeekHigh,
+  show52WeekLow,
+  showPreviousClose,
+  previousClose,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<KLineChartInstance | null>(null);
 
@@ -281,6 +300,111 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
         });
       }
 
+      // Optional chart overlays. They are deliberately opt-in so the
+      // locked base chart stays clean until the user selects an overlay.
+      const createPriceLine = (id: string, value: number, color: string) => {
+        if (!Number.isFinite(value)) return;
+        chart.createOverlay({
+          name: "priceLine",
+          id,
+          points: [{ timestamp: Date.now(), value }],
+          lock: true,
+          needDefaultPointFigure: false,
+          needDefaultXAxisFigure: false,
+          needDefaultYAxisFigure: true,
+          styles: {
+            line: {
+              color,
+              size: 1,
+              style: "dashed",
+              dashedValue: [4, 3],
+            },
+          },
+        });
+      };
+
+      if (showPreviousClose && previousClose != null && Number.isFinite(previousClose)) {
+        createPriceLine("pipsgox-previous-close", previousClose, "#7d8792");
+      }
+
+      if (showVwap && timeframe !== "D" && timeframe !== "W" && timeframe !== "M") {
+        chart.createIndicator({
+          name: "PIPSGOX_VWAP",
+          shortName: "VWAP",
+          paneId: "candle_pane",
+          series: "price",
+          shouldOhlc: false,
+          figures: [{ key: "vwap", title: "VWAP: ", type: "line" }],
+          styles: {
+            lines: [{
+              style: "solid",
+              color: "#d6a84f",
+              size: 1,
+            }],
+          },
+          calc: (dataList) => {
+            let sessionKey = "";
+            let cumulativeVolume = 0;
+            let cumulativeTurnover = 0;
+            const result: Record<number, { vwap: number | null }> = {};
+
+            for (const candle of dataList) {
+              const key = new Date(candle.timestamp).toDateString();
+              if (key !== sessionKey) {
+                sessionKey = key;
+                cumulativeVolume = 0;
+                cumulativeTurnover = 0;
+              }
+
+              const volume = Number(candle.volume ?? 0);
+              const typicalPrice = (candle.high + candle.low + candle.close) / 3;
+              cumulativeVolume += volume;
+              cumulativeTurnover += typicalPrice * volume;
+
+              result[candle.timestamp] = {
+                vwap: cumulativeVolume > 0 ? cumulativeTurnover / cumulativeVolume : null,
+              };
+            }
+
+            return result;
+          },
+        });
+      }
+
+      if (show52WeekHigh || show52WeekLow) {
+        void (async () => {
+          try {
+            const response = await fetch(
+              "/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=D&limit=400",
+              { cache: "no-store" },
+            );
+            if (!response.ok) return;
+
+            const raw = (await response.json()) as HistoryCandle[];
+            if (disposed) return;
+
+            const daily = raw.filter((item) =>
+              Number.isFinite(Number(item.high)) &&
+              Number.isFinite(Number(item.low)),
+            );
+            if (!daily.length) return;
+
+            const recent = daily.slice(-260);
+            const high52 = Math.max(...recent.map((item) => Number(item.high)));
+            const low52 = Math.min(...recent.map((item) => Number(item.low)));
+
+            if (show52WeekHigh && Number.isFinite(high52)) {
+              createPriceLine("pipsgox-52w-high", high52, "#b26cff");
+            }
+            if (show52WeekLow && Number.isFinite(low52)) {
+              createPriceLine("pipsgox-52w-low", low52, "#5ca8ff");
+            }
+          } catch (error) {
+            console.warn("PIPSGOX optional overlay data error:", error);
+          }
+        })();
+      }
+
       const resizeObserver = new ResizeObserver(() => {
         chart.resize();
       });
@@ -298,7 +422,21 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
         chartRef.current = null;
       };
     }
-  }, [chartType, dark, symbol, timeframe, chartTheme, showGrid, showCrosshair, showVolume]);
+  }, [
+    chartType,
+    dark,
+    symbol,
+    timeframe,
+    chartTheme,
+    showGrid,
+    showCrosshair,
+    showVolume,
+    showVwap,
+    show52WeekHigh,
+    show52WeekLow,
+    showPreviousClose,
+    previousClose,
+  ]);
 
   return <div ref={containerRef} className="chart-canvas" />;
 }
