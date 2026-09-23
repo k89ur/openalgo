@@ -440,6 +440,58 @@ function App() {
     };
   }, [watchlist]);
 
+  useEffect(() => {
+    if (!watchlist.length) {
+      setLiveQuotes({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadWatchlistQuotes = async () => {
+      try {
+        const symbols = watchlist.map((item) => item.symbol).join(",");
+        const response = await fetch(
+          "/api/quotes?symbols=" + encodeURIComponent(symbols),
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("watchlist quote request failed");
+
+        const data = await response.json() as Array<{
+          symbol: string;
+          last: number;
+          change: number;
+          change_percent: number;
+        }>;
+
+        if (cancelled) return;
+
+        setLiveQuotes((current) => {
+          const next = { ...current };
+          for (const item of data) {
+            if (!item.symbol) continue;
+            next[item.symbol] = {
+              last: Number(item.last),
+              change: Number(item.change ?? 0),
+              change_percent: Number(item.change_percent ?? 0),
+            };
+          }
+          return next;
+        });
+      } catch {
+        // Keep existing live values; WebSocket remains the primary live stream.
+      }
+    };
+
+    void loadWatchlistQuotes();
+    const timer = window.setInterval(() => void loadWatchlistQuotes(), 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [watchlist]);
+
   const selected = useMemo(
     () =>
       watchlist.find((item) => item.symbol === symbol) ??
