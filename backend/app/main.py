@@ -196,16 +196,29 @@ def resolve_api_symbol(symbol: str) -> str | None:
     try:
         master = _load_nse_symbol_master()
     except ValueError:
-        return None
+        # The symbol master is a discovery/normalization source, not the
+        # quote API itself. If it is temporarily unavailable, keep the
+        # provider's standard candidate so FYERS can validate it. A candidate
+        # is never treated as valid merely because it was constructed here.
+        return provider.symbol_info(clean).api_symbol
 
     for api_symbol, item in master.items():
         if not isinstance(item, dict):
             continue
+
+        api = str(api_symbol or "").strip().upper()
         ticker = str(item.get("symTicker") or "").strip().upper()
-        if ticker == clean:
-            resolved = str(api_symbol or "").strip().upper()
-            if resolved:
-                return resolved
+        exchange_symbol = str(item.get("exSymbol") or "").strip().upper()
+
+        # FYERS documents symTicker/exSymbol as symbol identifiers. Also
+        # accept the exact API-symbol key because that is the authoritative
+        # key of the JSON master.
+        api_base = api.rsplit(":", 1)[-1]
+        api_base = api_base.rsplit("-", 1)[0]
+
+        if clean in {ticker, exchange_symbol, api_base}:
+            if api:
+                return api
 
     return None
 
