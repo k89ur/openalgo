@@ -777,32 +777,18 @@ function App() {
               showVolume={chartSettings.showVolume}
             />
 
-            <div className="quote-panel">
-              <div className="quote-title">{selected.symbol}</div>
-              <div className="quote-price">{quote ? quote.last.toFixed(2) : liveSelected ? liveSelected.last.toFixed(2) : "—"}</div>
-              <div className={`quote-change ${changePercent < 0 ? "negative" : "positive"}`}>
-                {hasLiveData ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)` : "No live quote"}
-              </div>
-              <dl>
-                <div><dt>Bid</dt><dd>{quote?.bid != null ? quote.bid.toFixed(2) : "—"}</dd></div>
-                <div><dt>Ask</dt><dd>{quote?.ask != null ? quote.ask.toFixed(2) : "—"}</dd></div>
-                <div><dt>Open</dt><dd>{open != null ? open.toFixed(2) : "—"}</dd></div>
-                <div><dt>High</dt><dd>{high != null ? high.toFixed(2) : "—"}</dd></div>
-                <div><dt>Low</dt><dd>{low != null ? low.toFixed(2) : "—"}</dd></div>
-                <div><dt>Volume</dt><dd>{volume != null ? volume.toLocaleString() : "—"}</dd></div>
-              </dl>
-            </div>
-
-            <div className="chart-overlay">
-              <div className="ohlc-line">
-                <span>O <b>{open != null ? open.toFixed(2) : "—"}</b></span>
-                <span>H <b>{high != null ? high.toFixed(2) : "—"}</b></span>
-                <span>L <b>{low != null ? low.toFixed(2) : "—"}</b></span>
-                <span>C <b>{quote ? quote.last.toFixed(2) : liveSelected ? liveSelected.last.toFixed(2) : "—"}</b></span>
-                <span className={changePercent < 0 ? "negative" : "positive"}>
-                  {changeAmount >= 0 ? "+" : ""}{changeAmount.toFixed(2)} ({changePercent.toFixed(2)}%)
-                </span>
-              </div>
+            <div className="chart-header-overlay">
+              <span className="chart-header-symbol">
+                {selected.symbol} · {timeframe} · NSE
+              </span>
+              <span className={`chart-header-price ${changePercent < 0 ? "negative" : "positive"}`}>
+                {hasLiveData ? price.toFixed(2) : "—"}
+              </span>
+              <span className={`chart-header-change ${changePercent < 0 ? "negative" : "positive"}`}>
+                {hasLiveData
+                  ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)`
+                  : "No data"}
+              </span>
             </div>
           </div>
 
