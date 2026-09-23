@@ -399,38 +399,44 @@ async def quotes_websocket(websocket: WebSocket) -> None:
     watchlist_stream._client_symbols[queue] = set()
     watchlist_stream._loop = asyncio.get_running_loop()
 
+    async def sender() -> None:
+        while True:
+            payload = await queue.get()
+            await websocket.send_json(payload)
+
+    sender_task = asyncio.create_task(sender())
+
     try:
         while True:
             message = await websocket.receive_json()
             if not isinstance(message, dict):
                 continue
 
-            if message.get("action") == "subscribe":
-                symbols = message.get("symbols") or []
-                if not isinstance(symbols, list):
-                    await websocket.send_json({
-                        "type": "status",
-                        "status": "error",
-                        "message": "symbols must be an array",
-                    })
-                    continue
+            if message.get("action") != "subscribe":
+                continue
 
-                try:
-                    await watchlist_stream.update_client(queue, [str(item) for item in symbols])
-                except ValueError as exc:
-                    await websocket.send_json({
-                        "type": "status",
-                        "status": "error",
-                        "message": str(exc),
-                    })
-                    continue
+            symbols = message.get("symbols") or []
+            if not isinstance(symbols, list):
+                await websocket.send_json({
+                    "type": "status",
+                    "status": "error",
+                    "message": "symbols must be an array",
+                })
+                continue
 
-            while not queue.empty():
-                await websocket.send_json(queue.get_nowait())
+            try:
+                await watchlist_stream.update_client(queue, [str(item) for item in symbols])
+            except ValueError as exc:
+                await websocket.send_json({
+                    "type": "status",
+                    "status": "error",
+                    "message": str(exc),
+                })
 
     except WebSocketDisconnect:
-        watchlist_stream.remove_client(queue)
+        pass
     finally:
+        sender_task.cancel()
         watchlist_stream.remove_client(queue)
 
 
