@@ -11,6 +11,10 @@ type ChartSettings = {
   showGrid: boolean;
   showCrosshair: boolean;
   showVolume: boolean;
+  showVwap: boolean;
+  show52WeekHigh: boolean;
+  show52WeekLow: boolean;
+  showPreviousClose: boolean;
 };
 
 const DEFAULT_CHART_SETTINGS: ChartSettings = {
@@ -18,6 +22,10 @@ const DEFAULT_CHART_SETTINGS: ChartSettings = {
   showGrid: true,
   showCrosshair: true,
   showVolume: true,
+  showVwap: false,
+  show52WeekHigh: false,
+  show52WeekLow: false,
+  showPreviousClose: false,
 };
 
 function loadChartSettings(): ChartSettings {
@@ -120,7 +128,7 @@ function parseWatchlistImport(text: string): string[] {
   return [...new Set(symbols)];
 }
 
-const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
+const coreIndicators = ["MA 50", "MA 200"];
 
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
@@ -582,7 +590,7 @@ function App() {
   const open = quote?.open;
   const high = quote?.high;
   const low = quote?.low;
-  const volume = quote?.volume;
+  const previousClose = quote ? quote.last - quote.change : undefined;
 
   const selectSymbol = (next: string) => {
     setSymbol(next);
@@ -775,6 +783,11 @@ function App() {
               showGrid={chartSettings.showGrid}
               showCrosshair={chartSettings.showCrosshair}
               showVolume={chartSettings.showVolume}
+              showVwap={chartSettings.showVwap}
+              show52WeekHigh={chartSettings.show52WeekHigh}
+              show52WeekLow={chartSettings.show52WeekLow}
+              showPreviousClose={chartSettings.showPreviousClose}
+              previousClose={previousClose}
             />
 
             <div className="chart-header-overlay">
@@ -892,12 +905,66 @@ function App() {
 
             {panel === "indicators" ? (
               <div className="indicator-panel">
-                <p>Select indicators to display on the active chart.</p>
-                {indicators.map((item) => (
-                  <button key={item} className="indicator-row">
-                    <span>{item}</span><span>ADD</span>
-                  </button>
+                <p>Select technical studies and optional overlays for the active chart.</p>
+
+                <div className="indicator-section-title">CORE CHART INDICATORS</div>
+                {coreIndicators.map((item) => (
+                  <div key={item} className="indicator-row indicator-row-static">
+                    <span>{item}</span><span>ON</span>
+                  </div>
                 ))}
+                <label className="indicator-toggle-row">
+                  <span>Volume</span>
+                  <input
+                    type="checkbox"
+                    checked={chartSettings.showVolume}
+                    onChange={(event) => updateChartSettings({ showVolume: event.target.checked })}
+                  />
+                  <i />
+                </label>
+
+                <div className="indicator-section-title optional">OPTIONAL CHART OVERLAYS</div>
+                <p className="indicator-help">These stay hidden unless you select them.</p>
+
+                <label className="indicator-toggle-row">
+                  <span>VWAP <small>intraday</small></span>
+                  <input
+                    type="checkbox"
+                    checked={chartSettings.showVwap}
+                    onChange={(event) => updateChartSettings({ showVwap: event.target.checked })}
+                  />
+                  <i />
+                </label>
+
+                <label className="indicator-toggle-row">
+                  <span>52W High</span>
+                  <input
+                    type="checkbox"
+                    checked={chartSettings.show52WeekHigh}
+                    onChange={(event) => updateChartSettings({ show52WeekHigh: event.target.checked })}
+                  />
+                  <i />
+                </label>
+
+                <label className="indicator-toggle-row">
+                  <span>52W Low</span>
+                  <input
+                    type="checkbox"
+                    checked={chartSettings.show52WeekLow}
+                    onChange={(event) => updateChartSettings({ show52WeekLow: event.target.checked })}
+                  />
+                  <i />
+                </label>
+
+                <label className="indicator-toggle-row">
+                  <span>Previous Close</span>
+                  <input
+                    type="checkbox"
+                    checked={chartSettings.showPreviousClose}
+                    onChange={(event) => updateChartSettings({ showPreviousClose: event.target.checked })}
+                  />
+                  <i />
+                </label>
               </div>
             ) : panel === "pipscript" ? (
               <div className="builder-panel">
