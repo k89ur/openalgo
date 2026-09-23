@@ -117,7 +117,7 @@ function parseWatchlistImport(text: string): string[] {
     if (candidate) symbols.push(candidate);
   }
 
-  return [...new Set(symbols)].slice(0, MAX_WATCHLIST_SIZE);
+  return [...new Set(symbols)];
 }
 
 type LiveQuote = { symbol: string; last: number; change: number; change_percent: number };
@@ -142,7 +142,7 @@ function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [watchlists, setWatchlists] = useState<Record<string, WatchItem[]>>(loadWatchlists);
-  const [activeWatchlistName, setActiveWatchlistName] = useState(DEFAULT_WATCHLIST_NAME);
+  const [activeWatchlistName, setActiveWatchlistName] = useState(() => Object.keys(loadWatchlists())[0] ?? DEFAULT_WATCHLIST_NAME);
   const watchlist = watchlists[activeWatchlistName] ?? [];
   const setWatchlist = (update: SetStateAction<WatchItem[]>) => {
     setWatchlists((current) => {
@@ -280,6 +280,16 @@ function App() {
       [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
       return next;
     });
+  };
+
+  const removeWatchSymbol = (itemSymbol: string) => {
+    setWatchlist((current) => current.filter((item) => item.symbol !== itemSymbol));
+    if (symbol === itemSymbol) {
+      const remaining = watchlist.filter((item) => item.symbol !== itemSymbol);
+      const next = remaining[0]?.symbol ?? "BHARTIARTL";
+      setSymbol(next);
+      setSearch(next);
+    }
   };
 
   const addWatchSymbol = () => {
@@ -617,6 +627,7 @@ function App() {
                   </button>
                   <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), -1)} aria-label={`Move ${item.symbol} up`}>▲</button>
                   <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), 1)} aria-label={`Move ${item.symbol} down`}>▼</button>
+                  <button className="watch-remove" onClick={() => removeWatchSymbol(item.symbol)} aria-label={`Remove ${item.symbol}`}>×</button>
                 </div>
               ))}
             </div>
