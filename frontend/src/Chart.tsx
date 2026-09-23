@@ -220,15 +220,18 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
         true,
       );
       if (showVolume) {
-        const volumePaneId = chart.createIndicator("VOL");
-        if (volumePaneId) {
-          chart.setPaneOptions({
-            id: volumePaneId,
-            height: 92,
-            minHeight: 70,
-            dragEnabled: true,
-          });
-        }
+        chart.createIndicator({
+          name: "VOL",
+          paneId: "volume_pane",
+          series: "volume",
+        });
+        chart.setPaneOptions({
+          id: "volume_pane",
+          height: 72,
+          minHeight: 60,
+          dragEnabled: false,
+          order: 20,
+        });
       }
 
       const resizeObserver = new ResizeObserver(() => {
