@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { dispose, init } from "klinecharts";
+import { dispose, init, type Chart as KLineChartInstance } from "klinecharts";
 
 export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
@@ -20,151 +20,163 @@ type HistoryCandle = {
   volume: number;
 };
 
-function periodFor(timeframe: Timeframe) {
-  const map: Record<Timeframe, { span: number; type: "minute" | "hour" | "day" | "week" | "month" }> = {
-    "1m": { span: 1, type: "minute" },
-    "3m": { span: 3, type: "minute" },
-    "5m": { span: 5, type: "minute" },
-    "15m": { span: 15, type: "minute" },
-    "30m": { span: 30, type: "minute" },
-    "1h": { span: 1, type: "hour" },
-    D: { span: 1, type: "day" },
-    W: { span: 1, type: "week" },
-    M: { span: 1, type: "month" },
-  };
-  return map[timeframe];
+function getPeriod(timeframe: Timeframe) {
+  switch (timeframe) {
+    case "1m": return { span: 1, type: "minute" as const };
+    case "3m": return { span: 3, type: "minute" as const };
+    case "5m": return { span: 5, type: "minute" as const };
+    case "15m": return { span: 15, type: "minute" as const };
+    case "30m": return { span: 30, type: "minute" as const };
+    case "1h": return { span: 1, type: "hour" as const };
+    case "D": return { span: 1, type: "day" as const };
+    case "W": return { span: 1, type: "week" as const };
+    case "M": return { span: 1, type: "month" as const };
+  }
+}
+
+function getLimit(timeframe: Timeframe) {
+  if (timeframe === "D") return 500;
+  if (timeframe === "W") return 250;
+  if (timeframe === "M") return 120;
+  return 500;
 }
 
 export function Chart({ chartType, dark, symbol, timeframe }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<KLineChartInstance | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const chart = init(container, {
-      locale: "en-US",
-      timezone: "Asia/Kolkata",
-      layout: {
-        barSpaceLimit: { min: 2, max: 14 },
-        yAxis: {
-          position: "right",
-          inside: false,
-          scrollZoomEnabled: true,
-        },
-      },
-      styles: {
-        grid: {
-          horizontal: {
-            color: dark ? "#121d27" : "#e4e9ef",
-          },
-          vertical: {
-            color: dark ? "#121d27" : "#e4e9ef",
-          },
-        },
-        candle: {
-          type: chartType === "bars" ? "ohlc" : chartType === "line" ? "area" : "candle_solid",
-          bar: {
-            upColor: "#12d98b",
-            downColor: "#ff4d5a",
-            noChangeColor: "#8d9aaa",
-            upBorderColor: "#12d98b",
-            downBorderColor: "#ff4d5a",
-            noChangeBorderColor: "#8d9aaa",
-            upWickColor: "#12d98b",
-            downWickColor: "#ff4d5a",
-            noChangeWickColor: "#8d9aaa",
-          },
-          area: {
-            lineColor: "#38bdf8",
-            lineSize: 2,
-            backgroundColor: [
-              { offset: 0, color: "rgba(56, 189, 248, 0.08)" },
-              { offset: 1, color: "rgba(56, 189, 248, 0)" },
-            ],
-          },
-        },
-        xAxis: {
-          tickText: {
-            color: dark ? "#8d9aaa" : "#566273",
-          },
-        },
-        yAxis: {
-          tickText: {
-            color: dark ? "#8d9aaa" : "#566273",
-          },
-        },
-        crosshair: {
-          horizontal: {
-            line: { color: dark ? "#5b6879" : "#9aa7b7" },
-          },
-          vertical: {
-            line: { color: dark ? "#5b6879" : "#9aa7b7" },
-          },
-        },
-      },
-    });
+    let disposed = false;
 
-    chart.setSymbol({
-      ticker: symbol,
-      pricePrecision: 2,
-      volumePrecision: 0,
-    });
-    chart.setPeriod(periodFor(timeframe));
+    try {
+      const chart = init(container);
+      chartRef.current = chart;
 
-    chart.setDataLoader({
-      getBars: async ({ callback }) => {
-        try {
-          const limit =
-            timeframe === "D" ? 500 :
-            timeframe === "W" ? 250 :
-            timeframe === "M" ? 120 : 500;
+      chart.setSymbol({
+        ticker: symbol,
+        pricePrecision: 2,
+        volumePrecision: 0,
+      });
+      chart.setPeriod(getPeriod(timeframe));
 
-          const response = await fetch(
-            `/api/history?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${limit}`,
-          );
+      chart.setDataLoader({
+        getBars: async ({ callback }) => {
+          try {
+            const url =
+              `/api/history?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${getLimit(timeframe)}`;
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            console.log("PIPSGOX history request:", url);
+
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              throw new Error(`History HTTP ${response.status}`);
+            }
+
+            const raw = (await response.json()) as HistoryCandle[];
+
+            const bars = raw
+              .map((item) => ({
+                timestamp: Number(item.time) * 1000,
+                open: Number(item.open),
+                high: Number(item.high),
+                low: Number(item.low),
+                close: Number(item.close),
+                volume: Number(item.volume || 0),
+              }))
+              .filter((item) =>
+                Number.isFinite(item.timestamp) &&
+                Number.isFinite(item.open) &&
+                Number.isFinite(item.high) &&
+                Number.isFinite(item.low) &&
+                Number.isFinite(item.close),
+              )
+              .sort((a, b) => a.timestamp - b.timestamp);
+
+            if (disposed) return;
+
+            console.log("PIPSGOX history bars:", bars.length);
+
+            callback(bars, {
+              forward: false,
+              backward: false,
+            });
+          } catch (error) {
+            console.error("PIPSGOX history error:", error);
+            if (!disposed) {
+              callback([], {
+                forward: false,
+                backward: false,
+              });
+            }
           }
+        },
+      });
 
-          const raw = (await response.json()) as HistoryCandle[];
+      if (chartType === "bars") {
+        chart.setStyles({
+          candle: {
+            type: "ohlc",
+          },
+        });
+      } else if (chartType === "line") {
+        chart.setStyles({
+          candle: {
+            type: "area",
+            area: {
+              lineColor: dark ? "#38bdf8" : "#1976d2",
+              lineSize: 2,
+              backgroundColor: [
+                { offset: 0, color: dark ? "rgba(56,189,248,0.12)" : "rgba(25,118,210,0.12)" },
+                { offset: 1, color: "rgba(0,0,0,0)" },
+              ],
+            },
+          },
+        });
+      } else {
+        chart.setStyles({
+          candle: {
+            type: "candle_solid",
+            bar: {
+              upColor: dark ? "#12d98b" : "#168a59",
+              downColor: dark ? "#ff4d5a" : "#c93643",
+              noChangeColor: "#8d9aaa",
+              upBorderColor: dark ? "#12d98b" : "#168a59",
+              downBorderColor: dark ? "#ff4d5a" : "#c93643",
+              noChangeBorderColor: "#8d9aaa",
+              upWickColor: dark ? "#12d98b" : "#168a59",
+              downWickColor: dark ? "#ff4d5a" : "#c93643",
+              noChangeWickColor: "#8d9aaa",
+            },
+          },
+        });
+      }
 
-          const bars = raw
-            .map((item) => ({
-              timestamp: item.time * 1000,
-              open: Number(item.open),
-              high: Number(item.high),
-              low: Number(item.low),
-              close: Number(item.close),
-              volume: Number(item.volume || 0),
-            }))
-            .sort((a, b) => a.timestamp - b.timestamp);
+      chart.createIndicator(
+        { name: "MA", paneId: "candle_pane", calcParams: [20, 50, 200] },
+        true,
+      );
+      chart.createIndicator("VOL");
 
-          callback(bars, { forward: false, backward: false });
-        } catch (error) {
-          console.error("PIPSGOX KLineChart data error", error);
-          callback([], { forward: false, backward: false });
-        }
-      },
-    });
+      const resizeObserver = new ResizeObserver(() => {
+        chart.resize();
+      });
+      resizeObserver.observe(container);
 
-    // Use KLineChart's built-in indicators for the first stable prototype.
-    chart.createIndicator(
-      { name: "MA", paneId: "candle_pane", calcParams: [20, 50, 200] },
-      true,
-    );
-    chart.createIndicator("VOL");
-
-    const resizeObserver = new ResizeObserver(() => {
-      chart.resize();
-    });
-    resizeObserver.observe(container);
-
-    return () => {
-      resizeObserver.disconnect();
-      dispose(chart);
-    };
+      return () => {
+        disposed = true;
+        resizeObserver.disconnect();
+        chartRef.current = null;
+        dispose(chart);
+      };
+    } catch (error) {
+      console.error("PIPSGOX chart initialization error:", error);
+      return () => {
+        chartRef.current = null;
+      };
+    }
   }, [chartType, dark, symbol, timeframe]);
 
   return <div ref={containerRef} className="chart-canvas" />;
