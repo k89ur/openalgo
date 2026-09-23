@@ -120,22 +120,6 @@ function parseWatchlistImport(text: string): string[] {
   return [...new Set(symbols)];
 }
 
-type LiveQuote = { symbol: string; last: number; change: number; change_percent: number };
-
-async function fetchWatchQuotes(symbols: string[]): Promise<LiveQuote[]> {
-  if (!symbols.length) return [];
-
-  const response = await fetch("/api/quotes", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    body: JSON.stringify({ symbols }),
-  });
-
-  if (!response.ok) throw new Error("watchlist quotes request failed");
-  return response.json() as Promise<LiveQuote[]>;
-}
-
 const indicators = ["MA 20", "MA 50", "MA 200", "Volume"];
 
 function App() {
@@ -384,44 +368,66 @@ function App() {
   }, [symbol]);
 
   useEffect(() => {
-    let cancelled = false;
-    const symbols = watchlist.map((item) => item.symbol).join(",");
-    if (!symbols) {
-      setLiveQuotes({});
-      return () => { cancelled = true; };
-    }
-    fetchWatchQuotes(watchlist.map((item) => item.symbol))
-      .then((data) => {
-        if (cancelled) return;
-        const next: Record<string, { last: number; change: number; change_percent: number }> = {};
-        data.forEach((item) => { next[item.symbol] = item; });
-        setLiveQuotes(next);
-      })
-      .catch(() => { if (!cancelled) setLiveQuotes({}); });
-    return () => { cancelled = true; };
-  }, [watchlist]);
+    setLiveQuotes({});
+    if (!watchlist.length) return;
 
-  useEffect(() => {
-    let cancelled = false;
+    let stopped = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
 
-    const refreshWatchlist = async () => {
-      try {
-        const symbols = watchlist.map((item) => item.symbol).join(",");
-        const data = await fetchWatchQuotes(watchlist.map((item) => item.symbol));
+    const connect = () => {
+      if (stopped) return;
 
-        if (cancelled) return;
-        const next: Record<string, { last: number; change: number; change_percent: number }> = {};
-        data.forEach((item) => { next[item.symbol] = item; });
-        setLiveQuotes(next);
-      } catch {
-        // Keep the last successful watchlist snapshot visible.
-      }
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${protocol}//${window.location.host}/api/ws/quotes`);
+
+      socket.onopen = () => {
+        socket?.send(JSON.stringify({
+          action: "subscribe",
+          symbols: watchlist.map((item) => item.symbol),
+        }));
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as {
+            type?: string;
+            symbol?: string;
+            last?: number;
+            change?: number;
+            change_percent?: number;
+          };
+
+          if (message.type !== "quote" || !message.symbol || message.last == null) return;
+
+          const item = {
+            symbol: message.symbol,
+            last: Number(message.last),
+            change: Number(message.change ?? 0),
+            change_percent: Number(message.change_percent ?? 0),
+          };
+
+          setLiveQuotes((current) => ({ ...current, [item.symbol]: item }));
+        } catch {
+          // Ignore malformed WebSocket messages.
+        }
+      };
+
+      socket.onclose = () => {
+        if (!stopped) reconnectTimer = window.setTimeout(connect, 3000);
+      };
+
+      socket.onerror = () => {
+        socket?.close();
+      };
     };
 
-    const timer = window.setInterval(() => void refreshWatchlist(), 10000);
+    connect();
+
     return () => {
-      cancelled = true;
-      window.clearInterval(timer);
+      stopped = true;
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      socket?.close();
     };
   }, [watchlist]);
 
