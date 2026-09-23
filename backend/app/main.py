@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -22,9 +22,24 @@ load_dotenv()
 
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
 
+def _codespace_forwarded_url(port: int) -> str:
+    codespace_name = os.getenv("CODESPACE_NAME", "").strip()
+    forwarding_domain = os.getenv(
+        "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN",
+        "app.github.dev",
+    ).strip()
+    if codespace_name and forwarding_domain:
+        return f"https://{codespace_name}-{port}.{forwarding_domain}"
+    return f"http://127.0.0.1:{port}"
+
+
+PIPSGOX_WEB_URL = os.getenv(
+    "PIPSGOX_WEB_URL",
+    _codespace_forwarded_url(3001),
+).strip()
 FYERS_REDIRECT_URI = os.getenv(
     "FYERS_REDIRECT_URI",
-    "https://studious-space-system-5vxr9wq4qgwphv5r5-8000.app.github.dev/auth/fyers/callback",
+    f"{_codespace_forwarded_url(8000)}/auth/fyers/callback",
 ).strip()
 FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
@@ -384,7 +399,11 @@ def fyers_login() -> RedirectResponse:
 
 
 @app.get("/auth/fyers/callback", response_class=HTMLResponse)
-def fyers_callback(auth_code: str | None = None, state: str | None = None) -> HTMLResponse:
+def fyers_callback(
+    request: Request,
+    auth_code: str | None = None,
+    state: str | None = None,
+) -> HTMLResponse | RedirectResponse:
     global _fyers_access_token
 
     if not auth_code:
@@ -429,15 +448,9 @@ def fyers_callback(auth_code: str | None = None, state: str | None = None) -> HT
     _fyers_access_token = str(payload["access_token"])
     provider.set_access_token(_fyers_access_token)
 
-    return HTMLResponse(
-        """
-        <html><body style="font-family:Arial;padding:40px">
-        <h2>PIPSGOX — FYERS connected</h2>
-        <p>Authentication completed successfully. The FYERS access token is now active for this backend session.</p>
-        <p>You can close this tab and return to PIPSGOX.</p>
-        </body></html>
-        """
-    )
+    # Return directly to the web terminal after OAuth so the normal startup
+    # flow is: start PIPSGOX -> FYERS login if needed -> back to the chart.
+    return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
 
 
 @app.get("/api/fyers/status")
