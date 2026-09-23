@@ -32,7 +32,14 @@ button { cursor: pointer; }
   background:transparent; color:#a5a5a5; font-size:10px; letter-spacing:.02em;
 }
 .top-command:hover { color:#eee; background:#171717; }
+.top-search-wrap {
+  position: relative;
+  width: 260px;
+  flex: 0 0 260px;
+}
+
 .top-search {
+
   width:240px; height:28px; margin-left:7px; display:flex; align-items:center;
   border:1px solid #303030; background:#121212;
 }
@@ -187,3 +194,82 @@ button { cursor: pointer; }
 .settings-toggle input:checked + i { background:#315f82; border-color:#477da5; }
 .settings-toggle input:checked + i::after { left:16px; background:#fff; }
 .settings-note { color:#5f5f5f; font-size:8px; line-height:1.5; }
+
+.symbol-search-results {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 3px);
+  left: 0;
+  width: 100%;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid #303030;
+  background: #101010;
+  box-shadow: 0 8px 20px rgba(0,0,0,.45);
+}
+
+.symbol-search-row {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 30px;
+  border-bottom: 1px solid #222;
+}
+
+.symbol-search-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  border: 0;
+  background: transparent;
+  color: #bbb;
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.symbol-search-main:hover {
+  background: #191919;
+}
+
+.symbol-search-main strong {
+  color: #ddd;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.symbol-search-main span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #666;
+  font-size: 8px;
+}
+
+.symbol-search-add {
+  border: 0;
+  border-left: 1px solid #222;
+  background: #141414;
+  color: #777;
+  font-size: 16px;
+}
+
+.symbol-search-add:hover {
+  color: #ddd;
+  background: #1d1d1d;
+}
+
+.symbol-search-empty {
+  padding: 12px 9px;
+  color: #666;
+  font-size: 9px;
+}
+
+@media (max-width:1050px) {
+  .top-search-wrap { width:190px; flex-basis:190px; }
+}
+
+@media (max-width:800px) {
+  .top-search-wrap { flex:1; width:auto; }
+}
