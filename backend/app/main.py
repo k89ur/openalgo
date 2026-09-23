@@ -176,6 +176,37 @@ def search_nse_symbols(query: str, limit: int = 12) -> list[SymbolSearchResult]:
     return [item[1] for item in matches[:limit]]
 
 
+def resolve_api_symbol(symbol: str) -> str:
+    """Resolve a user-facing NSE ticker to the exact current FYERS API symbol."""
+    clean = symbol.strip().upper()
+    if not clean:
+        return clean
+    if ":" in clean:
+        return clean
+    alias_symbols = {"NIFTY", "NIFTY50", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"}
+    if clean in alias_symbols:
+        return provider.symbol_info(clean).api_symbol
+    try:
+        master = _load_nse_symbol_master()
+        for api_symbol, item in master.items():
+            if not isinstance(item, dict):
+                continue
+            ticker = str(item.get("symTicker") or "").strip().upper()
+            if ticker == clean:
+                return str(api_symbol).strip().upper()
+    except ValueError:
+        pass
+    return provider.symbol_info(clean).api_symbol
+
+def resolve_requested_symbols(symbols: list[str]) -> tuple[list[str], dict[str, str]]:
+    api_symbols: list[str] = []
+    api_to_original: dict[str, str] = {}
+    for original in symbols:
+        api_symbol = resolve_api_symbol(original)
+        api_symbols.append(api_symbol)
+        api_to_original[api_symbol.upper()] = original
+    return api_symbols, api_to_original
+
 class FyersWatchlistStream:
     """One shared FYERS data socket for all PIPSGOX browser clients."""
 
@@ -196,9 +227,9 @@ class FyersWatchlistStream:
         result = set()
         with self._symbol_lock:
             for symbol in symbols:
-                info = provider.symbol_info(symbol)
-                result.add(info.api_symbol)
-                self._api_to_app[info.api_symbol.upper()] = symbol
+                api_symbol = resolve_api_symbol(symbol)
+                result.add(api_symbol)
+                self._api_to_app[api_symbol.upper()] = symbol
         return result
 
     def _connect(self) -> None:
@@ -490,7 +521,8 @@ def history(
     limit: int = Query(default=260, ge=50, le=2000),
 ) -> list[Candle]:
     try:
-        return [to_candle(item) for item in provider.get_history(symbol.upper(), timeframe, limit)]
+        api_symbol = resolve_api_symbol(symbol)
+        return [to_candle(item) for item in provider.get_history(api_symbol, timeframe, limit)]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -500,7 +532,11 @@ def quote(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
 ) -> Quote:
     try:
-        return to_quote(provider.get_quote(symbol.upper()))
+        original = symbol.strip().upper()
+        api_symbol = resolve_api_symbol(original)
+        result = provider.get_quote(api_symbol)
+        result.symbol = original
+        return to_quote(result)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -573,10 +609,26 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
     if len(requested) > 1000:
         raise HTTPException(status_code=400, detail="A maximum of 1000 symbols can be requested at once.")
 
-    try:
-        results = []
-        for start in range(0, len(requested), 50):
-            results.extend(provider.get_quotes(requested[start:start + 50]))
-        return [to_quote(item) for item in results]
-    except ValueError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    api_symbols, api_to_original = resolve_requested_symbols(requested)
+    results: list[Quote] = []
+
+    for start in range(0, len(api_symbols), 50):
+        chunk = api_symbols[start:start + 50]
+        if not chunk:
+            continue
+        try:
+            results.extend(provider.get_quotes(chunk))
+        except ValueError:
+            for api_symbol in chunk:
+                try:
+                    results.extend(provider.get_quotes([api_symbol]))
+                except ValueError:
+                    continue
+
+    output: list[Quote] = []
+    for item in results:
+        original = api_to_original.get(item.symbol.upper(), item.symbol)
+        item.symbol = original
+        output.append(to_quote(item))
+
+    return output
