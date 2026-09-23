@@ -94,31 +94,41 @@ class FyersMarketDataProvider:
             )
         return payload
 
-    def get_history(self, symbol: str, timeframe: str, limit: int) -> list[Candle]:
+    def get_history(
+        self,
+        symbol: str,
+        timeframe: str,
+        limit: int,
+        start: date | None = None,
+        end: date | None = None,
+    ) -> list[Candle]:
         client = self._require_client()
         info = self.symbol_info(symbol)
         resolution = self.resolution(timeframe)
         today = date.today()
+        end = end or today
 
-        if resolution in {"D", "1W", "1M"}:
-            # Estimate calendar days needed for the requested number of bars.
-            # FYERS allows up to 366 days per daily/weekly/monthly request,
-            # so avoid making dozens of unnecessary requests for old data.
-            days_per_bar = {"D": 2, "1W": 8, "1M": 32}[resolution]
-            lookback_days = max(limit * days_per_bar, 366)
-            chunk_days = 366
+        if start is None:
+            if resolution in {"D", "1W", "1M"}:
+                days_per_bar = {"D": 2, "1W": 8, "1M": 32}[resolution]
+                lookback_days = max(limit * days_per_bar, 366)
+                chunk_days = 366
+            else:
+                bars_per_day = {
+                    "1": 375, "3": 125, "5": 75, "15": 25,
+                    "30": 13, "60": 7,
+                }.get(resolution, 25)
+                lookback_days = min(max((limit // bars_per_day) + 10, 20), 100)
+                chunk_days = 100
+            start = end - timedelta(days=lookback_days)
         else:
-            bars_per_day = {
-                "1": 375, "3": 125, "5": 75, "15": 25,
-                "30": 13, "60": 7,
-            }.get(resolution, 25)
-            lookback_days = min(max((limit // bars_per_day) + 10, 20), 100)
-            chunk_days = 100
+            if start > end:
+                raise ValueError("History start date must be on or before end date.")
+            chunk_days = 366 if resolution in {"D", "1W", "1M"} else 100
 
-        start = today - timedelta(days=lookback_days)
         candles: list[Candle] = []
 
-        for chunk_start, chunk_end in self._chunks(start, today, chunk_days):
+        for chunk_start, chunk_end in self._chunks(start, end, chunk_days):
             payload = client.history(data={
                 "symbol": info.api_symbol,
                 "resolution": resolution,
