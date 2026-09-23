@@ -69,7 +69,96 @@ class QuotesRequest(BaseModel):
     symbols: list[str]
 
 
+class SymbolSearchResult(BaseModel):
+    symbol: str
+    name: str
+    exchange: str
+    api_symbol: str
+
+
 provider = FyersMarketDataProvider()
+
+
+_symbol_master_cache: dict[str, dict] = {}
+_symbol_master_date: str | None = None
+_symbol_master_lock = threading.Lock()
+
+
+def _load_nse_symbol_master() -> dict[str, dict]:
+    global _symbol_master_cache, _symbol_master_date
+
+    today = __import__("datetime").date.today().isoformat()
+    if _symbol_master_cache and _symbol_master_date == today:
+        return _symbol_master_cache
+
+    with _symbol_master_lock:
+        if _symbol_master_cache and _symbol_master_date == today:
+            return _symbol_master_cache
+
+        try:
+            response = requests.get(
+                "https://public.fyers.in/sym_details/NSE_CM_sym_master.json",
+                timeout=20,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError) as exc:
+            if _symbol_master_cache:
+                return _symbol_master_cache
+            raise ValueError(f"Could not load FYERS NSE symbol master: {exc}") from exc
+
+        if not isinstance(payload, dict):
+            raise ValueError("FYERS NSE symbol master returned an invalid payload.")
+
+        _symbol_master_cache = payload
+        _symbol_master_date = today
+        return _symbol_master_cache
+
+
+def search_nse_symbols(query: str, limit: int = 12) -> list[SymbolSearchResult]:
+    term = query.strip().upper()
+    if not term:
+        return []
+
+    master = _load_nse_symbol_master()
+    matches: list[tuple[int, SymbolSearchResult]] = []
+
+    for api_symbol, item in master.items():
+        if not isinstance(item, dict):
+            continue
+
+        ticker = str(item.get("symTicker") or "").strip().upper()
+        name = str(item.get("exSymName") or item.get("symDetails") or "").strip()
+        api = str(api_symbol or "").strip().upper()
+
+        if not ticker or not api:
+            continue
+
+        haystack = f"{ticker} {name}".upper()
+        if term not in haystack:
+            continue
+
+        if ticker == term:
+            rank = 0
+        elif ticker.startswith(term):
+            rank = 1
+        elif name.startswith(term):
+            rank = 2
+        else:
+            rank = 3
+
+        matches.append((
+            rank,
+            SymbolSearchResult(
+                symbol=ticker,
+                name=name or ticker,
+                exchange="NSE",
+                api_symbol=api,
+            ),
+        ))
+
+    matches.sort(key=lambda item: (item[0], item[1].symbol, item[1].name))
+    return [item[1] for item in matches[:limit]]
 
 
 class FyersWatchlistStream:
@@ -369,6 +458,17 @@ def health() -> dict[str, str]:
         "configured": "true" if provider.configured else "false",
         "fyers_connected": "true" if _fyers_access_token else "false",
     }
+
+
+@app.get("/api/symbols/search", response_model=list[SymbolSearchResult])
+def symbol_search(
+    q: str = Query(default="", max_length=80),
+    limit: int = Query(default=12, ge=1, le=25),
+) -> list[SymbolSearchResult]:
+    try:
+        return search_nse_symbols(q, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/history", response_model=list[Candle])
