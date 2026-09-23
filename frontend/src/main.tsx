@@ -15,6 +15,7 @@ type ChartSettings = {
   show52WeekHigh: boolean;
   show52WeekLow: boolean;
   showPreviousClose: boolean;
+  showHistoricalPe: boolean;
 };
 
 const DEFAULT_CHART_SETTINGS: ChartSettings = {
@@ -26,6 +27,7 @@ const DEFAULT_CHART_SETTINGS: ChartSettings = {
   show52WeekHigh: false,
   show52WeekLow: false,
   showPreviousClose: false,
+  showHistoricalPe: false,
 };
 
 function loadChartSettings(): ChartSettings {
@@ -787,6 +789,7 @@ function App() {
               show52WeekHigh={chartSettings.show52WeekHigh}
               show52WeekLow={chartSettings.show52WeekLow}
               showPreviousClose={chartSettings.showPreviousClose}
+              showHistoricalPe={chartSettings.showHistoricalPe}
               previousClose={previousClose}
             />
 
@@ -965,6 +968,13 @@ function App() {
                   />
                   <i />
                 </label>
+
+                <label className="indicator-toggle-row">
+                  <span>Historical P/E <small>quarterly</small></span>
+                  <input type="checkbox" checked={chartSettings.showHistoricalPe} onChange={(event) => updateChartSettings({ showHistoricalPe: event.target.checked })} />
+                  <i />
+                </label>
+                <p className="indicator-help">Uses the configured fundamentals provider. P/E points are reported by period and carried forward between reports; no synthetic daily P/E is calculated.</p>
               </div>
             ) : panel === "pipscript" ? (
               <div className="builder-panel">
