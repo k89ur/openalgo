@@ -62,6 +62,9 @@ class Quote(BaseModel):
     ask: float | None = None
     source: str = "FYERS API V3"
 
+class QuotesRequest(BaseModel):
+    symbols: list[str]
+
 
 provider = FyersMarketDataProvider()
 
@@ -213,11 +216,23 @@ def quote(
 
 @app.get("/api/quotes", response_model=list[Quote])
 def quotes(
-    symbols: str = Query(..., min_length=1, max_length=4000),
+    symbols: str = Query(..., min_length=1, max_length=30000),
 ) -> list[Quote]:
     requested = [item.strip().upper() for item in symbols.split(",") if item.strip()]
+    return get_quotes_for_symbols(requested)
+
+
+@app.post("/api/quotes", response_model=list[Quote])
+def quotes_post(request: QuotesRequest) -> list[Quote]:
+    requested = [item.strip().upper() for item in request.symbols if item.strip()]
+    return get_quotes_for_symbols(requested)
+
+
+def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
     if not requested:
         return []
+    if len(requested) > 1000:
+        raise HTTPException(status_code=400, detail="A maximum of 1000 symbols can be requested at once.")
 
     try:
         results = []
