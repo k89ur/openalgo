@@ -152,7 +152,8 @@ function App() {
     });
   };
   const [symbol, setSymbol] = useState(() => {
-    const initial = loadWatchlists()[DEFAULT_WATCHLIST_NAME] ?? DEFAULT_WATCHLIST;
+    const initialLists = loadWatchlists();
+    const initial = Object.values(initialLists)[0] ?? DEFAULT_WATCHLIST;
     return initial[0]?.symbol ?? "BHARTIARTL";
   });
   const [search, setSearch] = useState("");
