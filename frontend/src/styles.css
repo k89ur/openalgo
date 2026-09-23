@@ -68,21 +68,15 @@ button { cursor: pointer; }
 
 .chart-container { flex:1; min-height:0; position:relative; overflow:hidden; }
 .chart-canvas { width:100%; height:100%; }
-.quote-panel {
-  position:absolute; z-index:3; left:8px; top:8px; width:145px;
-  padding:8px 9px; background:rgba(10,10,10,.86); border:1px solid #2a2a2a;
-  color:#aaa; pointer-events:none;
+.chart-header-overlay {
+  position:absolute; z-index:3; left:12px; top:9px;
+  display:flex; align-items:baseline; gap:10px;
+  pointer-events:none; text-shadow:0 1px 3px #000;
+  font-size:10px;
 }
-.quote-title { font-size:10px; color:#bbb; }
-.quote-price { margin-top:5px; color:#eee; font-size:20px; line-height:1; }
-.quote-change { margin-top:4px; font-size:10px; }
-.quote-panel dl { margin:10px 0 0; border-top:1px solid #252525; padding-top:6px; }
-.quote-panel dl div { display:flex; justify-content:space-between; padding:2px 0; }
-.quote-panel dt { color:#666; font-size:9px; }
-.quote-panel dd { margin:0; color:#bdbdbd; font-size:9px; }
-.chart-overlay { position:absolute; z-index:2; right:12px; top:9px; pointer-events:none; text-shadow:0 1px 3px #000; }
-.ohlc-line { display:flex; flex-wrap:wrap; gap:11px; color:#777; font-size:10px; }
-.ohlc-line b { color:#ccc; font-weight:500; }
+.chart-header-symbol { color:#a7aeb8; }
+.chart-header-price { font-size:11px; font-weight:600; }
+.chart-header-change { font-size:10px; }
 .plotted-indicators { display:flex; gap:14px; justify-content:flex-end; margin-top:5px; font-size:9px; }
 .plotted-indicators b { font-weight:500; }
 .ma20 { color:#32b6d4; } .ma50 { color:#e0a32d; } .ma200 { color:#a679cf; }
@@ -174,9 +168,9 @@ button { cursor: pointer; }
   .instrument-bar { min-height:38px; }
   .instrument-main span,.instrument-main b { display:none; }
   .chart-controls { max-width:62%; }
-  .quote-panel { width:125px; }
-  .quote-price { font-size:17px; }
-  .ohlc-line { font-size:8px; gap:6px; }
+  .chart-header-overlay { left:8px; top:7px; gap:7px; font-size:8px; }
+  .chart-header-price { font-size:9px; }
+  .chart-header-change { font-size:8px; }
   .plotted-indicators { font-size:8px; }
 }
 
