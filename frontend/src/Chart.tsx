@@ -219,7 +219,17 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
         { name: "MA", paneId: "candle_pane", calcParams: [20, 50, 200] },
         true,
       );
-      if (showVolume) chart.createIndicator("VOL");
+      if (showVolume) {
+        const volumePaneId = chart.createIndicator("VOL");
+        if (volumePaneId) {
+          chart.setPaneOptions({
+            id: volumePaneId,
+            height: 92,
+            minHeight: 70,
+            dragEnabled: true,
+          });
+        }
+      }
 
       const resizeObserver = new ResizeObserver(() => {
         chart.resize();
