@@ -5,6 +5,7 @@ import hashlib
 import os
 import secrets
 import threading
+from dataclasses import replace
 from typing import Literal
 from urllib.parse import urlencode
 
@@ -535,7 +536,7 @@ def quote(
         original = symbol.strip().upper()
         api_symbol = resolve_api_symbol(original)
         result = provider.get_quote(api_symbol)
-        result.symbol = original
+        result = replace(result, symbol=original)
         return to_quote(result)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -628,7 +629,7 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
     output: list[Quote] = []
     for item in results:
         original = api_to_original.get(item.symbol.upper(), item.symbol)
-        item.symbol = original
+        item = replace(item, symbol=original)
         output.append(to_quote(item))
 
     return output
