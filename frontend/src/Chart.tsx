@@ -110,6 +110,16 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
           horizontal: { show: showGrid, color: palette.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
           vertical: { show: showGrid, color: palette.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
         },
+        candle: {
+          tooltip: {
+            showRule: "none",
+          },
+        },
+        indicator: {
+          tooltip: {
+            showRule: "none",
+          },
+        },
         crosshair: {
           show: showCrosshair,
           horizontal: { show: showCrosshair, line: { show: showCrosshair, color: palette.crosshair, size: 1, style: "dashed", dashedValue: [4, 2] } },
@@ -250,6 +260,17 @@ export function Chart({ chartType, dark, symbol, timeframe, chartTheme, showGrid
           paneId: "volume_pane",
           series: "volume",
           calcParams: [],
+          styles: {
+            bars: [{
+              style: "fill",
+              borderStyle: "solid",
+              borderSize: 0,
+              upColor: "#d9dde3",
+              downColor: "#d9dde3",
+              noChangeColor: "#d9dde3",
+            }],
+            lines: [],
+          },
         });
         chart.setPaneOptions({
           id: "volume_pane",
