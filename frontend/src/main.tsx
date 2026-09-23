@@ -174,6 +174,7 @@ function App() {
   const [quoteError, setQuoteError] = useState(false);
   const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
   const [watchImportMessage, setWatchImportMessage] = useState("");
+  const [draggedSymbol, setDraggedSymbol] = useState<string | null>(null);
   const watchImportRef = useRef<HTMLInputElement>(null);
   const updateChartSettings = (patch: Partial<ChartSettings>) => {
     setChartSettings((current) => {
@@ -291,6 +292,23 @@ function App() {
       setSymbol(next);
       setSearch(next);
     }
+  };
+
+  const dropWatchSymbol = (targetSymbol: string) => {
+    if (!draggedSymbol || draggedSymbol === targetSymbol) return;
+
+    setWatchlist((current) => {
+      const from = current.findIndex((item) => item.symbol === draggedSymbol);
+      const to = current.findIndex((item) => item.symbol === targetSymbol);
+      if (from < 0 || to < 0) return current;
+
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+
+    setDraggedSymbol(null);
   };
 
   const addWatchSymbol = () => {
@@ -618,7 +636,15 @@ function App() {
             <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span><span></span></div>
             <div className="watch-items">
               {filteredWatchlist.map((item) => (
-                <div key={item.symbol} className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}>
+                <div
+                  key={item.symbol}
+                  className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}
+                  draggable
+                  onDragStart={() => setDraggedSymbol(item.symbol)}
+                  onDragEnd={() => setDraggedSymbol(null)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => dropWatchSymbol(item.symbol)}
+                >
                   <button className="watch-row-main" onClick={() => selectSymbol(item.symbol)}>
                     <span className="watch-symbol">{item.symbol}</span>
                     <span className="watch-price">{liveQuotes[item.symbol] ? liveQuotes[item.symbol].last.toFixed(2) : "—"}</span>
