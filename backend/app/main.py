@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 import hashlib
 import os
 import secrets
@@ -558,13 +559,24 @@ def symbol_search(
 def history(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
     timeframe: Timeframe = "D",
-    limit: int = Query(default=260, ge=50, le=2000),
+    limit: int = Query(default=800, ge=50, le=2000),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
 ) -> list[Candle]:
     try:
         api_symbol = resolve_api_symbol(symbol)
         if not api_symbol:
             raise unresolved_symbol_error(symbol)
-        return [to_candle(item) for item in provider.get_history(api_symbol, timeframe, limit)]
+        return [
+            to_candle(item)
+            for item in provider.get_history(
+                api_symbol,
+                timeframe,
+                limit,
+                start=from_date,
+                end=to_date,
+            )
+        ]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
