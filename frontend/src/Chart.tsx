@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dispose, init, type Chart as KLineChartInstance } from "klinecharts";
 
 export type ChartType = "candles" | "bars" | "line";
@@ -19,6 +19,7 @@ type Props = {
   show52WeekHigh: boolean;
   show52WeekLow: boolean;
   showPreviousClose: boolean;
+  showHistoricalPe: boolean;
   previousClose?: number;
 };
 
@@ -30,6 +31,60 @@ type HistoryCandle = {
   close: number;
   volume: number;
 };
+
+type CrosshairData = {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  change: number;
+  changePercent: number;
+  ma50?: number;
+  ma200?: number;
+};
+
+type HistoricalPePoint = {
+  time: number;
+  value: number;
+};
+
+function movingAverage(data: Array<{ close: number }>, endIndex: number, period: number) {
+  const start = endIndex - period + 1;
+  if (start < 0) return undefined;
+  let sum = 0;
+  for (let index = start; index <= endIndex; index += 1) sum += Number(data[index].close);
+  return Number.isFinite(sum) ? sum / period : undefined;
+}
+
+function formatCrosshairDate(timestamp: number, timeframe: Timeframe) {
+  const date = new Date(timestamp);
+  if (timeframe === "D" || timeframe === "W" || timeframe === "M") {
+    return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+  }
+  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+function formatNumber(value: number | undefined, digits = 2) {
+  return value == null || !Number.isFinite(value) ? "—" : value.toFixed(digits);
+}
+
+function parseCrosshairEvent(event: unknown) {
+  if (!event || typeof event !== "object") return {};
+  const value = event as Record<string, unknown>;
+  const nested = value.data && typeof value.data === "object" ? value.data as Record<string, unknown> : {};
+  const point = value.point && typeof value.point === "object" ? value.point as Record<string, unknown> : {};
+  const readNumber = (...keys: string[]) => {
+    for (const key of keys) {
+      const raw = value[key] ?? nested[key] ?? point[key];
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return undefined;
+  };
+  return { dataIndex: readNumber("dataIndex"), timestamp: readNumber("timestamp") };
+}
 
 function getPeriod(timeframe: Timeframe) {
   switch (timeframe) {
@@ -71,9 +126,13 @@ export function Chart({
   show52WeekHigh,
   show52WeekLow,
   showPreviousClose,
+  showHistoricalPe,
   previousClose,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [crosshairData, setCrosshairData] = useState<CrosshairData | null>(null);
+  const [historicalPe, setHistoricalPe] = useState<HistoricalPePoint[]>([]);
+  const [historicalPeStatus, setHistoricalPeStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const chartRef = useRef<KLineChartInstance | null>(null);
 
   useEffect(() => {
@@ -92,6 +151,7 @@ export function Chart({
         volumePrecision: 0,
       });
       chart.setPeriod(getPeriod(timeframe));
+      setCrosshairData(null);
 
       const palette = chartTheme === "light"
         ? {
@@ -157,6 +217,40 @@ export function Chart({
       });
 
       container.style.background = palette.background;
+
+      const crosshairHandler = (event: unknown) => {
+        const parsed = parseCrosshairEvent(event);
+        const dataList = chart.getDataList();
+        let index = parsed.dataIndex != null ? Math.round(parsed.dataIndex) : -1;
+        if (index < 0 && parsed.timestamp != null && dataList.length) {
+          let bestIndex = 0;
+          let bestDistance = Number.POSITIVE_INFINITY;
+          dataList.forEach((item, itemIndex) => {
+            const distance = Math.abs(item.timestamp - parsed.timestamp!);
+            if (distance < bestDistance) { bestDistance = distance; bestIndex = itemIndex; }
+          });
+          index = bestIndex;
+        }
+        if (index < 0 || index >= dataList.length) { setCrosshairData(null); return; }
+        const candle = dataList[index];
+        const previous = index > 0 ? dataList[index - 1] : undefined;
+        const change = previous ? candle.close - previous.close : 0;
+        const changePercent = previous && previous.close !== 0 ? (change / previous.close) * 100 : 0;
+        setCrosshairData({
+          timestamp: candle.timestamp,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          volume: Number(candle.volume ?? 0),
+          change,
+          changePercent,
+          ma50: movingAverage(dataList, index, 50),
+          ma200: movingAverage(dataList, index, 200),
+        });
+      };
+
+      chart.subscribeAction("onCrosshairChange", crosshairHandler);
 
       chart.setDataLoader({
         getBars: async ({ type, timestamp, callback }) => {
@@ -371,6 +465,55 @@ export function Chart({
         });
       }
 
+      if (showHistoricalPe) {
+        setHistoricalPeStatus("loading");
+        void (async () => {
+          try {
+            const response = await fetch("/api/fundamentals/pe?symbol=" + encodeURIComponent(symbol) + "&limit=40", { cache: "no-store" });
+            if (!response.ok) throw new Error("Historical P/E unavailable");
+            const raw = (await response.json()) as HistoricalPePoint[];
+            const points = raw.map((item) => ({ time: Number(item.time), value: Number(item.value) }))
+              .filter((item) => Number.isFinite(item.time) && Number.isFinite(item.value) && item.value > 0)
+              .sort((a, b) => a.time - b.time);
+            if (disposed) return;
+            setHistoricalPe(points);
+            setHistoricalPeStatus(points.length ? "ready" : "unavailable");
+            if (!points.length) return;
+            const latestByDate = new Map(points.map((point) => [new Date(point.time * 1000).toISOString().slice(0, 10), point.value]));
+            chart.createIndicator({
+              name: "PIPSGOX_PE",
+              shortName: "P/E",
+              paneId: "pe_pane",
+              series: "normal",
+              precision: 2,
+              shouldOhlc: false,
+              figures: [{ key: "pe", title: "P/E: ", type: "line" }],
+              styles: { lines: [{ style: "solid", color: "#c9a15a", size: 1 }] },
+              calc: (dataList) => {
+                const result: Record<number, { pe: number | null }> = {};
+                let latest: number | null = null;
+                for (const candle of dataList) {
+                  const exact = latestByDate.get(new Date(candle.timestamp).toISOString().slice(0, 10));
+                  if (exact != null) latest = exact;
+                  result[candle.timestamp] = { pe: latest };
+                }
+                return result;
+              },
+            });
+            chart.setPaneOptions({ id: "pe_pane", height: 86, minHeight: 70, dragEnabled: false, order: 10 });
+          } catch (error) {
+            if (!disposed) {
+              setHistoricalPe([]);
+              setHistoricalPeStatus("unavailable");
+              console.warn("PIPSGOX historical P/E unavailable:", error);
+            }
+          }
+        })();
+      } else {
+        setHistoricalPe([]);
+        setHistoricalPeStatus("idle");
+      }
+
       if (show52WeekHigh || show52WeekLow) {
         void (async () => {
           try {
@@ -413,6 +556,7 @@ export function Chart({
       return () => {
         disposed = true;
         resizeObserver.disconnect();
+        chart.unsubscribeAction("onCrosshairChange", crosshairHandler);
         chartRef.current = null;
         dispose(chart);
       };
@@ -435,8 +579,31 @@ export function Chart({
     show52WeekHigh,
     show52WeekLow,
     showPreviousClose,
+    showHistoricalPe,
     previousClose,
   ]);
 
-  return <div ref={containerRef} className="chart-canvas" />;
+  return (
+    <div className="chart-stage">
+      <div ref={containerRef} className="chart-canvas" />
+      {crosshairData && (
+        <div className="chart-crosshair-data" aria-live="polite">
+          <span className="chart-crosshair-date">{formatCrosshairDate(crosshairData.timestamp, timeframe)}</span>
+          <span>O <b>{formatNumber(crosshairData.open)}</b></span>
+          <span>H <b>{formatNumber(crosshairData.high)}</b></span>
+          <span>L <b>{formatNumber(crosshairData.low)}</b></span>
+          <span>C <b>{formatNumber(crosshairData.close)}</b></span>
+          <span className={crosshairData.change < 0 ? "negative" : "positive"}>
+            {crosshairData.change >= 0 ? "+" : ""}{formatNumber(crosshairData.change)} ({crosshairData.changePercent >= 0 ? "+" : ""}{formatNumber(crosshairData.changePercent)}%)
+          </span>
+          <span>Vol <b>{formatNumber(crosshairData.volume, 0)}</b></span>
+          {crosshairData.ma50 != null && <span>MA50 <b>{formatNumber(crosshairData.ma50)}</b></span>}
+          {crosshairData.ma200 != null && <span>MA200 <b>{formatNumber(crosshairData.ma200)}</b></span>}
+        </div>
+      )}
+      {showVolume && <div className="chart-pane-label volume-pane-label">VOLUME</div>}
+      {showHistoricalPe && historicalPeStatus === "ready" && historicalPe.length > 0 && <div className="chart-pane-label pe-pane-label">HISTORICAL P/E</div>}
+      {showHistoricalPe && historicalPeStatus === "unavailable" && <div className="chart-pane-status">Historical P/E data unavailable</div>}
+    </div>
+  );
 }
