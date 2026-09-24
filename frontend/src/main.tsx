@@ -7,6 +7,19 @@ type WatchItem = { symbol: string; price: string; change: string };
 export type ChartTheme = "pipsgox" | "classic" | "light";
 type PipscriptLanguage = "python" | "javascript";
 type PipscriptOutputType = "indicator" | "table";
+type PipscriptScope = "symbol" | "multi-symbol" | "static";
+
+type ActivePipscript = {
+  language: PipscriptLanguage;
+  outputType: PipscriptOutputType;
+  code: string;
+  scope: PipscriptScope;
+};
+
+type CachedPipscriptResult = {
+  output: PipscriptOutput;
+  cachedAt: number;
+};
 
 type PyodideRuntime = {
   runPythonAsync: (code: string) => Promise<unknown>;
@@ -65,6 +78,30 @@ function loadPyodideRuntime(): Promise<PyodideRuntime> {
   });
 
   return pyodidePromise;
+}
+
+function inferPipscriptScope(code: string): PipscriptScope {
+  // A script without data_requests() receives the selected chart candles,
+  // so it is inherently dependent on the current symbol.
+  if (!/\bdata_requests\s*\(/.test(code)) return "symbol";
+
+  // SYMBOL is injected by the runtime and is the standard way for a script
+  // to declare that its data follows the currently selected chart symbol.
+  if (/\bSYMBOL\b/.test(code)) return "symbol";
+
+  // A data_requests() script with fixed symbols is multi-symbol. It should
+  // not be re-executed just because the chart selection changes.
+  return "multi-symbol";
+}
+
+function pipscriptCacheKey(
+  language: PipscriptLanguage,
+  outputType: PipscriptOutputType,
+  code: string,
+  symbolValue: string,
+  timeframeValue: Timeframe,
+): string {
+  return JSON.stringify([language, outputType, code, symbolValue, timeframeValue]);
 }
 
 function normalizePipscriptOutput(raw: unknown, preferredType: PipscriptOutputType): PipscriptOutput {
@@ -548,12 +585,10 @@ function App() {
   const [savedPipscripts, setSavedPipscripts] = useState<SavedPipscript[]>(loadSavedPipscripts);
   const [selectedSavedPipscriptId, setSelectedSavedPipscriptId] = useState("");
   const pipscriptHasOutputRef = useRef(false);
-  const activePipscriptRef = useRef<{
-    language: PipscriptLanguage;
-    outputType: PipscriptOutputType;
-    code: string;
-  } | null>(null);
+  const activePipscriptRef = useRef<ActivePipscript | null>(null);
   const pipscriptRunIdRef = useRef(0);
+  const pipscriptResultCacheRef = useRef<Map<string, CachedPipscriptResult>>(new Map());
+  const PIPSCRIPT_CACHE_TTL_MS = 60_000;
 
   const runPipscript = async (override?: {
     language?: PipscriptLanguage;
@@ -566,12 +601,28 @@ function App() {
     const outputType = override?.outputType ?? pipscriptOutputType;
     const code = override?.code ?? pipscript;
 
-    // Keep the active script registered even while its current run is loading.
-    activePipscriptRef.current = { language, outputType, code };
+    // Register the script as the active chart script. The engine derives its
+    // dependency scope so future symbol changes can be handled generically.
+    const scope = inferPipscriptScope(code);
+    activePipscriptRef.current = { language, outputType, code, scope };
+
     const runId = ++pipscriptRunIdRef.current;
+    const cacheKey = pipscriptCacheKey(language, outputType, code, executionSymbol, timeframe);
+    const cached = pipscriptResultCacheRef.current.get(cacheKey);
+    const cacheIsFresh = cached && Date.now() - cached.cachedAt < PIPSCRIPT_CACHE_TTL_MS;
+
+    if (cacheIsFresh) {
+      setPipscriptOutput(cached.output);
+      pipscriptHasOutputRef.current = true;
+      setPipscriptStatus(
+        cached.output.type === "table"
+          ? `Table ready · ${cached.output.rows.length} rows · refreshing`
+          : `Indicator ready · ${cached.output.points.length} points · refreshing`,
+      );
+    }
 
     setPipscriptRunning(true);
-    setPipscriptStatus("Preparing Pipscript...");
+    if (!cacheIsFresh) setPipscriptStatus("Preparing Pipscript...");
 
     try {
       type ChartBar = {
@@ -699,6 +750,12 @@ json.dumps(_result)`;
 
       const normalized = normalizePipscriptOutput(rawOutput, outputType);
       if (runId !== pipscriptRunIdRef.current) return;
+      pipscriptResultCacheRef.current.set(cacheKey, {
+        output: normalized,
+        cachedAt: Date.now(),
+      });
+
+      if (runId !== pipscriptRunIdRef.current) return;
       setPipscriptOutput(normalized);
       pipscriptHasOutputRef.current = true;
       setPipscriptStatus(
@@ -707,16 +764,20 @@ json.dumps(_result)`;
           : `Indicator ready · ${normalized.points.length} points`,
       );
     } catch (error) {
+      // A stale request must never erase a newer symbol's result.
+      if (runId !== pipscriptRunIdRef.current) return;
       setPipscriptOutput(null);
       setPipscriptStatus(error instanceof Error ? error.message : "PIPScript failed.");
     } finally {
-      setPipscriptRunning(false);
+      if (runId === pipscriptRunIdRef.current) {
+        setPipscriptRunning(false);
+      }
     }
   };
 
   useEffect(() => {
     const active = activePipscriptRef.current;
-    if (!active) return;
+    if (!active || active.scope !== "symbol") return;
 
     void runPipscript({
       language: active.language,
