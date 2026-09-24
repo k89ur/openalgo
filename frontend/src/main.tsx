@@ -1438,7 +1438,7 @@ json.dumps(_result)`;
                   </button>
                 </div>
                 <div className="builder-hint">
-                  Input: <code>data</code> = current chart OHLCV candles. Saved scripts are stored in this browser. <b>APPLY</b> loads and runs the selected script; <b>DELETE</b> removes it.
+                  <code>calculate(data)</code> receives the current chart candles by default. Add <code>data_requests()</code> to fetch multiple symbols/timeframes through the PIPSGOX Data Gateway. Saved scripts are stored in this browser. <b>APPLY</b> loads and runs the selected script; <b>DELETE</b> removes it.
                 </div>
                 <textarea value={pipscript} onChange={(event) => setPipscript(event.target.value)} spellCheck={false} />
                 <div className="builder-output">
