@@ -21,9 +21,19 @@ class SymbolInfo:
 
 class FyersMarketDataProvider:
     name = "fyers_v3_sdk"
-    _history_cache: dict[tuple, tuple[float, list[Candle]]] = {}
+    # History is shared by chart, watchlist and Pipscript consumers.
+    _history_cache: dict[tuple[str, str], tuple[float, date, date, list[Candle]]] = {}
     _history_cache_lock = threading.Lock()
+    _history_inflight: dict[tuple, threading.Event] = {}
     _history_cache_ttl_seconds = 300.0
+
+    # Bound actual FYERS calls so concurrent browser requests cannot create a
+    # burst of upstream traffic.
+    _history_upstream_semaphore = threading.BoundedSemaphore(2)
+    _history_request_lock = threading.Lock()
+    _history_last_upstream_request = 0.0
+    _history_min_interval_seconds = 0.20
+    _history_refresh_threads: set[threading.Thread] = set()
 
     def __init__(self) -> None:
         self.client_id = os.getenv("FYERS_CLIENT_ID", "").strip()
@@ -130,6 +140,150 @@ class FyersMarketDataProvider:
         payload = client.get_profile()
         self._check_response(payload, "profile")
 
+    @staticmethod
+    def _is_retryable_history_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return any(token in message for token in (
+            "429", "rate limit", "rate-limit", "too many request",
+            "too many requests", "temporarily unavailable", "timeout",
+            "timed out", "connection reset", "connection aborted",
+            "connection error",
+        ))
+
+    def _history_upstream_call(self, client, payload: dict) -> dict:
+        with self._history_upstream_semaphore:
+            for attempt in range(3):
+                with self._history_request_lock:
+                    now = time.monotonic()
+                    wait = self._history_min_interval_seconds - (
+                        now - self._history_last_upstream_request
+                    )
+                    if wait > 0:
+                        time.sleep(wait)
+                    self._history_last_upstream_request = time.monotonic()
+
+                try:
+                    response = client.history(data=payload)
+                    return self._check_response(response, "history")
+                except Exception as exc:
+                    if attempt >= 2 or not self._is_retryable_history_error(exc):
+                        raise
+                    time.sleep(0.5 * (2 ** attempt))
+
+        raise RuntimeError("FYERS history request failed after retries.")
+
+    def _fetch_history_and_cache(
+        self,
+        *,
+        client,
+        info: SymbolInfo,
+        resolution: str,
+        limit: int,
+        start: date,
+        end: date,
+        chunk_days: int,
+        inflight_key: tuple,
+    ) -> list[Candle]:
+        try:
+            chunks = list(self._chunks(start, end, chunk_days))
+
+            def load_chunk(chunk: tuple[date, date]) -> list[Candle]:
+                chunk_start, chunk_end = chunk
+                payload = self._history_upstream_call(
+                    client,
+                    {
+                        "symbol": info.api_symbol,
+                        "resolution": resolution,
+                        "date_format": "1",
+                        "range_from": chunk_start.isoformat(),
+                        "range_to": chunk_end.isoformat(),
+                        "cont_flag": "1",
+                    },
+                )
+                result: list[Candle] = []
+                for row in payload.get("candles") or []:
+                    if len(row) >= 6:
+                        result.append(
+                            Candle(
+                                time=int(row[0]),
+                                open=float(row[1]),
+                                high=float(row[2]),
+                                low=float(row[3]),
+                                close=float(row[4]),
+                                volume=int(row[5] or 0),
+                            )
+                        )
+                return result
+
+            candles: list[Candle] = []
+            worker_count = min(4, len(chunks))
+            if worker_count <= 1:
+                for chunk in chunks:
+                    candles.extend(load_chunk(chunk))
+            else:
+                with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                    futures = [executor.submit(load_chunk, chunk) for chunk in chunks]
+                    for future in as_completed(futures):
+                        candles.extend(future.result())
+
+            unique = {item.time: item for item in candles}
+            result = sorted(unique.values(), key=lambda item: item.time)[-limit:]
+            if not result:
+                raise ValueError(f"No historical data returned for {info.api_symbol}.")
+
+            with self._history_cache_lock:
+                self._history_cache[(info.api_symbol.upper(), resolution)] = (
+                    time.monotonic(),
+                    start,
+                    end,
+                    list(result),
+                )
+            return result
+        finally:
+            with self._history_cache_lock:
+                event = self._history_inflight.pop(inflight_key, None)
+                if event is not None:
+                    event.set()
+
+    def _start_background_refresh(
+        self,
+        *,
+        client,
+        info: SymbolInfo,
+        resolution: str,
+        limit: int,
+        start: date,
+        end: date,
+        chunk_days: int,
+        inflight_key: tuple,
+    ) -> None:
+        def refresh() -> None:
+            try:
+                self._fetch_history_and_cache(
+                    client=client,
+                    info=info,
+                    resolution=resolution,
+                    limit=limit,
+                    start=start,
+                    end=end,
+                    chunk_days=chunk_days,
+                    inflight_key=inflight_key,
+                )
+            except Exception:
+                with self._history_cache_lock:
+                    self._history_inflight.pop(inflight_key, None)
+            finally:
+                with self._history_cache_lock:
+                    self._history_refresh_threads.discard(threading.current_thread())
+
+        thread = threading.Thread(
+            target=refresh,
+            name="pipsgox-history-refresh",
+            daemon=True,
+        )
+        self._history_refresh_threads.add(thread)
+        thread.start()
+
     def get_history(
         self,
         symbol: str,
@@ -162,71 +316,73 @@ class FyersMarketDataProvider:
                 raise ValueError("History start date must be on or before end date.")
             chunk_days = 366 if resolution in {"D", "1W", "1M"} else 100
 
-        cache_key = (
+        cache_key = (info.api_symbol.upper(), resolution)
+        inflight_key = (
             info.api_symbol.upper(),
             resolution,
             start.isoformat(),
             end.isoformat(),
-            limit,
         )
-        now = time.monotonic()
+
+        # A larger cached dataset can satisfy a smaller request immediately.
         with self._history_cache_lock:
             cached = self._history_cache.get(cache_key)
-            if cached and now - cached[0] < self._history_cache_ttl_seconds:
-                return list(cached[1])
+            inflight = self._history_inflight.get(inflight_key)
             if cached:
-                self._history_cache.pop(cache_key, None)
+                cached_at, cached_start, cached_end, cached_bars = cached
+                covers_request = cached_start <= start and cached_end >= end
+                if covers_request:
+                    result = list(cached_bars[-limit:])
+                    if time.monotonic() - cached_at < self._history_cache_ttl_seconds:
+                        return result
 
-        chunks = list(self._chunks(start, end, chunk_days))
-
-        def load_chunk(chunk: tuple[date, date]) -> list[Candle]:
-            chunk_start, chunk_end = chunk
-            payload = client.history(data={
-                "symbol": info.api_symbol,
-                "resolution": resolution,
-                "date_format": "1",
-                "range_from": chunk_start.isoformat(),
-                "range_to": chunk_end.isoformat(),
-                "cont_flag": "1",
-            })
-            payload = self._check_response(payload, "history")
-            result: list[Candle] = []
-            for row in payload.get("candles") or []:
-                if len(row) >= 6:
-                    result.append(
-                        Candle(
-                            time=int(row[0]),
-                            open=float(row[1]),
-                            high=float(row[2]),
-                            low=float(row[3]),
-                            close=float(row[4]),
-                            volume=int(row[5] or 0),
+                    # Stale-while-refresh keeps an interactive chart responsive.
+                    if inflight is None:
+                        self._history_inflight[inflight_key] = threading.Event()
+                        self._start_background_refresh(
+                            client=client,
+                            info=info,
+                            resolution=resolution,
+                            limit=max(limit, len(cached_bars)),
+                            start=start,
+                            end=end,
+                            chunk_days=chunk_days,
+                            inflight_key=inflight_key,
                         )
-                    )
-            return result
+                    return result
 
-        # Daily/weekly/monthly history is split into multiple FYERS date
-        # ranges. Fetch those independent ranges concurrently so one chart
-        # switch does not wait for several sequential round trips.
-        candles: list[Candle] = []
-        worker_count = min(4, len(chunks))
-        if worker_count <= 1:
-            for chunk in chunks:
-                candles.extend(load_chunk(chunk))
-        else:
-            with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                futures = [executor.submit(load_chunk, chunk) for chunk in chunks]
-                for future in as_completed(futures):
-                    candles.extend(future.result())
+            if inflight is None:
+                self._history_inflight[inflight_key] = threading.Event()
+                owner = True
+            else:
+                owner = False
+                event = inflight
 
-        unique = {item.time: item for item in candles}
-        result = sorted(unique.values(), key=lambda item: item.time)[-limit:]
-        if not result:
-            raise ValueError(f"No historical data returned for {symbol}.")
+        if not owner:
+            event.wait(timeout=30.0)
+            with self._history_cache_lock:
+                cached = self._history_cache.get(cache_key)
+                if cached:
+                    _, cached_start, cached_end, cached_bars = cached
+                    if cached_start <= start and cached_end >= end:
+                        return list(cached_bars[-limit:])
 
-        with self._history_cache_lock:
-            self._history_cache[cache_key] = (time.monotonic(), list(result))
-        return result
+                if inflight_key not in self._history_inflight:
+                    self._history_inflight[inflight_key] = threading.Event()
+                    owner = True
+                else:
+                    raise ValueError(f"Historical data request is still unavailable for {symbol}.")
+
+        return self._fetch_history_and_cache(
+            client=client,
+            info=info,
+            resolution=resolution,
+            limit=limit,
+            start=start,
+            end=end,
+            chunk_days=chunk_days,
+            inflight_key=inflight_key,
+        )
 
     @staticmethod
     def _quote_from_value(symbol: str, value: dict) -> Quote:
