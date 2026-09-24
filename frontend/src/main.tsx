@@ -548,6 +548,12 @@ function App() {
   const [savedPipscripts, setSavedPipscripts] = useState<SavedPipscript[]>(loadSavedPipscripts);
   const [selectedSavedPipscriptId, setSelectedSavedPipscriptId] = useState("");
   const pipscriptHasOutputRef = useRef(false);
+  const activePipscriptRef = useRef<{
+    language: PipscriptLanguage;
+    outputType: PipscriptOutputType;
+    code: string;
+  } | null>(null);
+  const pipscriptRunIdRef = useRef(0);
 
   const runPipscript = async (override?: {
     language?: PipscriptLanguage;
@@ -556,6 +562,7 @@ function App() {
     symbol?: string;
   }) => {
     const executionSymbol = override?.symbol ?? symbol;
+    const runId = ++pipscriptRunIdRef.current;
     const language = override?.language ?? pipscriptLanguage;
     const outputType = override?.outputType ?? pipscriptOutputType;
     const code = override?.code ?? pipscript;
@@ -688,8 +695,10 @@ json.dumps(_result)`;
       }
 
       const normalized = normalizePipscriptOutput(rawOutput, outputType);
+      if (runId !== pipscriptRunIdRef.current) return;
       setPipscriptOutput(normalized);
       pipscriptHasOutputRef.current = true;
+      activePipscriptRef.current = { language, outputType, code };
       setPipscriptStatus(
         normalized.type === "table"
           ? `Table ready · ${normalized.rows.length} rows`
@@ -702,6 +711,18 @@ json.dumps(_result)`;
       setPipscriptRunning(false);
     }
   };
+
+  useEffect(() => {
+    const active = activePipscriptRef.current;
+    if (!active) return;
+
+    void runPipscript({
+      language: active.language,
+      outputType: active.outputType,
+      code: active.code,
+      symbol,
+    });
+  }, [symbol]);
 
   const savePipscript = () => {
     const value = window.prompt(
@@ -1017,17 +1038,6 @@ json.dumps(_result)`;
   const selectSymbol = (next: string) => {
     setSymbol(next);
     setSearch(next);
-
-    // If a data-request Pipscript is already active, refresh it immediately
-    // with the newly selected Watchlist symbol. This avoids relying on a
-    // React effect closure during rapid Watchlist changes.
-    if (
-      pipscriptHasOutputRef.current &&
-      pipscriptOutputType === "table" &&
-      pipscript.includes("data_requests")
-    ) {
-      void runPipscript({ symbol: next });
-    }
   };
 
   const submitSearch = () => {
