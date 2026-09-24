@@ -1,10 +1,108 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type SetStateAction } from "react";
 import ReactDOM from "react-dom/client";
-import { Chart, type ChartType, type Timeframe } from "./Chart";
+import { Chart, type ChartType, type Timeframe, type PipscriptOutput } from "./Chart";
 import "./styles.css";
 
 type WatchItem = { symbol: string; price: string; change: string };
 export type ChartTheme = "pipsgox" | "classic" | "light";
+type PipscriptLanguage = "python" | "javascript";
+type PipscriptOutputType = "indicator" | "table";
+
+type PyodideRuntime = {
+  runPythonAsync: (code: string) => Promise<unknown>;
+};
+
+declare global {
+  interface Window {
+    loadPyodide?: (options?: { indexURL?: string }) => Promise<PyodideRuntime>;
+  }
+}
+
+let pyodidePromise: Promise<PyodideRuntime> | null = null;
+
+function loadPyodideRuntime(): Promise<PyodideRuntime> {
+  if (window.loadPyodide) {
+    return window.loadPyodide({
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/",
+    });
+  }
+
+  if (pyodidePromise) return pyodidePromise;
+
+  pyodidePromise = new Promise<PyodideRuntime>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>("script[data-pipsgox-pyodide]");
+    if (existing) {
+      existing.addEventListener("load", () => {
+        if (!window.loadPyodide) reject(new Error("Pyodide loaded without loadPyodide()."));
+        else resolve(window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/" }));
+      }, { once: true });
+      existing.addEventListener("error", () => reject(new Error("Could not load the Python runtime.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js";
+    script.async = true;
+    script.dataset.pipsgoxPyodide = "true";
+    script.onload = () => {
+      if (!window.loadPyodide) reject(new Error("Pyodide loaded without loadPyodide()."));
+      else resolve(window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/" }));
+    };
+    script.onerror = () => reject(new Error("Could not load the Python runtime."));
+    document.head.appendChild(script);
+  });
+
+  return pyodidePromise;
+}
+
+function normalizePipscriptOutput(raw: unknown, preferredType: PipscriptOutputType): PipscriptOutput {
+  if (!raw || typeof raw !== "object") throw new Error("Script must return an object.");
+
+  const value = raw as Record<string, unknown>;
+  const outputType = value.type === "table" || value.type === "line" ? value.type : preferredType === "table" ? "table" : "line";
+
+  if (outputType === "table") {
+    const columns = Array.isArray(value.columns)
+      ? value.columns.map((item) => String(item)).slice(0, 12)
+      : [];
+    const rows = Array.isArray(value.rows)
+      ? value.rows
+          .filter((row): row is unknown[] => Array.isArray(row))
+          .slice(0, 50)
+          .map((row) => row.slice(0, columns.length || 12).map((item) => String(item ?? "")))
+      : [];
+
+    if (!columns.length) throw new Error("Table output needs a non-empty columns array.");
+    return {
+      type: "table",
+      title: String(value.title || "PIPScript Table"),
+      columns,
+      rows,
+    };
+  }
+
+  const rawPoints = Array.isArray(value.points)
+    ? value.points
+    : Array.isArray(value.values)
+      ? value.values
+      : [];
+
+  const points = rawPoints
+    .filter((point): point is Record<string, unknown> => Boolean(point) && typeof point === "object")
+    .map((point) => ({
+      time: Number(point.time),
+      value: Number(point.value),
+    }))
+    .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
+
+  if (!points.length) throw new Error("Indicator output needs points: [{ time, value }].");
+
+  return {
+    type: "line",
+    name: String(value.name || "PIPScript"),
+    points,
+  };
+}
 
 type ChartSettings = {
   theme: ChartTheme;
@@ -365,9 +463,117 @@ function App() {
     window.setTimeout(() => setWatchImportMessage(""), 2500);
   };
 
+  const [pipscriptLanguage, setPipscriptLanguage] = useState<PipscriptLanguage>("python");
+  const [pipscriptOutputType, setPipscriptOutputType] = useState<PipscriptOutputType>("indicator");
   const [pipscript, setPipscript] = useState(
-    "def calculate(data):\n    close = data.close\n    ma20 = close.sma(20)\n    return {\n        \"MA20\": ma20\n    }",
+    "def calculate(data):\n    values = []\n    for row in data:\n        values.append({\"time\": row[\"time\"], \"value\": row[\"close\"]})\n    return {\"type\": \"line\", \"name\": \"Close Script\", \"values\": values}",
   );
+  const [pipscriptOutput, setPipscriptOutput] = useState<PipscriptOutput | null>(null);
+  const [pipscriptStatus, setPipscriptStatus] = useState("Ready");
+  const [pipscriptRunning, setPipscriptRunning] = useState(false);
+
+  const runPipscript = async () => {
+    setPipscriptRunning(true);
+    setPipscriptStatus("Loading chart data...");
+
+    try {
+      const response = await fetch(
+        "/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error("Could not load chart data.");
+
+      const raw = await response.json() as Array<{
+        time: number;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+      }>;
+
+      const data = raw.map((row) => ({
+        time: Number(row.time),
+        open: Number(row.open),
+        high: Number(row.high),
+        low: Number(row.low),
+        close: Number(row.close),
+        volume: Number(row.volume || 0),
+      }));
+
+      let rawOutput: unknown;
+
+      if (pipscriptLanguage === "javascript") {
+        setPipscriptStatus("Running JavaScript...");
+        const runner = new Function(
+          "data",
+          `"use strict";
+${pipscript}
+if (typeof calculate !== "function") {
+  throw new Error("Define calculate(data) in your script.");
+}
+return calculate(data);`,
+        );
+        rawOutput = runner(data);
+      } else {
+        setPipscriptStatus("Loading Python runtime...");
+        const pyodide = await loadPyodideRuntime();
+        setPipscriptStatus("Running Python...");
+        const serializedData = JSON.stringify(data);
+        const pythonCode = `import json
+data = json.loads(${JSON.stringify(serializedData)})
+${pipscript}
+if "calculate" not in globals():
+    raise RuntimeError("Define calculate(data) in your script.")
+_result = calculate(data)
+json.dumps(_result)`;
+        rawOutput = JSON.parse(String(await pyodide.runPythonAsync(pythonCode)));
+      }
+
+      const normalized = normalizePipscriptOutput(rawOutput, pipscriptOutputType);
+      setPipscriptOutput(normalized);
+      setPipscriptStatus(
+        normalized.type === "table"
+          ? `Table ready · ${normalized.rows.length} rows`
+          : `Indicator ready · ${normalized.points.length} points`,
+      );
+    } catch (error) {
+      setPipscriptOutput(null);
+      setPipscriptStatus(error instanceof Error ? error.message : "PIPScript failed.");
+    } finally {
+      setPipscriptRunning(false);
+    }
+  };
+
+  const savePipscript = () => {
+    localStorage.setItem("pipsgox-pipscript", JSON.stringify({
+      language: pipscriptLanguage,
+      outputType: pipscriptOutputType,
+      code: pipscript,
+    }));
+    setPipscriptStatus("Saved in this browser.");
+  };
+
+  const loadPipscript = () => {
+    try {
+      const raw = localStorage.getItem("pipsgox-pipscript");
+      if (!raw) {
+        setPipscriptStatus("No saved PIPScript found.");
+        return;
+      }
+      const saved = JSON.parse(raw) as {
+        language?: PipscriptLanguage;
+        outputType?: PipscriptOutputType;
+        code?: string;
+      };
+      if (saved.language === "python" || saved.language === "javascript") setPipscriptLanguage(saved.language);
+      if (saved.outputType === "indicator" || saved.outputType === "table") setPipscriptOutputType(saved.outputType);
+      if (typeof saved.code === "string") setPipscript(saved.code);
+      setPipscriptStatus("Loaded from this browser.");
+    } catch {
+      setPipscriptStatus("Saved PIPScript is invalid.");
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -788,6 +994,7 @@ function App() {
               show52WeekLow={chartSettings.show52WeekLow}
               showPreviousClose={chartSettings.showPreviousClose}
               previousClose={previousClose}
+              pipscriptOutput={pipscriptOutput}
             />
 
             <div className="chart-header-overlay">
@@ -970,12 +1177,43 @@ function App() {
             ) : panel === "pipscript" ? (
               <div className="builder-panel">
                 <div className="builder-toolbar">
-                  <span>Python</span><button>JavaScript</button><span className="builder-spacer" /><button>LOAD</button><button>SAVE</button><button>RUN</button>
+                  <select
+                    value={pipscriptLanguage}
+                    onChange={(event) => {
+                      const language = event.target.value as PipscriptLanguage;
+                      setPipscriptLanguage(language);
+                      if (language === "python") {
+                        setPipscript(
+                          "def calculate(data):\n    values = []\n    for row in data:\n        values.append({\"time\": row[\"time\"], \"value\": row[\"close\"]})\n    return {\"type\": \"line\", \"name\": \"Close Script\", \"values\": values}",
+                        );
+                      } else {
+                        setPipscript(
+                          "function calculate(data) {\n  return {\n    type: \"line\",\n    name: \"Close Script\",\n    values: data.map(row => ({ time: row.time, value: row.close }))\n  };\n}",
+                        );
+                      }
+                    }}
+                  >
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                  </select>
+                  <select value={pipscriptOutputType} onChange={(event) => setPipscriptOutputType(event.target.value as PipscriptOutputType)}>
+                    <option value="indicator">Indicator</option>
+                    <option value="table">Table</option>
+                  </select>
+                  <span className="builder-spacer" />
+                  <button onClick={loadPipscript}>LOAD</button>
+                  <button onClick={savePipscript}>SAVE</button>
+                  <button className="builder-run" onClick={() => void runPipscript()} disabled={pipscriptRunning}>
+                    {pipscriptRunning ? "RUNNING..." : "RUN"}
+                  </button>
+                </div>
+                <div className="builder-hint">
+                  Input: <code>data</code> = current chart OHLCV candles. Return an indicator with <code>values</code>, or a table with <code>columns</code>/<code>rows</code>.
                 </div>
                 <textarea value={pipscript} onChange={(event) => setPipscript(event.target.value)} spellCheck={false} />
                 <div className="builder-output">
                   <strong>Output</strong>
-                  <span>Lines, values, markers and tables will appear here.</span>
+                  <span>{pipscriptStatus}</span>
                 </div>
               </div>
             ) : (
