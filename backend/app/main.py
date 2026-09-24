@@ -6,6 +6,7 @@ import hashlib
 import os
 import secrets
 import threading
+import time
 from dataclasses import replace
 from typing import Literal
 from urllib.parse import urlencode
@@ -143,6 +144,41 @@ class SymbolSearchResult(BaseModel):
 
 
 provider = FyersMarketDataProvider()
+
+# Pace Pipscript historical-data calls so a multi-index script does not
+# burst past FYERS historical-data rate limits.
+_pipscript_history_lock = threading.Lock()
+_pipscript_last_history_request = 0.0
+PIPSCRIPT_HISTORY_INTERVAL_SECONDS = 1.0
+
+
+def _pipscript_get_history(
+    api_symbol: str,
+    timeframe: Timeframe,
+    limit: int,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+):
+    global _pipscript_last_history_request
+
+    with _pipscript_history_lock:
+        now = time.monotonic()
+        wait = PIPSCRIPT_HISTORY_INTERVAL_SECONDS - (now - _pipscript_last_history_request)
+        if wait > 0:
+            time.sleep(wait)
+
+        result = provider.get_history(
+            api_symbol,
+            timeframe,
+            limit,
+            start=start,
+            end=end,
+        )
+        _pipscript_last_history_request = time.monotonic()
+        return result
+
+
 if _fyers_access_token:
     provider.set_access_token(_fyers_access_token)
 
@@ -692,7 +728,7 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                 if not api_symbol:
                     raise unresolved_symbol_error(original)
 
-                candles = provider.get_history(
+                candles = _pipscript_get_history(
                     api_symbol,
                     item.timeframe,
                     item.limit,
