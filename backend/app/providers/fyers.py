@@ -41,6 +41,10 @@ class FyersMarketDataProvider:
     _quote_cache_lock = threading.Lock()
     _quote_inflight: dict[tuple[str, ...], threading.Event] = {}
     _quote_cache_ttl_seconds = 2.0
+    _quote_upstream_semaphore = threading.BoundedSemaphore(2)
+    _quote_request_lock = threading.Lock()
+    _quote_last_upstream_request = 0.0
+    _quote_min_interval_seconds = 0.15
 
     def __init__(self) -> None:
         self.client_id = os.getenv("FYERS_CLIENT_ID", "").strip()
@@ -409,10 +413,27 @@ class FyersMarketDataProvider:
 
     def _fetch_quotes_upstream(self, infos: list[SymbolInfo], originals: list[str]) -> list[Quote]:
         client = self._require_client()
-        payload = client.quotes(
-            data={"symbols": ",".join(info.api_symbol for info in infos)}
-        )
-        payload = self._check_response(payload, "quotes")
+        with self._quote_upstream_semaphore:
+            for attempt in range(3):
+                with self._quote_request_lock:
+                    now = time.monotonic()
+                    wait = self._quote_min_interval_seconds - (
+                        now - self._quote_last_upstream_request
+                    )
+                    if wait > 0:
+                        time.sleep(wait)
+                    self._quote_last_upstream_request = time.monotonic()
+
+                try:
+                    payload = client.quotes(
+                        data={"symbols": ",".join(info.api_symbol for info in infos)}
+                    )
+                    payload = self._check_response(payload, "quotes")
+                    break
+                except Exception as exc:
+                    if attempt >= 2 or not self._is_retryable_history_error(exc):
+                        raise
+                    time.sleep(0.25 * (2 ** attempt))
 
         requested = {
             info.api_symbol.upper(): symbol
