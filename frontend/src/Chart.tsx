@@ -317,47 +317,46 @@ export function Chart({
             const cached = historyCache.get(cacheKey);
             const now = Date.now();
 
-            if (cached && now - cached.storedAt < historyCacheTtl(timeframe)) {
-              if (!disposed) {
-                callback(cached.bars, {
-                  forward: type === "backward" ? false : cached.bars.length >= pageSize,
-                  backward: false,
-                });
-              }
-              return;
+            const cacheFresh = cached && now - cached.storedAt < historyCacheTtl(timeframe);
+            if (cached && !disposed) {
+              callback(cached.bars, {
+                forward: type === "backward" ? false : cached.bars.length >= pageSize,
+                backward: false,
+              });
+            }
+            if (cacheFresh) return;
+
+            let barsPromise = historyInflight.get(cacheKey);
+            if (!barsPromise) {
+              console.log("PIPSGOX history request:", url);
+              barsPromise = fetch(url, { cache: "no-store" }).then(async (response) => {
+                if (!response.ok) throw new Error("History HTTP " + response.status);
+                return response.json() as Promise<HistoryCandle[]>;
+              }).then((raw) => {
+                const bars = raw
+                  .map((item) => ({
+                    timestamp: Number(item.time) * 1000,
+                    open: Number(item.open),
+                    high: Number(item.high),
+                    low: Number(item.low),
+                    close: Number(item.close),
+                    volume: Number(item.volume || 0),
+                  }))
+                  .filter((item) =>
+                    Number.isFinite(item.timestamp) &&
+                    Number.isFinite(item.open) &&
+                    Number.isFinite(item.high) &&
+                    Number.isFinite(item.low) &&
+                    Number.isFinite(item.close),
+                  )
+                  .sort((a, b) => a.timestamp - b.timestamp);
+                historyCache.set(cacheKey, { storedAt: Date.now(), bars });
+                return bars;
+              }).finally(() => historyInflight.delete(cacheKey));
+              historyInflight.set(cacheKey, barsPromise);
             }
 
-            console.log("PIPSGOX history request:", url);
-
-            const response = await fetch(url, {
-              cache: "no-store",
-              signal: historyAbortController.signal,
-            });
-            if (!response.ok) {
-              throw new Error(`History HTTP ${response.status}`);
-            }
-
-            const raw = (await response.json()) as HistoryCandle[];
-
-            const bars = raw
-              .map((item) => ({
-                timestamp: Number(item.time) * 1000,
-                open: Number(item.open),
-                high: Number(item.high),
-                low: Number(item.low),
-                close: Number(item.close),
-                volume: Number(item.volume || 0),
-              }))
-              .filter((item) =>
-                Number.isFinite(item.timestamp) &&
-                Number.isFinite(item.open) &&
-                Number.isFinite(item.high) &&
-                Number.isFinite(item.low) &&
-                Number.isFinite(item.close),
-              )
-              .sort((a, b) => a.timestamp - b.timestamp);
-
-            historyCache.set(cacheKey, { storedAt: Date.now(), bars });
+            const bars = await barsPromise;
 
             if (disposed) return;
 
