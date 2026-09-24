@@ -613,7 +613,7 @@ function App() {
         if (payload?.errors?.length) {
           const first = payload.errors[0];
           throw new Error(
-            \`Pipscript data request failed: \${first.name} (\${first.type}) — \${first.message}\`,
+            `Pipscript data request failed: ${first.name} (${first.type}) — ${first.message}`,
           );
         }
         return payload;
@@ -625,12 +625,12 @@ function App() {
         setPipscriptStatus("Loading JavaScript engine...");
         const runner = new Function(
           "data",
-          \`"use strict";
-\${code}
+          `"use strict";
+${code}
 return {
   requests: typeof data_requests === "function" ? data_requests() : null,
   calculate: typeof calculate === "function" ? calculate : null
-};\`,
+};`,
         ) as (data: unknown) => {
           requests: unknown[] | null;
           calculate: ((value: unknown) => unknown) | null;
@@ -653,10 +653,10 @@ return {
       } else {
         setPipscriptStatus("Loading Python runtime...");
         const pyodide = await loadPyodideRuntime();
-        const declarationCode = \`import json
-\${code}
+        const declarationCode = `import json
+${code}
 _requests = data_requests() if "data_requests" in globals() else None
-json.dumps(_requests)\`;
+json.dumps(_requests)`;
         const requestJson = String(await pyodide.runPythonAsync(declarationCode));
         const declaredRequests = JSON.parse(requestJson) as unknown[] | null;
 
@@ -670,12 +670,12 @@ json.dumps(_requests)\`;
 
         setPipscriptStatus("Running Python...");
         const serializedData = JSON.stringify(calculationData);
-        const pythonCode = \`import json
-data = json.loads(\${JSON.stringify(serializedData)})
+        const pythonCode = `import json
+data = json.loads(${JSON.stringify(serializedData)})
 if "calculate" not in globals():
     raise RuntimeError("Define calculate(data) in your script.")
 _result = calculate(data)
-json.dumps(_result)\`;
+json.dumps(_result)`;
         rawOutput = JSON.parse(String(await pyodide.runPythonAsync(pythonCode)));
       }
 
@@ -683,8 +683,8 @@ json.dumps(_result)\`;
       setPipscriptOutput(normalized);
       setPipscriptStatus(
         normalized.type === "table"
-          ? \`Table ready · \${normalized.rows.length} rows\`
-          : \`Indicator ready · \${normalized.points.length} points\`,
+          ? `Table ready · ${normalized.rows.length} rows`
+          : `Indicator ready · ${normalized.points.length} points`,
       );
     } catch (error) {
       setPipscriptOutput(null);
