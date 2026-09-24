@@ -241,7 +241,19 @@ def resolve_api_symbol(symbol: str) -> str | None:
     if ":" in clean:
         return clean
 
-    alias_symbols = {"NIFTY", "NIFTY50", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"}
+    # Index aliases must bypass the equity (-EQ) fallback. FYERS uses
+    # explicit -INDEX symbols for NSE spot indices.
+    alias_symbols = {
+        "NIFTY", "NIFTY50", "NIFTYNEXT50", "NIFTYNXT50",
+        "NIFTY100", "NIFTY200", "NIFTY500",
+        "NIFTYMIDCAP50", "NIFTYMIDCAP100", "NIFTYMIDCAP150",
+        "NIFTYSMALLCAP50", "NIFTYSMALLCAP100", "NIFTYSMALLCAP250",
+        "BANKNIFTY", "FINNIFTY", "NIFTYFINANCIALSERVICES", "MIDCPNIFTY",
+        "NIFTYIT", "NIFTYPHARMA", "NIFTYHEALTHCARE", "NIFTYFMCG",
+        "NIFTYAUTO", "NIFTYMETAL", "NIFTYPSUBANK", "NIFTYPVTBANK",
+        "NIFTYREALTY", "NIFTYENERGY", "NIFTYOILGAS", "NIFTYINFRA",
+        "NIFTYCAPITALGOODS", "NIFTYCONSUMERDURABLES",
+    }
     if clean in alias_symbols:
         return provider.symbol_info(clean).api_symbol
 
