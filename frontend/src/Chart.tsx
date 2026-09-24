@@ -452,7 +452,7 @@ export function Chart({
       }
 
       if (showVwap && timeframe !== "D" && timeframe !== "W" && timeframe !== "M") {
-        chart.createIndicator(({ 
+        chart.createIndicator({
           name: "PIPSGOX_VWAP",
           shortName: "VWAP",
           paneId: "candle_pane",
@@ -534,7 +534,7 @@ export function Chart({
           pipscriptOutput.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
         );
 
-        chart.createIndicator(({ 
+        chart.createIndicator({
           name: "PIPSGOX_SCRIPT",
           shortName: pipscriptOutput.name || "PIPScript",
           paneId: "script_pane",
