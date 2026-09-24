@@ -553,7 +553,9 @@ function App() {
     language?: PipscriptLanguage;
     outputType?: PipscriptOutputType;
     code?: string;
+    symbol?: string;
   }) => {
+    const executionSymbol = override?.symbol ?? symbol;
     const language = override?.language ?? pipscriptLanguage;
     const outputType = override?.outputType ?? pipscriptOutputType;
     const code = override?.code ?? pipscript;
@@ -573,7 +575,7 @@ function App() {
 
       const loadCurrentChartData = async (): Promise<ChartBar[]> => {
         const response = await fetch(
-          "/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
+          "/api/history?symbol=" + encodeURIComponent(executionSymbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("Could not load chart data.");
@@ -641,7 +643,7 @@ return {
           calculate: ((value: unknown) => unknown) | null;
         };
 
-        const program = runner(null, symbol);
+        const program = runner(null, executionSymbol);
         let calculationData: unknown;
         if (program.requests !== null) {
           calculationData = await fetchGatewayData(program.requests);
@@ -659,7 +661,7 @@ return {
         setPipscriptStatus("Loading Python runtime...");
         const pyodide = await loadPyodideRuntime();
         const declarationCode = `import json
-SYMBOL = ${JSON.stringify(symbol)}
+SYMBOL = ${JSON.stringify(executionSymbol)}
 ${code}
 _requests = data_requests() if "data_requests" in globals() else None
 json.dumps(_requests)`;
@@ -706,7 +708,7 @@ json.dumps(_result)`;
     if (pipscriptOutputType !== "table") return;
     if (!pipscript.includes("data_requests")) return;
 
-    void runPipscript();
+    void runPipscript({ symbol });
   }, [symbol]);
 
   const savePipscript = () => {
