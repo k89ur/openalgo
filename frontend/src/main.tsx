@@ -562,10 +562,13 @@ function App() {
     symbol?: string;
   }) => {
     const executionSymbol = override?.symbol ?? symbol;
-    const runId = ++pipscriptRunIdRef.current;
     const language = override?.language ?? pipscriptLanguage;
     const outputType = override?.outputType ?? pipscriptOutputType;
     const code = override?.code ?? pipscript;
+
+    // Keep the active script registered even while its current run is loading.
+    activePipscriptRef.current = { language, outputType, code };
+    const runId = ++pipscriptRunIdRef.current;
 
     setPipscriptRunning(true);
     setPipscriptStatus("Preparing Pipscript...");
@@ -698,7 +701,6 @@ json.dumps(_result)`;
       if (runId !== pipscriptRunIdRef.current) return;
       setPipscriptOutput(normalized);
       pipscriptHasOutputRef.current = true;
-      activePipscriptRef.current = { language, outputType, code };
       setPipscriptStatus(
         normalized.type === "table"
           ? `Table ready · ${normalized.rows.length} rows`
@@ -1036,8 +1038,23 @@ json.dumps(_result)`;
   const previousClose = quote ? quote.last - quote.change : undefined;
 
   const selectSymbol = (next: string) => {
-    setSymbol(next);
-    setSearch(next);
+    const cleanSymbol = next.trim().toUpperCase();
+    if (!cleanSymbol) return;
+
+    setSymbol(cleanSymbol);
+    setSearch(cleanSymbol);
+
+    // Re-run the active Pipscript immediately for the selected symbol.
+    // Passing the symbol directly avoids waiting for the React state update.
+    const active = activePipscriptRef.current;
+    if (active) {
+      void runPipscript({
+        language: active.language,
+        outputType: active.outputType,
+        code: active.code,
+        symbol: cleanSymbol,
+      });
+    }
   };
 
   const submitSearch = () => {
