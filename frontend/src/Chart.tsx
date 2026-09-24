@@ -647,9 +647,30 @@ export function Chart({
             <tbody>
               {pipscriptOutput.rows.map((row, rowIndex) => (
                 <tr key={rowIndex}>
-                  {pipscriptOutput.columns.map((_, columnIndex) => (
-                    <td key={columnIndex}>{row[columnIndex] ?? "—"}</td>
-                  ))}
+                  {pipscriptOutput.columns.map((column, columnIndex) => {
+                    const value = row[columnIndex] ?? "—";
+                    const numericValue = Number(value);
+                    const isRsCell =
+                      pipscriptOutput.title.toUpperCase().includes("RS") &&
+                      column.toUpperCase() === "RS" &&
+                      Number.isFinite(numericValue);
+
+                    let className = "";
+                    if (isRsCell) {
+                      if (numericValue >= 90) className = "rs-90";
+                      else if (numericValue >= 80) className = "rs-80";
+                      else if (numericValue >= 70) className = "rs-70";
+                      else if (numericValue >= 60) className = "rs-60";
+                      else if (numericValue >= 50) className = "rs-50";
+                      else className = "rs-low";
+                    }
+
+                    return (
+                      <td key={columnIndex} className={className}>
+                        {value}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
