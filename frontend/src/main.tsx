@@ -19,22 +19,31 @@ declare global {
 }
 
 let pyodidePromise: Promise<PyodideRuntime> | null = null;
+let pyodideRuntime: PyodideRuntime | null = null;
 
 function loadPyodideRuntime(): Promise<PyodideRuntime> {
-  if (window.loadPyodide) {
-    return window.loadPyodide({
-      indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/",
-    });
-  }
-
+  if (pyodideRuntime) return Promise.resolve(pyodideRuntime);
   if (pyodidePromise) return pyodidePromise;
+
+  if (window.loadPyodide) {
+    pyodidePromise = window.loadPyodide({
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/",
+    }).then((runtime) => {
+      pyodideRuntime = runtime;
+      return runtime;
+    });
+    return pyodidePromise;
+  }
 
   pyodidePromise = new Promise<PyodideRuntime>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>("script[data-pipsgox-pyodide]");
     if (existing) {
       existing.addEventListener("load", () => {
         if (!window.loadPyodide) reject(new Error("Pyodide loaded without loadPyodide()."));
-        else resolve(window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/" }));
+        else window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/" }).then((runtime) => {
+          pyodideRuntime = runtime;
+          resolve(runtime);
+        }).catch(reject);
       }, { once: true });
       existing.addEventListener("error", () => reject(new Error("Could not load the Python runtime.")), { once: true });
       return;
@@ -46,7 +55,10 @@ function loadPyodideRuntime(): Promise<PyodideRuntime> {
     script.dataset.pipsgoxPyodide = "true";
     script.onload = () => {
       if (!window.loadPyodide) reject(new Error("Pyodide loaded without loadPyodide()."));
-      else resolve(window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/" }));
+      else window.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/" }).then((runtime) => {
+        pyodideRuntime = runtime;
+        resolve(runtime);
+      }).catch(reject);
     };
     script.onerror = () => reject(new Error("Could not load the Python runtime."));
     document.head.appendChild(script);
