@@ -707,7 +707,7 @@ json.dumps(_result)`;
       if (!window.confirm(`"${name}" already exists. Overwrite it?`)) return;
     }
 
-    const id = existing?.id ?? selectedSavedPipscriptId || `pipscript-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const id = (existing?.id ?? selectedSavedPipscriptId) || `pipscript-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const saved: SavedPipscript = {
       id,
       name,
