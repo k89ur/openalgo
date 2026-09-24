@@ -35,6 +35,13 @@ class FyersMarketDataProvider:
     _history_min_interval_seconds = 0.20
     _history_refresh_threads: set[threading.Thread] = set()
 
+    # Short quote cache shared by the watchlist, header quote and Pipscript.
+    # Quotes are intentionally short-lived because they are near-real-time.
+    _quote_cache: dict[str, tuple[float, Quote]] = {}
+    _quote_cache_lock = threading.Lock()
+    _quote_inflight: dict[tuple[str, ...], threading.Event] = {}
+    _quote_cache_ttl_seconds = 2.0
+
     def __init__(self) -> None:
         self.client_id = os.getenv("FYERS_CLIENT_ID", "").strip()
         self.access_token = os.getenv("FYERS_ACCESS_TOKEN", "").strip()
@@ -400,12 +407,8 @@ class FyersMarketDataProvider:
             ask=_number(value.get("ask")),
         )
 
-    def get_quotes(self, symbols: list[str]) -> list[Quote]:
+    def _fetch_quotes_upstream(self, infos: list[SymbolInfo], originals: list[str]) -> list[Quote]:
         client = self._require_client()
-        if not symbols:
-            return []
-
-        infos = [self.symbol_info(symbol) for symbol in symbols]
         payload = client.quotes(
             data={"symbols": ",".join(info.api_symbol for info in infos)}
         )
@@ -413,9 +416,8 @@ class FyersMarketDataProvider:
 
         requested = {
             info.api_symbol.upper(): symbol
-            for info, symbol in zip(infos, symbols)
+            for info, symbol in zip(infos, originals)
         }
-
         result: list[Quote] = []
         for item in payload.get("d") or []:
             value = item.get("v") or {}
@@ -428,10 +430,94 @@ class FyersMarketDataProvider:
 
         if not result and payload.get("d"):
             raise ValueError(
-                f"FYERS returned quote data, but no requested symbols matched: "
-                f"{', '.join(symbols)}"
+                "FYERS returned quote data, but no requested symbols matched: "
+                + ", ".join(originals)
             )
         return result
+
+    def get_quotes(self, symbols: list[str]) -> list[Quote]:
+        if not symbols:
+            return []
+
+        # De-duplicate while preserving caller order.
+        originals: list[str] = []
+        seen: set[str] = set()
+        for symbol in symbols:
+            clean = symbol.strip().upper()
+            if clean and clean not in seen:
+                seen.add(clean)
+                originals.append(clean)
+
+        infos = [self.symbol_info(symbol) for symbol in originals]
+        api_to_original = {
+            info.api_symbol.upper(): original
+            for info, original in zip(infos, originals)
+        }
+
+        now = time.monotonic()
+        cached: dict[str, Quote] = {}
+        missing_infos: list[SymbolInfo] = []
+        missing_originals: list[str] = []
+
+        with self._quote_cache_lock:
+            for info, original in zip(infos, originals):
+                item = self._quote_cache.get(info.api_symbol.upper())
+                if item and now - item[0] < self._quote_cache_ttl_seconds:
+                    cached[info.api_symbol.upper()] = item[1]
+                else:
+                    missing_infos.append(info)
+                    missing_originals.append(original)
+
+        if missing_infos:
+            # Keep upstream batches small. This also gives concurrent callers a
+            # chance to reuse freshly populated quote-cache entries.
+            for start in range(0, len(missing_infos), 50):
+                info_chunk = missing_infos[start:start + 50]
+                original_chunk = missing_originals[start:start + 50]
+                key = tuple(sorted(info.api_symbol.upper() for info in info_chunk))
+
+                with self._quote_cache_lock:
+                    event = self._quote_inflight.get(key)
+                    owner = event is None
+                    if owner:
+                        event = threading.Event()
+                        self._quote_inflight[key] = event
+
+                if owner:
+                    try:
+                        results = self._fetch_quotes_upstream(info_chunk, original_chunk)
+                        with self._quote_cache_lock:
+                            stored_at = time.monotonic()
+                            for result in results:
+                                api_symbol = next(
+                                    (
+                                        info.api_symbol.upper()
+                                        for info in info_chunk
+                                        if original_chunk and api_to_original.get(info.api_symbol.upper()) == result.symbol.upper()
+                                    ),
+                                    None,
+                                )
+                                if api_symbol:
+                                    self._quote_cache[api_symbol] = (stored_at, result)
+                                    cached[api_symbol] = result
+                    finally:
+                        with self._quote_cache_lock:
+                            event = self._quote_inflight.pop(key, None)
+                            if event is not None:
+                                event.set()
+                else:
+                    event.wait(timeout=5.0)
+                    with self._quote_cache_lock:
+                        for info in info_chunk:
+                            item = self._quote_cache.get(info.api_symbol.upper())
+                            if item:
+                                cached[info.api_symbol.upper()] = item[1]
+
+        return [
+            cached[info.api_symbol.upper()]
+            for info in infos
+            if info.api_symbol.upper() in cached
+        ]
 
     def get_quote(self, symbol: str) -> Quote:
         result = self.get_quotes([symbol])
