@@ -561,23 +561,39 @@ def fyers_callback(
     return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
 
 
+def _fyers_session_valid() -> bool:
+    if not FYERS_CLIENT_ID or not FYERS_SECRET_KEY or not _fyers_access_token:
+        return False
+
+    try:
+        provider.validate_session()
+        return True
+    except Exception:
+        return False
+
+
 @app.get("/api/fyers/status")
 def fyers_status() -> dict[str, object]:
+    configured = bool(FYERS_CLIENT_ID and FYERS_SECRET_KEY)
+    connected = _fyers_session_valid() if configured else False
     return {
-        "configured": bool(FYERS_CLIENT_ID and FYERS_SECRET_KEY),
-        "connected": bool(_fyers_access_token),
+        "configured": configured,
+        "connected": connected,
+        "status": "connected" if connected else "not_connected",
         "redirect_uri": FYERS_REDIRECT_URI,
     }
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    configured = bool(FYERS_CLIENT_ID and FYERS_SECRET_KEY)
+    connected = _fyers_session_valid() if configured else False
     return {
         "status": "ok",
         "app": "pipsgox",
         "data_provider": "fyers_v3",
-        "configured": "true" if provider.configured else "false",
-        "fyers_connected": "true" if _fyers_access_token else "false",
+        "configured": "true" if configured else "false",
+        "fyers_connected": "true" if connected else "false",
     }
 
 
