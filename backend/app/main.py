@@ -120,6 +120,21 @@ class QuotesRequest(BaseModel):
     symbols: list[str]
 
 
+class PipscriptDataRequest(BaseModel):
+    type: Literal["history", "quote", "quotes"]
+    name: str | None = None
+    symbol: str | None = None
+    symbols: list[str] = []
+    timeframe: Timeframe = "D"
+    limit: int = 800
+    from_date: date | None = None
+    to_date: date | None = None
+
+
+class PipscriptDataBatchRequest(BaseModel):
+    requests: list[PipscriptDataRequest] = []
+
+
 class SymbolSearchResult(BaseModel):
     symbol: str
     name: str
@@ -632,6 +647,95 @@ def history(
         ]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/pipscript/data")
+def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
+    """Resolve and fetch only the market datasets explicitly requested by Pipscript.
+
+    This is the controlled Data Gateway for the browser Pipscript runtime. Scripts
+    never receive arbitrary HTTP/network access; they declare market-data requests
+    and the server resolves them through the configured provider.
+    """
+    if len(request.requests) > 40:
+        raise HTTPException(status_code=400, detail="A maximum of 40 Pipscript data requests is supported.")
+
+    history_data: dict[str, dict[str, object]] = {}
+    quotes_data: dict[str, object] = {}
+    errors: list[dict[str, str]] = []
+
+    for index, item in enumerate(request.requests):
+        name = (item.name or item.symbol or f"request_{index + 1}").strip().upper()
+        if not name:
+            name = f"REQUEST_{index + 1}"
+
+        try:
+            if item.type == "history":
+                if not item.symbol:
+                    raise ValueError("history request requires symbol.")
+                if not 50 <= item.limit <= 2000:
+                    raise ValueError("history limit must be between 50 and 2000.")
+
+                original = item.symbol.strip().upper()
+                api_symbol = resolve_api_symbol(original)
+                if not api_symbol:
+                    raise unresolved_symbol_error(original)
+
+                candles = provider.get_history(
+                    api_symbol,
+                    item.timeframe,
+                    item.limit,
+                    start=item.from_date,
+                    end=item.to_date,
+                )
+                history_data[name] = {
+                    "symbol": original,
+                    "timeframe": item.timeframe,
+                    "bars": [to_candle(candle).model_dump() for candle in candles],
+                }
+
+            elif item.type == "quote":
+                if not item.symbol:
+                    raise ValueError("quote request requires symbol.")
+
+                original = item.symbol.strip().upper()
+                api_symbol = resolve_api_symbol(original)
+                if not api_symbol:
+                    raise unresolved_symbol_error(original)
+
+                result = provider.get_quote(api_symbol)
+                result = replace(result, symbol=original)
+                quotes_data[name] = to_quote(result).model_dump()
+
+            elif item.type == "quotes":
+                requested = [
+                    value.strip().upper()
+                    for value in item.symbols
+                    if value and value.strip()
+                ]
+                if not requested:
+                    raise ValueError("quotes request requires a non-empty symbols array.")
+                if len(requested) > 1000:
+                    raise ValueError("A maximum of 1000 symbols can be requested in one quotes request.")
+
+                results = get_quotes_for_symbols(requested)
+                quotes_data[name] = {
+                    "items": [quote.model_dump() for quote in results],
+                }
+
+        except (ValueError, HTTPException) as exc:
+            message = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            errors.append({
+                "name": name,
+                "type": item.type,
+                "message": str(message),
+            })
+
+    return {
+        "history": history_data,
+        "quotes": quotes_data,
+        "errors": errors,
+    }
 
 
 @app.get("/api/quote", response_model=Quote)
