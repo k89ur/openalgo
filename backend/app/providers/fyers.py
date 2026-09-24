@@ -61,11 +61,40 @@ class FyersMarketDataProvider:
     def symbol_info(symbol: str) -> SymbolInfo:
         symbol = symbol.strip().upper()
         aliases = {
+            # NSE broad-market indices
             "NIFTY": "NSE:NIFTY50-INDEX",
             "NIFTY50": "NSE:NIFTY50-INDEX",
+            "NIFTYNEXT50": "NSE:NIFTYNEXT50-INDEX",
+            "NIFTYNXT50": "NSE:NIFTYNEXT50-INDEX",
+            "NIFTY100": "NSE:NIFTY100-INDEX",
+            "NIFTY200": "NSE:NIFTY200-INDEX",
+            "NIFTY500": "NSE:NIFTY500-INDEX",
+            "NIFTYMIDCAP50": "NSE:NIFTYMIDCAP50-INDEX",
+            "NIFTYMIDCAP100": "NSE:NIFTYMIDCAP100-INDEX",
+            "NIFTYMIDCAP150": "NSE:NIFTYMIDCAP150-INDEX",
+            "NIFTYSMALLCAP50": "NSE:NIFTYSMALLCAP50-INDEX",
+            "NIFTYSMALLCAP100": "NSE:NIFTYSMALLCAP100-INDEX",
+            "NIFTYSMALLCAP250": "NSE:NIFTYSMALLCAP250-INDEX",
+
+            # NSE sectoral / thematic indices
             "BANKNIFTY": "NSE:NIFTYBANK-INDEX",
             "FINNIFTY": "NSE:FINNIFTY-INDEX",
+            "NIFTYFINANCIALSERVICES": "NSE:FINNIFTY-INDEX",
             "MIDCPNIFTY": "NSE:MIDCPNIFTY-INDEX",
+            "NIFTYIT": "NSE:NIFTYIT-INDEX",
+            "NIFTYPHARMA": "NSE:NIFTYPHARMA-INDEX",
+            "NIFTYHEALTHCARE": "NSE:NIFTYHEALTHCARE-INDEX",
+            "NIFTYFMCG": "NSE:NIFTYFMCG-INDEX",
+            "NIFTYAUTO": "NSE:NIFTYAUTO-INDEX",
+            "NIFTYMETAL": "NSE:NIFTYMETAL-INDEX",
+            "NIFTYPSUBANK": "NSE:NIFTYPSUBANK-INDEX",
+            "NIFTYPVTBANK": "NSE:NIFTYPVTBANK-INDEX",
+            "NIFTYREALTY": "NSE:NIFTYREALTY-INDEX",
+            "NIFTYENERGY": "NSE:NIFTYENERGY-INDEX",
+            "NIFTYOILGAS": "NSE:NIFTYOILGAS-INDEX",
+            "NIFTYINFRA": "NSE:NIFTYINFRA-INDEX",
+            "NIFTYCAPITALGOODS": "NSE:NIFTYCAPITALGOODS-INDEX",
+            "NIFTYCONSUMERDURABLES": "NSE:NIFTYCONSUMERDURABLES-INDEX",
         }
         if ":" in symbol:
             return SymbolInfo(symbol)
