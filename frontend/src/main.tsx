@@ -703,14 +703,6 @@ json.dumps(_result)`;
     }
   };
 
-  useEffect(() => {
-    if (!pipscriptHasOutputRef.current) return;
-    if (pipscriptOutputType !== "table") return;
-    if (!pipscript.includes("data_requests")) return;
-
-    void runPipscript({ symbol });
-  }, [symbol]);
-
   const savePipscript = () => {
     const value = window.prompt(
       "Save PIPScript as:",
@@ -1025,6 +1017,17 @@ json.dumps(_result)`;
   const selectSymbol = (next: string) => {
     setSymbol(next);
     setSearch(next);
+
+    // If a data-request Pipscript is already active, refresh it immediately
+    // with the newly selected Watchlist symbol. This avoids relying on a
+    // React effect closure during rapid Watchlist changes.
+    if (
+      pipscriptHasOutputRef.current &&
+      pipscriptOutputType === "table" &&
+      pipscript.includes("data_requests")
+    ) {
+      void runPipscript({ symbol: next });
+    }
   };
 
   const submitSearch = () => {
