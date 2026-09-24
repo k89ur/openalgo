@@ -94,6 +94,12 @@ class FyersMarketDataProvider:
             )
         return payload
 
+    def validate_session(self) -> None:
+        """Validate the current FYERS access token with an authenticated API call."""
+        client = self._require_client()
+        payload = client.get_profile()
+        self._check_response(payload, "profile")
+
     def get_history(
         self,
         symbol: str,
