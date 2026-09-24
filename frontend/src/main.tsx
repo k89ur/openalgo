@@ -628,18 +628,19 @@ function App() {
         setPipscriptStatus("Loading JavaScript engine...");
         const runner = new Function(
           "data",
+          "SYMBOL",
           `"use strict";
 ${code}
 return {
   requests: typeof data_requests === "function" ? data_requests() : null,
   calculate: typeof calculate === "function" ? calculate : null
 };`,
-        ) as (data: unknown) => {
+        ) as (data: unknown, symbolValue: string) => {
           requests: unknown[] | null;
           calculate: ((value: unknown) => unknown) | null;
         };
 
-        const program = runner(null);
+        const program = runner(null, symbol);
         let calculationData: unknown;
         if (program.requests !== null) {
           calculationData = await fetchGatewayData(program.requests);
@@ -657,6 +658,7 @@ return {
         setPipscriptStatus("Loading Python runtime...");
         const pyodide = await loadPyodideRuntime();
         const declarationCode = `import json
+SYMBOL = ${JSON.stringify(symbol)}
 ${code}
 _requests = data_requests() if "data_requests" in globals() else None
 json.dumps(_requests)`;
