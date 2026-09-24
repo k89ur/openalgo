@@ -1009,6 +1009,14 @@ json.dumps(_result)`;
                   ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)`
                   : "No data"}
               </span>
+              {hasLiveData && (
+                <span className="chart-header-ohlc">
+                  O <b>{open != null ? open.toFixed(2) : "—"}</b>
+                  H <b>{high != null ? high.toFixed(2) : "—"}</b>
+                  L <b>{low != null ? low.toFixed(2) : "—"}</b>
+                  C <b>{price.toFixed(2)}</b>
+                </span>
+              )}
             </div>
           </div>
 
