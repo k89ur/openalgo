@@ -51,6 +51,7 @@ type HistoryCacheEntry = {
 };
 
 const historyCache = new Map<string, HistoryCacheEntry>();
+const historyInflight = new Map<string, Promise<KLineData[]>>();
 
 function historyCacheTtl(timeframe: Timeframe) {
   return timeframe === "D" || timeframe === "W" || timeframe === "M" ? 5 * 60_000 : 15_000;
