@@ -449,11 +449,6 @@ class FyersMarketDataProvider:
                 originals.append(clean)
 
         infos = [self.symbol_info(symbol) for symbol in originals]
-        api_to_original = {
-            info.api_symbol.upper(): original
-            for info, original in zip(infos, originals)
-        }
-
         now = time.monotonic()
         cached: dict[str, Quote] = {}
         missing_infos: list[SymbolInfo] = []
@@ -492,8 +487,8 @@ class FyersMarketDataProvider:
                                 api_symbol = next(
                                     (
                                         info.api_symbol.upper()
-                                        for info in info_chunk
-                                        if original_chunk and api_to_original.get(info.api_symbol.upper()) == result.symbol.upper()
+                                        for info, original in zip(info_chunk, original_chunk)
+                                        if original == result.symbol.upper()
                                     ),
                                     None,
                                 )
