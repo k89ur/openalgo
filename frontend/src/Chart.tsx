@@ -19,7 +19,6 @@ type Props = {
   show52WeekHigh: boolean;
   show52WeekLow: boolean;
   showPreviousClose: boolean;
-  showHistoricalPe: boolean;
   previousClose?: number;
 };
 
@@ -43,11 +42,6 @@ type CrosshairData = {
   changePercent: number;
   ma50?: number;
   ma200?: number;
-};
-
-type HistoricalEpsPoint = {
-  time: number;
-  ttm_eps: number;
 };
 
 function movingAverage(data: Array<{ close: number }>, endIndex: number, period: number) {
@@ -135,13 +129,10 @@ export function Chart({
   show52WeekHigh,
   show52WeekLow,
   showPreviousClose,
-  showHistoricalPe,
   previousClose,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [crosshairData, setCrosshairData] = useState<CrosshairData | null>(null);
-  const [historicalPe, setHistoricalPe] = useState<Array<{ time: number; value: number }>>([]);
-  const [historicalPeStatus, setHistoricalPeStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
   const chartRef = useRef<KLineChartInstance | null>(null);
 
   useEffect(() => {
@@ -486,115 +477,6 @@ export function Chart({
         });
       }
 
-      if (showHistoricalPe) {
-        setHistoricalPeStatus("loading");
-        void (async () => {
-          try {
-            const response = await fetch("/api/fundamentals/eps?symbol=" + encodeURIComponent(symbol) + "&limit=40", { cache: "no-store" });
-            if (!response.ok) throw new Error("Historical EPS unavailable");
-
-            const raw = (await response.json()) as HistoricalEpsPoint[];
-            const epsPoints = raw
-              .map((item) => ({
-                time: Number(item.time),
-                ttmEps: Number(item.ttm_eps),
-              }))
-              .filter((item) => Number.isFinite(item.time) && Number.isFinite(item.ttmEps))
-              .sort((a, b) => a.time - b.time);
-
-            if (disposed) return;
-
-            if (!epsPoints.length) {
-              setHistoricalPe([]);
-              setHistoricalPeStatus("unavailable");
-              return;
-            }
-
-            // EPS becomes usable only from its filing/effective date onward.
-            // P/E is then calculated against each chart candle's close.
-            const candles = chart.getDataList();
-            const calculated = candles
-              .map((candle) => {
-                let applicable: { time: number; ttmEps: number } | undefined;
-                for (const point of epsPoints) {
-                  if (point.time * 1000 <= candle.timestamp) {
-                    applicable = point;
-                  } else {
-                    break;
-                  }
-                }
-
-                if (!applicable || applicable.ttmEps <= 0 || candle.close <= 0) {
-                  return { time: candle.timestamp, value: NaN };
-                }
-
-                return {
-                  time: candle.timestamp,
-                  value: candle.close / applicable.ttmEps,
-                };
-              })
-              .filter((point) => Number.isFinite(point.value));
-
-            setHistoricalPe(calculated);
-            setHistoricalPeStatus(calculated.length ? "ready" : "unavailable");
-
-            if (!calculated.length) return;
-
-            chart.createIndicator({
-              name: "PIPSGOX_PE",
-              shortName: "P/E",
-              paneId: "pe_pane",
-              series: "normal",
-              precision: 2,
-              shouldOhlc: false,
-              figures: [{ key: "pe", title: "P/E: ", type: "line" }],
-              styles: { lines: [{ style: "solid", color: "#c9a15a", size: 1 }] },
-              minValue: 0,
-              calc: (dataList) => {
-                let epsIndex = 0;
-                let currentEps: number | null = null;
-
-                return dataList.map((candle) => {
-                  while (
-                    epsIndex < epsPoints.length &&
-                    epsPoints[epsIndex].time * 1000 <= candle.timestamp
-                  ) {
-                    currentEps = epsPoints[epsIndex].ttmEps;
-                    epsIndex += 1;
-                  }
-
-                  if (currentEps == null || currentEps <= 0 || candle.close <= 0) {
-                    return { pe: null };
-                  }
-
-                  return { pe: candle.close / currentEps };
-                }) as any;
-              },
-            });
-
-            chart.setPaneOptions({
-              id: "pe_pane",
-              height: 86,
-              minHeight: 70,
-              dragEnabled: false,
-              order: 10,
-            });
-          } catch (error) {
-            if (!disposed) {
-              setHistoricalPe([]);
-              setHistoricalPeStatus("unavailable");
-              console.warn("PIPSGOX historical EPS/P/E unavailable:", error);
-            }
-          }
-        })();
-      } else {
-        setHistoricalPe([]);
-        setHistoricalPeStatus("idle");
-      }
-        setHistoricalPe([]);
-        setHistoricalPeStatus("idle");
-      }
-
       if (show52WeekHigh || show52WeekLow) {
         void (async () => {
           try {
@@ -660,7 +542,6 @@ export function Chart({
     show52WeekHigh,
     show52WeekLow,
     showPreviousClose,
-    showHistoricalPe,
     previousClose,
   ]);
 
@@ -683,8 +564,6 @@ export function Chart({
         </div>
       )}
       {showVolume && <div className="chart-pane-label volume-pane-label">VOLUME</div>}
-      {showHistoricalPe && historicalPeStatus === "ready" && historicalPe.length > 0 && <div className="chart-pane-label pe-pane-label">HISTORICAL P/E</div>}
-      {showHistoricalPe && historicalPeStatus === "unavailable" && <div className="chart-pane-status">Historical P/E data unavailable</div>}
     </div>
   );
 }
