@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe, type PipscriptOutput } from "./Chart";
 import "./styles.css";
@@ -875,11 +875,11 @@ json.dumps(_result)`;
     window.setTimeout(() => setWatchImportMessage(""), 2500);
   };
 
-  const startResize = (event: PointerEvent<HTMLDivElement>) => {
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     const startX = event.clientX;
     const startWidth = watchWidth;
-    const move = (moveEvent: PointerEvent) => {
+    const move = (moveEvent: globalThis.PointerEvent) => {
       setWatchWidth(Math.min(480, Math.max(240, startWidth + startX - moveEvent.clientX)));
     };
     const stop = () => {
