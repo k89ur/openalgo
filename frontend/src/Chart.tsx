@@ -45,6 +45,17 @@ type HistoryCandle = {
   volume: number;
 };
 
+type HistoryCacheEntry = {
+  storedAt: number;
+  bars: KLineData[];
+};
+
+const historyCache = new Map<string, HistoryCacheEntry>();
+
+function historyCacheTtl(timeframe: Timeframe) {
+  return timeframe === "D" || timeframe === "W" || timeframe === "M" ? 5 * 60_000 : 15_000;
+}
+
 type CrosshairData = {
   timestamp: number;
   open: number;
@@ -155,6 +166,7 @@ export function Chart({
     if (!container) return;
 
     let disposed = false;
+    const historyAbortController = new AbortController();
 
     try {
       const chart = init(container);
@@ -300,9 +312,26 @@ export function Chart({
             }
 
             const url = `/api/history?${params.toString()}`;
+            const cacheKey = url;
+            const cached = historyCache.get(cacheKey);
+            const now = Date.now();
+
+            if (cached && now - cached.storedAt < historyCacheTtl(timeframe)) {
+              if (!disposed) {
+                callback(cached.bars, {
+                  forward: type === "backward" ? false : cached.bars.length >= pageSize,
+                  backward: false,
+                });
+              }
+              return;
+            }
+
             console.log("PIPSGOX history request:", url);
 
-            const response = await fetch(url, { cache: "no-store" });
+            const response = await fetch(url, {
+              cache: "no-store",
+              signal: historyAbortController.signal,
+            });
             if (!response.ok) {
               throw new Error(`History HTTP ${response.status}`);
             }
@@ -327,6 +356,8 @@ export function Chart({
               )
               .sort((a, b) => a.timestamp - b.timestamp);
 
+            historyCache.set(cacheKey, { storedAt: Date.now(), bars });
+
             if (disposed) return;
 
             console.log(
@@ -343,6 +374,7 @@ export function Chart({
               backward: false,
             });
           } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") return;
             console.error("PIPSGOX history error:", error);
             if (!disposed) {
               callback([], {
@@ -573,6 +605,7 @@ export function Chart({
 
       return () => {
         disposed = true;
+        historyAbortController.abort();
         resizeObserver.disconnect();
         chart.unsubscribeAction("onCrosshairChange", crosshairHandler);
         chartRef.current = null;
