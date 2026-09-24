@@ -310,3 +310,99 @@ button { cursor: pointer; }
 @media (max-width:800px) {
   .top-search-wrap { flex:1; width:auto; }
 }
+
+
+.chart-header-ohlc {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #8f969e;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.chart-header-ohlc b {
+  color: #c7cbd0;
+  font-weight: 500;
+}
+.pipscript-table-overlay {
+  position: absolute;
+  z-index: 8;
+  top: 36px;
+  left: 10px;
+  min-width: 180px;
+  max-width: min(520px, calc(100% - 20px));
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid #2c2c2c;
+  background: rgba(12, 12, 12, .94);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.pipscript-table-title {
+  padding: 6px 8px;
+  border-bottom: 1px solid #282828;
+  color: #c9cdd2;
+  font-size: 9px;
+  font-weight: 600;
+}
+.pipscript-table-overlay table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8px;
+}
+.pipscript-table-overlay th,
+.pipscript-table-overlay td {
+  padding: 4px 7px;
+  border-bottom: 1px solid #1f1f1f;
+  text-align: left;
+  white-space: nowrap;
+}
+.pipscript-table-overlay th {
+  color: #707780;
+  font-weight: 500;
+}
+.pipscript-table-overlay td {
+  color: #c3c7cb;
+}
+.builder-toolbar select {
+  height: 25px;
+  border: 1px solid #282828;
+  background: #151515;
+  color: #aaa;
+  padding: 0 7px;
+  outline: 0;
+  font-size: 9px;
+}
+.builder-toolbar button {
+  cursor: pointer;
+}
+.builder-toolbar button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+.builder-run {
+  color: #d7e6f2 !important;
+  border-color: #315f82 !important;
+  background: #1a3447 !important;
+}
+.builder-hint {
+  margin: 2px 0 7px;
+  color: #62686f;
+  font-size: 8px;
+  line-height: 1.45;
+}
+.builder-hint code {
+  color: #9ba9b5;
+  font-family: "Consolas","Courier New",monospace;
+}
+@media (max-width:620px) {
+  .chart-header-ohlc {
+    width: 100%;
+    gap: 4px;
+    font-size: 8px;
+  }
+  .pipscript-table-overlay {
+    top: 48px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+  }
+}
