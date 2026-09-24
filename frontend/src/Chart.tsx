@@ -167,7 +167,6 @@ export function Chart({
     if (!container) return;
 
     let disposed = false;
-    const historyAbortController = new AbortController();
 
     try {
       const chart = init(container);
@@ -605,7 +604,6 @@ export function Chart({
 
       return () => {
         disposed = true;
-        historyAbortController.abort();
         resizeObserver.disconnect();
         chart.unsubscribeAction("onCrosshairChange", crosshairHandler);
         chartRef.current = null;
