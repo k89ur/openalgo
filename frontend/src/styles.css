@@ -389,6 +389,20 @@ button { cursor: pointer; }
   color: #ef6262;
   font-weight: 700;
 }
+
+/* Price-position bands: near highs/ATH and comfortably above 52W low */
+.pipscript-table-overlay td.price-strong {
+  color: #35d07f;
+  font-weight: 700;
+}
+.pipscript-table-overlay td.price-watch {
+  color: #e5d34f;
+  font-weight: 700;
+}
+.pipscript-table-overlay td.price-weak {
+  color: #ef6262;
+  font-weight: 700;
+}
 .pipscript-saved-select {
   min-width: 120px;
   max-width: 170px;
