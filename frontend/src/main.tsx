@@ -558,59 +558,124 @@ function App() {
     const code = override?.code ?? pipscript;
 
     setPipscriptRunning(true);
-    setPipscriptStatus("Loading chart data...");
+    setPipscriptStatus("Preparing Pipscript...");
 
     try {
-      const response = await fetch(
-        "/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
-        { cache: "no-store" },
-      );
-      if (!response.ok) throw new Error("Could not load chart data.");
-
-      const raw = await response.json() as Array<{
+      type ChartBar = {
         time: number;
         open: number;
         high: number;
         low: number;
         close: number;
         volume: number;
-      }>;
+      };
 
-      const data = raw.map((row) => ({
-        time: Number(row.time),
-        open: Number(row.open),
-        high: Number(row.high),
-        low: Number(row.low),
-        close: Number(row.close),
-        volume: Number(row.volume || 0),
-      }));
+      const loadCurrentChartData = async (): Promise<ChartBar[]> => {
+        const response = await fetch(
+          "/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("Could not load chart data.");
+        const raw = await response.json() as ChartBar[];
+        return raw.map((row) => ({
+          time: Number(row.time),
+          open: Number(row.open),
+          high: Number(row.high),
+          low: Number(row.low),
+          close: Number(row.close),
+          volume: Number(row.volume || 0),
+        }));
+      };
+
+      const fetchGatewayData = async (requests: unknown[]): Promise<unknown> => {
+        if (!Array.isArray(requests)) {
+          throw new Error("data_requests() must return an array.");
+        }
+        if (requests.length > 40) {
+          throw new Error("A maximum of 40 Pipscript data requests is supported.");
+        }
+
+        setPipscriptStatus("Loading requested market data...");
+        const response = await fetch("/api/pipscript/data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({ requests }),
+        });
+        const payload = await response.json().catch(() => null) as {
+          history?: Record<string, unknown>;
+          quotes?: Record<string, unknown>;
+          errors?: Array<{ name: string; type: string; message: string }>;
+        } | null;
+        if (!response.ok) {
+          throw new Error(String((payload as { detail?: string } | null)?.detail || "Pipscript data request failed."));
+        }
+        if (payload?.errors?.length) {
+          const first = payload.errors[0];
+          throw new Error(
+            \`Pipscript data request failed: \${first.name} (\${first.type}) — \${first.message}\`,
+          );
+        }
+        return payload;
+      };
 
       let rawOutput: unknown;
 
       if (language === "javascript") {
-        setPipscriptStatus("Running JavaScript...");
+        setPipscriptStatus("Loading JavaScript engine...");
         const runner = new Function(
           "data",
-          `"use strict";
-${code}
-if (typeof calculate !== "function") {
-  throw new Error("Define calculate(data) in your script.");
-}
-return calculate(data);`,
-        );
-        rawOutput = runner(data);
+          \`"use strict";
+\${code}
+return {
+  requests: typeof data_requests === "function" ? data_requests() : null,
+  calculate: typeof calculate === "function" ? calculate : null
+};\`,
+        ) as (data: unknown) => {
+          requests: unknown[] | null;
+          calculate: ((value: unknown) => unknown) | null;
+        };
+
+        const program = runner(null);
+        let calculationData: unknown;
+        if (program.requests !== null) {
+          calculationData = await fetchGatewayData(program.requests);
+        } else {
+          setPipscriptStatus("Loading chart data...");
+          calculationData = await loadCurrentChartData();
+        }
+
+        if (typeof program.calculate !== "function") {
+          throw new Error("Define calculate(data) in your script.");
+        }
+        setPipscriptStatus("Running JavaScript...");
+        rawOutput = program.calculate(calculationData);
       } else {
         setPipscriptStatus("Loading Python runtime...");
         const pyodide = await loadPyodideRuntime();
+        const declarationCode = \`import json
+\${code}
+_requests = data_requests() if "data_requests" in globals() else None
+json.dumps(_requests)\`;
+        const requestJson = String(await pyodide.runPythonAsync(declarationCode));
+        const declaredRequests = JSON.parse(requestJson) as unknown[] | null;
+
+        let calculationData: unknown;
+        if (declaredRequests !== null) {
+          calculationData = await fetchGatewayData(declaredRequests);
+        } else {
+          setPipscriptStatus("Loading chart data...");
+          calculationData = await loadCurrentChartData();
+        }
+
         setPipscriptStatus("Running Python...");
-        const serializedData = JSON.stringify(data);
-        const pythonCode = `import json
-data = json.loads(${JSON.stringify(serializedData)})
-${code}
+        const serializedData = JSON.stringify(calculationData);
+        const pythonCode = \`import json
+data = json.loads(\${JSON.stringify(serializedData)})
 if "calculate" not in globals():
     raise RuntimeError("Define calculate(data) in your script.")
 _result = calculate(data)
-json.dumps(_result)`;
+json.dumps(_result)\`;
         rawOutput = JSON.parse(String(await pyodide.runPythonAsync(pythonCode)));
       }
 
@@ -618,8 +683,8 @@ json.dumps(_result)`;
       setPipscriptOutput(normalized);
       setPipscriptStatus(
         normalized.type === "table"
-          ? `Table ready · ${normalized.rows.length} rows`
-          : `Indicator ready · ${normalized.points.length} points`,
+          ? \`Table ready · \${normalized.rows.length} rows\`
+          : \`Indicator ready · \${normalized.points.length} points\`,
       );
     } catch (error) {
       setPipscriptOutput(null);
