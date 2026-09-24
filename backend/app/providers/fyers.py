@@ -4,6 +4,9 @@ import os
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+import time
 
 from fyers_apiv3 import fyersModel
 
@@ -18,6 +21,9 @@ class SymbolInfo:
 
 class FyersMarketDataProvider:
     name = "fyers_v3_sdk"
+    _history_cache: dict[tuple, tuple[float, list[Candle]]] = {}
+    _history_cache_lock = threading.Lock()
+    _history_cache_ttl_seconds = 300.0
 
     def __init__(self) -> None:
         self.client_id = os.getenv("FYERS_CLIENT_ID", "").strip()
@@ -132,9 +138,25 @@ class FyersMarketDataProvider:
                 raise ValueError("History start date must be on or before end date.")
             chunk_days = 366 if resolution in {"D", "1W", "1M"} else 100
 
-        candles: list[Candle] = []
+        cache_key = (
+            info.api_symbol.upper(),
+            resolution,
+            start.isoformat(),
+            end.isoformat(),
+            limit,
+        )
+        now = time.monotonic()
+        with self._history_cache_lock:
+            cached = self._history_cache.get(cache_key)
+            if cached and now - cached[0] < self._history_cache_ttl_seconds:
+                return list(cached[1])
+            if cached:
+                self._history_cache.pop(cache_key, None)
 
-        for chunk_start, chunk_end in self._chunks(start, end, chunk_days):
+        chunks = list(self._chunks(start, end, chunk_days))
+
+        def load_chunk(chunk: tuple[date, date]) -> list[Candle]:
+            chunk_start, chunk_end = chunk
             payload = client.history(data={
                 "symbol": info.api_symbol,
                 "resolution": resolution,
@@ -144,9 +166,10 @@ class FyersMarketDataProvider:
                 "cont_flag": "1",
             })
             payload = self._check_response(payload, "history")
+            result: list[Candle] = []
             for row in payload.get("candles") or []:
                 if len(row) >= 6:
-                    candles.append(
+                    result.append(
                         Candle(
                             time=int(row[0]),
                             open=float(row[1]),
@@ -156,12 +179,30 @@ class FyersMarketDataProvider:
                             volume=int(row[5] or 0),
                         )
                     )
+            return result
+
+        # Daily/weekly/monthly history is split into multiple FYERS date
+        # ranges. Fetch those independent ranges concurrently so one chart
+        # switch does not wait for several sequential round trips.
+        candles: list[Candle] = []
+        worker_count = min(4, len(chunks))
+        if worker_count <= 1:
+            for chunk in chunks:
+                candles.extend(load_chunk(chunk))
+        else:
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = [executor.submit(load_chunk, chunk) for chunk in chunks]
+                for future in as_completed(futures):
+                    candles.extend(future.result())
 
         unique = {item.time: item for item in candles}
-        result = sorted(unique.values(), key=lambda item: item.time)
+        result = sorted(unique.values(), key=lambda item: item.time)[-limit:]
         if not result:
             raise ValueError(f"No historical data returned for {symbol}.")
-        return result[-limit:]
+
+        with self._history_cache_lock:
+            self._history_cache[cache_key] = (time.monotonic(), list(result))
+        return result
 
     @staticmethod
     def _quote_from_value(symbol: str, value: dict) -> Quote:
