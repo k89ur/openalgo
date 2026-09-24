@@ -238,6 +238,68 @@ function parseWatchlistImport(text: string): string[] {
   return [...new Set(symbols)];
 }
 
+type SavedPipscript = {
+  id: string;
+  name: string;
+  language: PipscriptLanguage;
+  outputType: PipscriptOutputType;
+  code: string;
+  updatedAt: number;
+};
+
+const PIPSCRIPT_STORAGE_KEY = "pipsgox-pipscripts";
+const LEGACY_PIPSCRIPT_STORAGE_KEY = "pipsgox-pipscript";
+
+function loadSavedPipscripts(): SavedPipscript[] {
+  try {
+    const raw = localStorage.getItem(PIPSCRIPT_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is SavedPipscript =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          typeof (item as SavedPipscript).id === "string" &&
+          typeof (item as SavedPipscript).name === "string" &&
+          ((item as SavedPipscript).language === "python" || (item as SavedPipscript).language === "javascript") &&
+          ((item as SavedPipscript).outputType === "indicator" || (item as SavedPipscript).outputType === "table") &&
+          typeof (item as SavedPipscript).code === "string"
+        );
+      }
+    }
+
+    // Migrate the previous single-script storage format.
+    const legacyRaw = localStorage.getItem(LEGACY_PIPSCRIPT_STORAGE_KEY);
+    if (legacyRaw) {
+      const saved = JSON.parse(legacyRaw) as {
+        language?: PipscriptLanguage;
+        outputType?: PipscriptOutputType;
+        code?: string;
+      };
+      if (
+        (saved.language === "python" || saved.language === "javascript") &&
+        (saved.outputType === "indicator" || saved.outputType === "table") &&
+        typeof saved.code === "string"
+      ) {
+        const migrated: SavedPipscript = {
+          id: "legacy-" + Date.now(),
+          name: "My PIPScript",
+          language: saved.language,
+          outputType: saved.outputType,
+          code: saved.code,
+          updatedAt: Date.now(),
+        };
+        const list = [migrated];
+        localStorage.setItem(PIPSCRIPT_STORAGE_KEY, JSON.stringify(list));
+        return list;
+      }
+    }
+  } catch {
+    // Ignore invalid local storage and start clean.
+  }
+  return [];
+}
+
 const coreIndicators = ["MA 50", "MA 200"];
 
 function App() {
@@ -483,8 +545,18 @@ function App() {
   const [pipscriptOutput, setPipscriptOutput] = useState<PipscriptOutput | null>(null);
   const [pipscriptStatus, setPipscriptStatus] = useState("Ready");
   const [pipscriptRunning, setPipscriptRunning] = useState(false);
+  const [savedPipscripts, setSavedPipscripts] = useState<SavedPipscript[]>(loadSavedPipscripts);
+  const [selectedSavedPipscriptId, setSelectedSavedPipscriptId] = useState("");
 
-  const runPipscript = async () => {
+  const runPipscript = async (override?: {
+    language?: PipscriptLanguage;
+    outputType?: PipscriptOutputType;
+    code?: string;
+  }) => {
+    const language = override?.language ?? pipscriptLanguage;
+    const outputType = override?.outputType ?? pipscriptOutputType;
+    const code = override?.code ?? pipscript;
+
     setPipscriptRunning(true);
     setPipscriptStatus("Loading chart data...");
 
@@ -515,12 +587,12 @@ function App() {
 
       let rawOutput: unknown;
 
-      if (pipscriptLanguage === "javascript") {
+      if (language === "javascript") {
         setPipscriptStatus("Running JavaScript...");
         const runner = new Function(
           "data",
           `"use strict";
-${pipscript}
+${code}
 if (typeof calculate !== "function") {
   throw new Error("Define calculate(data) in your script.");
 }
@@ -534,7 +606,7 @@ return calculate(data);`,
         const serializedData = JSON.stringify(data);
         const pythonCode = `import json
 data = json.loads(${JSON.stringify(serializedData)})
-${pipscript}
+${code}
 if "calculate" not in globals():
     raise RuntimeError("Define calculate(data) in your script.")
 _result = calculate(data)
@@ -542,7 +614,7 @@ json.dumps(_result)`;
         rawOutput = JSON.parse(String(await pyodide.runPythonAsync(pythonCode)));
       }
 
-      const normalized = normalizePipscriptOutput(rawOutput, pipscriptOutputType);
+      const normalized = normalizePipscriptOutput(rawOutput, outputType);
       setPipscriptOutput(normalized);
       setPipscriptStatus(
         normalized.type === "table"
@@ -558,33 +630,91 @@ json.dumps(_result)`;
   };
 
   const savePipscript = () => {
-    localStorage.setItem("pipsgox-pipscript", JSON.stringify({
+    const value = window.prompt(
+      "Save PIPScript as:",
+      savedPipscripts.find((item) => item.id === selectedSavedPipscriptId)?.name ?? "",
+    );
+    const name = String(value ?? "").trim().replace(/\\s+/g, " ").slice(0, 40);
+    if (!name) return;
+
+    const existing = savedPipscripts.find((item) => item.name.toLowerCase() === name.toLowerCase());
+    if (existing && existing.id !== selectedSavedPipscriptId) {
+      if (!window.confirm(`"${name}" already exists. Overwrite it?`)) return;
+    }
+
+    const id = existing?.id ?? selectedSavedPipscriptId || `pipscript-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const saved: SavedPipscript = {
+      id,
+      name,
       language: pipscriptLanguage,
       outputType: pipscriptOutputType,
       code: pipscript,
-    }));
-    setPipscriptStatus("Saved in this browser.");
+      updatedAt: Date.now(),
+    };
+
+    setSavedPipscripts((current) => {
+      const next = current.filter((item) => item.id !== id);
+      const result = [saved, ...next];
+      localStorage.setItem(PIPSCRIPT_STORAGE_KEY, JSON.stringify(result));
+      return result;
+    });
+    setSelectedSavedPipscriptId(id);
+    setPipscriptStatus(`Saved "${name}".`);
+  };
+
+  const applySavedPipscript = async () => {
+    const saved = savedPipscripts.find((item) => item.id === selectedSavedPipscriptId);
+    if (!saved) {
+      setPipscriptStatus("Select a saved PIPScript first.");
+      return;
+    }
+
+    setPipscriptLanguage(saved.language);
+    setPipscriptOutputType(saved.outputType);
+    setPipscript(saved.code);
+    setPipscriptStatus(`Applying "${saved.name}"...`);
+    await runPipscript({
+      language: saved.language,
+      outputType: saved.outputType,
+      code: saved.code,
+    });
+  };
+
+  const deleteSavedPipscript = () => {
+    const saved = savedPipscripts.find((item) => item.id === selectedSavedPipscriptId);
+    if (!saved) {
+      setPipscriptStatus("Select a saved PIPScript first.");
+      return;
+    }
+    if (!window.confirm(`Delete saved PIPScript "${saved.name}"?`)) return;
+
+    setSavedPipscripts((current) => {
+      const next = current.filter((item) => item.id !== saved.id);
+      localStorage.setItem(PIPSCRIPT_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+    setSelectedSavedPipscriptId("");
+    setPipscriptStatus(`Deleted "${saved.name}".`);
+  };
+
+  const selectSavedPipscript = (id: string) => {
+    setSelectedSavedPipscriptId(id);
+    const saved = savedPipscripts.find((item) => item.id === id);
+    if (saved) {
+      setPipscriptStatus(`Selected "${saved.name}". Press APPLY to run it.`);
+    }
   };
 
   const loadPipscript = () => {
-    try {
-      const raw = localStorage.getItem("pipsgox-pipscript");
-      if (!raw) {
-        setPipscriptStatus("No saved PIPScript found.");
-        return;
-      }
-      const saved = JSON.parse(raw) as {
-        language?: PipscriptLanguage;
-        outputType?: PipscriptOutputType;
-        code?: string;
-      };
-      if (saved.language === "python" || saved.language === "javascript") setPipscriptLanguage(saved.language);
-      if (saved.outputType === "indicator" || saved.outputType === "table") setPipscriptOutputType(saved.outputType);
-      if (typeof saved.code === "string") setPipscript(saved.code);
-      setPipscriptStatus("Loaded from this browser.");
-    } catch {
-      setPipscriptStatus("Saved PIPScript is invalid.");
+    const saved = savedPipscripts.find((item) => item.id === selectedSavedPipscriptId);
+    if (saved) {
+      setPipscriptLanguage(saved.language);
+      setPipscriptOutputType(saved.outputType);
+      setPipscript(saved.code);
+      setPipscriptStatus(`Loaded "${saved.name}" into the editor.`);
+      return;
     }
+    setPipscriptStatus("Select a saved PIPScript first.");
   };
 
   useEffect(() => {
@@ -1198,6 +1328,17 @@ json.dumps(_result)`;
               <div className="builder-panel">
                 <div className="builder-toolbar">
                   <select
+                    className="pipscript-saved-select"
+                    value={selectedSavedPipscriptId}
+                    onChange={(event) => selectSavedPipscript(event.target.value)}
+                    aria-label="Saved PIPScripts"
+                  >
+                    <option value="">Saved PIPScripts...</option>
+                    {savedPipscripts.map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
+                  </select>
+                  <select
                     value={pipscriptLanguage}
                     onChange={(event) => {
                       const language = event.target.value as PipscriptLanguage;
@@ -1221,14 +1362,18 @@ json.dumps(_result)`;
                     <option value="table">Table</option>
                   </select>
                   <span className="builder-spacer" />
-                  <button onClick={loadPipscript}>LOAD</button>
+                  <button onClick={loadPipscript} disabled={!selectedSavedPipscriptId}>LOAD</button>
                   <button onClick={savePipscript}>SAVE</button>
+                  <button onClick={() => void applySavedPipscript()} disabled={!selectedSavedPipscriptId || pipscriptRunning}>
+                    APPLY
+                  </button>
+                  <button onClick={deleteSavedPipscript} disabled={!selectedSavedPipscriptId}>DELETE</button>
                   <button className="builder-run" onClick={() => void runPipscript()} disabled={pipscriptRunning}>
                     {pipscriptRunning ? "RUNNING..." : "RUN"}
                   </button>
                 </div>
                 <div className="builder-hint">
-                  Input: <code>data</code> = current chart OHLCV candles. Return an indicator with <code>values</code>, or a table with <code>columns</code>/<code>rows</code>.
+                  Input: <code>data</code> = current chart OHLCV candles. Saved scripts are stored in this browser. <b>APPLY</b> loads and runs the selected script; <b>DELETE</b> removes it.
                 </div>
                 <textarea value={pipscript} onChange={(event) => setPipscript(event.target.value)} spellCheck={false} />
                 <div className="builder-output">
