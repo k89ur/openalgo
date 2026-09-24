@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { dispose, init, type Chart as KLineChartInstance } from "klinecharts";
+import { dispose, init, type Chart as KLineChartInstance, type KLineData } from "klinecharts";
 
 export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
@@ -466,7 +466,7 @@ export function Chart({
               size: 1,
             }],
           },
-          calc: (dataList) => {
+          calc: (dataList: KLineData[]) => {
             let sessionKey = "";
             let cumulativeVolume = 0;
             let cumulativeTurnover = 0;
