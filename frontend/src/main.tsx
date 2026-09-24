@@ -547,6 +547,7 @@ function App() {
   const [pipscriptRunning, setPipscriptRunning] = useState(false);
   const [savedPipscripts, setSavedPipscripts] = useState<SavedPipscript[]>(loadSavedPipscripts);
   const [selectedSavedPipscriptId, setSelectedSavedPipscriptId] = useState("");
+  const pipscriptHasOutputRef = useRef(false);
 
   const runPipscript = async (override?: {
     language?: PipscriptLanguage;
@@ -686,6 +687,7 @@ json.dumps(_result)`;
 
       const normalized = normalizePipscriptOutput(rawOutput, outputType);
       setPipscriptOutput(normalized);
+      pipscriptHasOutputRef.current = true;
       setPipscriptStatus(
         normalized.type === "table"
           ? `Table ready · ${normalized.rows.length} rows`
@@ -698,6 +700,14 @@ json.dumps(_result)`;
       setPipscriptRunning(false);
     }
   };
+
+  useEffect(() => {
+    if (!pipscriptHasOutputRef.current) return;
+    if (pipscriptOutputType !== "table") return;
+    if (!pipscript.includes("data_requests")) return;
+
+    void runPipscript();
+  }, [symbol]);
 
   const savePipscript = () => {
     const value = window.prompt(
