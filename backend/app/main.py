@@ -159,8 +159,18 @@ def _pipscript_get_history(
     *,
     start: date | None = None,
     end: date | None = None,
+    pace: bool = True,
 ):
     global _pipscript_last_history_request
+
+    if not pace:
+        return provider.get_history(
+            api_symbol,
+            timeframe,
+            limit,
+            start=start,
+            end=end,
+        )
 
     with _pipscript_history_lock:
         now = time.monotonic()
@@ -710,6 +720,11 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
     history_data: dict[str, dict[str, object]] = {}
     quotes_data: dict[str, object] = {}
     errors: list[dict[str, str]] = []
+    # Multi-index scripts need pacing to stay below FYERS historical-data
+    # request limits. A single-symbol Pipscript request should not inherit
+    # that one-second delay, because it is a common interactive use case.
+    history_request_count = sum(1 for item in request.requests if item.type == "history")
+    pace_history = history_request_count > 1
 
     for index, item in enumerate(request.requests):
         name = (item.name or item.symbol or f"request_{index + 1}").strip().upper()
@@ -734,6 +749,7 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                     item.limit,
                     start=item.from_date,
                     end=item.to_date,
+                    pace=pace_history,
                 )
                 history_data[name] = {
                     "symbol": original,
