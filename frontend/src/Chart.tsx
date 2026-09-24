@@ -631,7 +631,6 @@ export function Chart({
     show52WeekLow,
     showPreviousClose,
     previousClose,
-    pipscriptOutput,
   ]);
 
   return (
