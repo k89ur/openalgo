@@ -611,9 +611,12 @@ function App() {
           throw new Error(String((payload as { detail?: string } | null)?.detail || "Pipscript data request failed."));
         }
         if (payload?.errors?.length) {
-          const first = payload.errors[0];
-          throw new Error(
-            `Pipscript data request failed: ${first.name} (${first.type}) — ${first.message}`,
+          const names = payload.errors
+            .map((error) => error.name)
+            .filter(Boolean)
+            .join(", ");
+          setPipscriptStatus(
+            `Market data loaded with ${payload.errors.length} skipped request(s)${names ? `: ${names}` : ""}.`,
           );
         }
         return payload;
