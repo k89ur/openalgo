@@ -158,6 +158,9 @@ export function Chart({
 
     try {
       const chart = init(container);
+      if (!chart) {
+        throw new Error("KLineChart failed to initialize.");
+      }
       chartRef.current = chart;
 
       chart.setSymbol({
@@ -449,7 +452,7 @@ export function Chart({
       }
 
       if (showVwap && timeframe !== "D" && timeframe !== "W" && timeframe !== "M") {
-        chart.createIndicator({
+        chart.createIndicator(({ 
           name: "PIPSGOX_VWAP",
           shortName: "VWAP",
           paneId: "candle_pane",
@@ -489,7 +492,7 @@ export function Chart({
 
             return result;
           },
-        });
+        } as any);
       }
 
       if (show52WeekHigh || show52WeekLow) {
@@ -531,7 +534,7 @@ export function Chart({
           pipscriptOutput.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
         );
 
-        chart.createIndicator({
+        chart.createIndicator(({ 
           name: "PIPSGOX_SCRIPT",
           shortName: pipscriptOutput.name || "PIPScript",
           paneId: "script_pane",
@@ -552,7 +555,7 @@ export function Chart({
             }
             return result;
           },
-        });
+        } as any);
 
         chart.setPaneOptions({
           id: "script_pane",
