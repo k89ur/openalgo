@@ -655,6 +655,11 @@ export function Chart({
                       column.toUpperCase() === "RS" &&
                       Number.isFinite(numericValue);
 
+                    const isPricePositionCell =
+                      pipscriptOutput.title.toUpperCase().includes("PRICE POSITION") &&
+                      column.toUpperCase().includes("DIST") &&
+                      Number.isFinite(numericValue);
+
                     let className = "";
                     if (isRsCell) {
                       if (numericValue >= 90) className = "rs-90";
@@ -663,6 +668,17 @@ export function Chart({
                       else if (numericValue >= 60) className = "rs-60";
                       else if (numericValue >= 50) className = "rs-50";
                       else className = "rs-low";
+                    } else if (isPricePositionCell) {
+                      const columnName = column.toUpperCase();
+                      if (columnName.includes("52W HIGH") || columnName.includes("ATH")) {
+                        if (numericValue >= -5) className = "price-strong";
+                        else if (numericValue >= -10) className = "price-watch";
+                        else className = "price-weak";
+                      } else if (columnName.includes("52W LOW")) {
+                        if (numericValue >= 50) className = "price-strong";
+                        else if (numericValue >= 20) className = "price-watch";
+                        else className = "price-weak";
+                      }
                     }
 
                     return (
