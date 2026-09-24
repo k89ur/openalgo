@@ -363,6 +363,16 @@ button { cursor: pointer; }
 .pipscript-table-overlay td {
   color: #c3c7cb;
 }
+.pipscript-saved-select {
+  min-width: 120px;
+  max-width: 170px;
+}
+
+.builder-toolbar button:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
 .builder-toolbar select {
   height: 25px;
   border: 1px solid #282828;
