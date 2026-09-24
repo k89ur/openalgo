@@ -363,6 +363,32 @@ button { cursor: pointer; }
 .pipscript-table-overlay td {
   color: #c3c7cb;
 }
+
+/* IBD-style relative-strength rating bands */
+.pipscript-table-overlay td.rs-90 {
+  color: #35d07f;
+  font-weight: 700;
+}
+.pipscript-table-overlay td.rs-80 {
+  color: #79e66b;
+  font-weight: 700;
+}
+.pipscript-table-overlay td.rs-70 {
+  color: #b7df55;
+  font-weight: 700;
+}
+.pipscript-table-overlay td.rs-60 {
+  color: #e5d34f;
+  font-weight: 700;
+}
+.pipscript-table-overlay td.rs-50 {
+  color: #f0a14b;
+  font-weight: 700;
+}
+.pipscript-table-overlay td.rs-low {
+  color: #ef6262;
+  font-weight: 700;
+}
 .pipscript-saved-select {
   min-width: 120px;
   max-width: 170px;
