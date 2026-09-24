@@ -545,7 +545,7 @@ export function Chart({
           styles: {
             lines: [{ style: "solid", color: "#d6a84f", size: 1 }],
           },
-          calc: (dataList) => {
+          calc: (dataList: KLineData[]) => {
             const result: Record<number, { value: number | null }> = {};
             for (const candle of dataList) {
               const value = values.get(candle.timestamp);
