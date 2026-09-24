@@ -6,6 +6,19 @@ export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | 
 
 export type ChartTheme = "pipsgox" | "classic" | "light";
 
+export type PipscriptOutput =
+  | {
+      type: "line";
+      name: string;
+      points: Array<{ time: number; value: number }>;
+    }
+  | {
+      type: "table";
+      title: string;
+      columns: string[];
+      rows: string[][];
+    };
+
 type Props = {
   chartType: ChartType;
   dark: boolean;
@@ -20,6 +33,7 @@ type Props = {
   show52WeekLow: boolean;
   showPreviousClose: boolean;
   previousClose?: number;
+  pipscriptOutput?: PipscriptOutput | null;
 };
 
 type HistoryCandle = {
@@ -130,6 +144,7 @@ export function Chart({
   show52WeekLow,
   showPreviousClose,
   previousClose,
+  pipscriptOutput,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [crosshairData, setCrosshairData] = useState<CrosshairData | null>(null);
@@ -511,6 +526,43 @@ export function Chart({
         })();
       }
 
+      if (pipscriptOutput?.type === "line" && pipscriptOutput.points.length) {
+        const values = new Map(
+          pipscriptOutput.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
+        );
+
+        chart.createIndicator({
+          name: "PIPSGOX_SCRIPT",
+          shortName: pipscriptOutput.name || "PIPScript",
+          paneId: "script_pane",
+          series: "normal",
+          precision: 2,
+          shouldOhlc: false,
+          figures: [{ key: "value", title: (pipscriptOutput.name || "PIPScript") + ": ", type: "line" }],
+          styles: {
+            lines: [{ style: "solid", color: "#d6a84f", size: 1 }],
+          },
+          calc: (dataList) => {
+            const result: Record<number, { value: number | null }> = {};
+            for (const candle of dataList) {
+              const value = values.get(candle.timestamp);
+              result[candle.timestamp] = {
+                value: value != null && Number.isFinite(value) ? value : null,
+              };
+            }
+            return result;
+          },
+        });
+
+        chart.setPaneOptions({
+          id: "script_pane",
+          height: 86,
+          minHeight: 70,
+          dragEnabled: false,
+          order: 10,
+        });
+      }
+
       const resizeObserver = new ResizeObserver(() => {
         chart.resize();
       });
@@ -543,11 +595,31 @@ export function Chart({
     show52WeekLow,
     showPreviousClose,
     previousClose,
+    pipscriptOutput,
   ]);
 
   return (
     <div className="chart-stage">
       <div ref={containerRef} className="chart-canvas" />
+      {pipscriptOutput?.type === "table" && (
+        <div className="pipscript-table-overlay">
+          <div className="pipscript-table-title">{pipscriptOutput.title}</div>
+          <table>
+            <thead>
+              <tr>{pipscriptOutput.columns.map((column) => <th key={column}>{column}</th>)}</tr>
+            </thead>
+            <tbody>
+              {pipscriptOutput.rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {pipscriptOutput.columns.map((_, columnIndex) => (
+                    <td key={columnIndex}>{row[columnIndex] ?? "—"}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {crosshairData && (
         <div className="chart-crosshair-data" aria-live="polite">
           <span className="chart-crosshair-date">{formatCrosshairDate(crosshairData.timestamp, timeframe)}</span>
