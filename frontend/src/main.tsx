@@ -1280,44 +1280,67 @@ json.dumps(_result)`;
 
         <div className="top-spacer" />
 
+        <div className="top-chart-controls" aria-label="Chart controls">
+          <div className="top-timeframes">
+            {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
+              <button
+                key={item}
+                className={timeframe === item ? "active" : ""}
+                onClick={() => setTimeframe(item)}
+                aria-label={"Timeframe " + item}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+
+          <span className="top-control-divider" />
+
+          <div className="top-chart-actions">
+            {([
+              ["candles", "▥", "Candle"],
+              ["bars", "│", "Bar"],
+              ["line", "╱", "Line"],
+            ] as Array<[ChartType, string, string]>).map(([type, icon, label]) => (
+              <button
+                key={type}
+                className={chartType === type ? "active" : ""}
+                onClick={() => setChartType(type)}
+                title={label}
+                aria-label={label}
+              >
+                <span className="top-control-icon">{icon}</span>
+                <span>{label}</span>
+              </button>
+            ))}
+            <button
+              className={panel === "indicators" ? "active" : ""}
+              onClick={() => setPanel("indicators")}
+              title="Indicators"
+              aria-label="Indicators"
+            >
+              <span className="top-control-icon">◒</span>
+              <span>Indicators</span>
+            </button>
+            <button
+              className={panel === "pipscript" ? "active" : ""}
+              onClick={() => setPanel("pipscript")}
+              title="Pipscript"
+              aria-label="Pipscript"
+            >
+              <span className="top-control-icon">ƒx</span>
+              <span>Pipscript</span>
+            </button>
+          </div>
+        </div>
+
         <button className="top-command" onClick={() => setDark((value) => !value)}>
-          {dark ? "LIGHT" : "DARK"}
-        </button>
+          {dark ? "LIGHT" : "DARK"}</button>
         <button className="top-command" onClick={() => setPanel("settings")}>SETTINGS</button>
       </header>
 
       <section className="workspace">
         <section className="chart-workspace">
-          <div className="instrument-bar">
-            <div className="instrument-main">
-              <strong>{symbol === "BHARTIARTL" ? "BHARTI AIRTEL LTD" : symbol}</strong>
-              <span>NSE</span>
-              <b className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : hasLiveData ? price.toFixed(2) : "—"}</b>
-              <span className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : hasLiveData ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)` : "No data"}</span>
-            </div>
-
-            <div className="chart-controls">
-              {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
-                <button key={item} className={timeframe === item ? "active" : ""} onClick={() => setTimeframe(item)}>
-                  {item}
-                </button>
-              ))}
-              <span className="control-divider" />
-              {([
-                ["candles", "CANDLE"],
-                ["bars", "BAR"],
-                ["line", "LINE"],
-              ] as Array<[ChartType, string]>).map(([type, label]) => (
-                <button key={type} className={chartType === type ? "active" : ""} onClick={() => setChartType(type)}>
-                  {label}
-                </button>
-              ))}
-              <span className="control-divider" />
-              <button onClick={() => setPanel("indicators")}>INDICATORS</button>
-              <button onClick={() => setPanel("pipscript")}>PIPSCRIPT</button>
-            </div>
-          </div>
-
           <div className="chart-container">
             <Chart
               chartType={chartType}
