@@ -8,7 +8,7 @@ html, body, #root { width: 100%; height: 100%; }
 body { margin: 0; min-width: 320px; background: #080808; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
-.app { width: 100%; height: 100vh; overflow: hidden; background: var(--bg); color: var(--text); }
+.app { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; background: var(--bg); color: var(--text); }
 .theme-dark { --bg:#090909; --panel:#111111; --panel2:#0d0d0d; --panel3:#171717; --border:#292929; --grid:#202020; --text:#d8d8d8; --muted:#777; --faint:#4e4e4e; --selected:#1e1e1e; --blue:#3f8dcc; }
 .theme-light { --bg:#f2f2f2; --panel:#fff; --panel2:#f7f7f7; --panel3:#ededed; --border:#cfcfcf; --grid:#dedede; --text:#252525; --muted:#666; --faint:#999; --selected:#e5edf5; --blue:#2d6ea6; }
 
@@ -47,7 +47,7 @@ button { cursor: pointer; }
 .top-search button { width:38px; height:100%; border:0; border-left:1px solid #303030; background:#181818; color:#999; font-size:9px; }
 .top-spacer { flex:1; }
 
-.workspace { height:calc(100vh - 64px); display:flex; min-width:0; background:var(--bg); }
+.workspace { height:calc(100vh - 64px); height:calc(100dvh - 64px); display:flex; min-width:0; background:var(--bg); }
 .chart-workspace { min-width:0; min-height:0; flex:1; display:flex; flex-direction:column; background:var(--bg); }
 .instrument-bar {
   min-height:42px; display:flex; align-items:center; justify-content:space-between;
