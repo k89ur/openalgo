@@ -269,6 +269,116 @@ button { cursor: pointer; }
 
 .watch-open { width:110px; height:28px; align-self:center; border:1px solid #333; background:#141414; color:#888; font-size:9px; }
 
+.watch-dialog-backdrop {
+  position:fixed;
+  inset:0;
+  z-index:40;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:rgba(0,0,0,.62);
+  backdrop-filter:blur(3px);
+}
+.watch-dialog {
+  width:min(340px,calc(100vw - 36px));
+  padding:20px;
+  border:1px solid #2d3338;
+  border-radius:12px;
+  background:#111416;
+  box-shadow:0 18px 55px rgba(0,0,0,.55);
+}
+.watch-dialog-icon {
+  width:34px;
+  height:34px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:12px;
+  border:1px solid #29343d;
+  border-radius:9px;
+  background:#16202a;
+  color:#79a8c7;
+}
+.watch-dialog-icon svg {
+  width:16px;
+  height:16px;
+  stroke-width:1.6;
+}
+.watch-dialog-title {
+  display:block;
+  color:#e0e4e7;
+  font-size:13px;
+  font-weight:500;
+  letter-spacing:.01em;
+}
+.watch-dialog-subtitle {
+  margin:6px 0 16px;
+  color:#737b82;
+  font-size:9px;
+  line-height:1.5;
+}
+.watch-dialog-input {
+  width:100%;
+  height:36px;
+  box-sizing:border-box;
+  border:1px solid #2b3238;
+  border-radius:7px;
+  outline:0;
+  background:#0c0f11;
+  color:#d8dde1;
+  padding:0 10px;
+  font-size:11px;
+  transition:border-color .12s ease, box-shadow .12s ease;
+}
+.watch-dialog-input:focus {
+  border-color:#3d6f92;
+  box-shadow:0 0 0 2px rgba(56,105,139,.14);
+}
+.watch-dialog-actions {
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:6px;
+  margin-top:18px;
+}
+.watch-dialog-actions button {
+  height:30px;
+  padding:0 12px;
+  border-radius:6px;
+  font-size:9px;
+  font-weight:500;
+  cursor:pointer;
+  transition:background .12s ease, color .12s ease, border-color .12s ease;
+}
+.watch-dialog-cancel {
+  border:1px solid transparent;
+  background:transparent;
+  color:#727b82;
+}
+.watch-dialog-cancel:hover {
+  background:#191d20;
+  color:#b7bec3;
+}
+.watch-dialog-primary {
+  border:1px solid #315c79;
+  background:#28577d;
+  color:#fff;
+}
+.watch-dialog-primary:hover {
+  background:#326b96;
+  border-color:#477da4;
+}
+.watch-dialog-danger {
+  border:1px solid #693d42;
+  background:#4a292d;
+  color:#efb5b8;
+}
+.watch-dialog-danger:hover {
+  background:#623237;
+  border-color:#7e454b;
+}
+
 .modal-backdrop { position:fixed; inset:0; z-index:20; background:rgba(0,0,0,.58); display:flex; align-items:center; justify-content:center; }
 .modal { width:360px; background:#111; border:1px solid #343434; box-shadow:0 18px 50px #000; }
 .pipscript-modal { width:min(720px,92vw); }
