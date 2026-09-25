@@ -47,146 +47,87 @@ button { cursor: pointer; }
 .top-search button { width:38px; height:100%; border:0; border-left:1px solid #303030; background:#181818; color:#999; font-size:9px; }
 .top-spacer { flex:1; min-width:8px; }
 
-.top-chart-controls {
+.top-control-hub {
+  height:32px;
   display:flex;
   align-items:center;
   min-width:0;
   max-width:100%;
-  height:32px;
-  border:1px solid #242424;
-  background:#101010;
-  border-radius:5px;
-  overflow:hidden;
+  padding:0 3px;
+  border:1px solid #292929;
+  border-radius:6px;
+  background:#111;
+  box-shadow:0 1px 2px rgba(0,0,0,.25);
 }
-.top-control-section {
+.top-control-group {
   display:flex;
   align-items:center;
   height:30px;
-  flex:0 0 auto;
-}
-.top-timeframe-section {
-  padding:0 4px;
-}
-.top-timeframes {
-  display:flex;
-  align-items:center;
   min-width:0;
+}
+.top-timeframe-group {
   overflow-x:auto;
   scrollbar-width:none;
 }
-.top-timeframes::-webkit-scrollbar { display:none; }
-.top-timeframes button,
-.top-chart-type-section button {
-  height:30px;
+.top-timeframe-group::-webkit-scrollbar { display:none; }
+.top-hub-button {
+  height:28px;
   border:0;
   background:transparent;
-  color:#777;
+  color:#747b82;
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  gap:5px;
   white-space:nowrap;
-  font-size:9px;
-  transition:background .12s ease, color .12s ease;
-}
-.top-timeframes button {
-  min-width:30px;
-  padding:0 7px;
-}
-.top-chart-type-section {
-  padding:0 4px;
-}
-.top-timeframes button.active,
-.top-chart-type-section button.active,
-.top-control-section-button.active,
-.top-utility-button.active {
-  background:#28577d;
-  color:#fff;
-}
-.top-chart-type-section button.active svg,
-.top-control-section-button.active svg,
-.top-utility-button.active svg {
-  color:#fff;
-}
-
-/* Compact modern utility controls matching the chart toolbar. */
-.top-control-section-button,
-.top-utility-button {
-  height:30px;
-  min-width:0;
-  border:1px solid #3a3a3a;
-  background:#151515;
-  color:#8f8f8f;
-  transition:background .12s ease, color .12s ease, border-color .12s ease;
   font-size:9px;
   font-weight:500;
   letter-spacing:.01em;
+  border-radius:4px;
+  transition:background .12s ease, color .12s ease;
 }
-.top-control-section-button {
-  margin:0;
+.top-hub-button:hover,
+.top-hub-button:focus-visible {
+  background:#1b2934;
+  color:#d8e1e8;
+  outline:0;
+}
+.top-hub-button.active,
+.top-hub-button.active:hover,
+.top-hub-button.active:focus-visible {
+  background:#28577d;
+  color:#fff;
+}
+.top-timeframe-button {
+  min-width:30px;
+  padding:0 7px;
+}
+.top-icon-button {
+  width:30px;
+  min-width:30px !important;
+  padding:0 !important;
+}
+.top-label-button {
   padding:0 9px;
 }
-.top-control-section-button + .top-control-section-button {
-  margin-left:-1px;
-}
-.top-control-section-button:first-of-type {
-  border-radius:4px 0 0 4px;
-}
-.top-control-section-button:last-of-type {
-  border-radius:0 4px 4px 0;
-}
-.top-control-section-button:hover,
-.top-control-section-button:focus-visible,
-.top-utility-button:hover,
-.top-utility-button:focus-visible {
-  background:#28577d;
-  border-color:#3b6f98;
-  color:#fff;
-}
-.top-control-section-button.active,
-.top-control-section-button.active:hover,
-.top-control-section-button.active:focus-visible,
-.top-utility-button.active,
-.top-utility-button.active:hover,
-.top-utility-button.active:focus-visible {
-  background:#28577d;
-  border-color:#3b6f98;
-  color:#fff;
-}
-.top-control-section-button svg,
-.top-utility-button svg {
+.top-hub-button svg {
   width:13px;
   height:13px;
-  color:#9aa2aa;
+  flex:0 0 auto;
+  color:#8f989f;
   stroke-width:1.6;
 }
-.top-control-section-button:hover svg,
-.top-control-section-button:focus-visible svg,
-.top-control-section-button.active svg,
-.top-utility-button:hover svg,
-.top-utility-button:focus-visible svg,
-.top-utility-button.active svg {
-  color:#fff;
+.top-hub-button:hover svg,
+.top-hub-button:focus-visible svg,
+.top-hub-button.active svg {
+  color:currentColor;
 }
-.top-utility-group {
-  display:flex;
-  align-items:center;
-  height:32px;
-  margin-left:9px;
-  padding-left:8px;
-  border-left:1px solid #292929;
-  gap:5px;
-}
-.top-utility-button {
-  margin-left:0;
-  padding:0 10px;
-  border-radius:4px;
-}
-.top-utility-button + .top-utility-button {
-  margin-left:0;
-  border-left:1px solid #3a3a3a;
-}
-.top-utility-button svg {
-  color:#9aa2aa;
+.top-hub-divider {
+  width:1px;
+  height:18px;
+  flex:0 0 1px;
+  margin:0 4px;
+  background:#2c2c2c;
 }
 
 .workspace { height:calc(100vh - 64px); height:calc(100dvh - 64px); display:flex; min-width:0; background:var(--bg); }
