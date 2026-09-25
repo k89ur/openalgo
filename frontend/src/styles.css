@@ -109,17 +109,25 @@ button { cursor: pointer; }
   background:#5a2020;
   color:#ff6464;
 }
+/* Hover always wins over the red active state. */
+.top-timeframes button:hover,
+.top-chart-type-section button:hover,
+.top-control-section-button:hover,
+.top-utility-button:hover,
 .top-timeframes button.active:hover,
 .top-chart-type-section button.active:hover,
 .top-control-section-button.active:hover,
 .top-utility-button.active:hover {
-  background:#1b1b1b;
-  color:#fff;
+  background:#1b1b1b !important;
+  color:#fff !important;
 }
+.top-chart-type-section button:hover svg,
+.top-control-section-button:hover svg,
+.top-utility-button:hover svg,
 .top-chart-type-section button.active:hover svg,
 .top-control-section-button.active:hover svg,
 .top-utility-button.active:hover svg {
-  color:#fff;
+  color:#fff !important;
 }
 .top-section-divider {
   width:1px;
