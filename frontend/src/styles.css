@@ -55,8 +55,17 @@ button { cursor: pointer; }
   height:32px;
   border:1px solid #242424;
   background:#101010;
-  border-radius:4px;
+  border-radius:5px;
   overflow:hidden;
+}
+.top-control-section {
+  display:flex;
+  align-items:center;
+  height:30px;
+  flex:0 0 auto;
+}
+.top-timeframe-section {
+  padding:0 4px;
 }
 .top-timeframes {
   display:flex;
@@ -64,13 +73,10 @@ button { cursor: pointer; }
   min-width:0;
   overflow-x:auto;
   scrollbar-width:none;
-  padding-right:6px;
-  margin-right:4px;
-  border-right:1px solid #292929;
 }
 .top-timeframes::-webkit-scrollbar { display:none; }
 .top-timeframes button,
-.top-chart-actions button {
+.top-chart-type-section button {
   height:30px;
   border:0;
   background:transparent;
@@ -78,7 +84,6 @@ button { cursor: pointer; }
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  gap:5px;
   white-space:nowrap;
   font-size:9px;
   transition:background .12s ease, color .12s ease;
@@ -87,56 +92,43 @@ button { cursor: pointer; }
   min-width:30px;
   padding:0 7px;
 }
+.top-chart-type-section {
+  padding:0 4px;
+}
 .top-timeframes button:hover,
-.top-chart-actions button:hover,
+.top-chart-type-section button:hover,
+.top-control-section-button:hover,
 .top-utility-button:hover {
   background:#1b1b1b;
   color:#fff;
 }
 .top-timeframes button.active,
-.top-chart-actions button.active,
+.top-chart-type-section button.active,
+.top-control-section-button.active,
 .top-utility-button.active {
   background:#5a2020;
   color:#ff6464;
 }
-.top-control-divider {
-  width:1px;
-  height:20px;
-  flex:0 0 1px;
-  background:#292929;
-}
-.top-chart-actions {
-  display:flex;
-  align-items:center;
-  flex:0 0 auto;
-  gap:0;
-  height:30px;
-}
-.top-chart-type-group,
-.top-analysis-group {
-  display:flex;
-  align-items:center;
-  height:30px;
-  padding:0 3px;
-}
-.top-analysis-group {
-  padding-left:5px;
-}
 .top-section-divider {
   width:1px;
   height:20px;
-  background:#343434;
-  margin:0 4px;
+  flex:0 0 1px;
+  background:#3a3a3a;
+  margin:0 5px;
 }
 .top-icon-button {
-  width:31px;
-  min-width:31px !important;
+  width:32px;
+  min-width:32px !important;
   padding:0 !important;
+}
+.top-control-section-button {
+  min-width:0;
+  margin:0 2px;
 }
 .top-text-button {
   min-width:0;
   height:30px;
-  padding:0 8px;
+  padding:0 9px;
   border:0;
   background:transparent;
   color:#777;
@@ -153,12 +145,6 @@ button { cursor: pointer; }
   height:14px;
   flex:0 0 auto;
 }
-.top-control-icon {
-  color:#aeb7c0;
-  font-size:13px;
-  line-height:1;
-  font-weight:600;
-}
 .top-chart-actions button.active svg,
 .top-text-button.active svg {
   color:#ff6464;
@@ -167,9 +153,9 @@ button { cursor: pointer; }
   display:flex;
   align-items:center;
   height:32px;
-  margin-left:8px;
-  padding-left:5px;
-  border-left:1px solid #343434;
+  margin-left:10px;
+  padding-left:7px;
+  border-left:1px solid #3a3a3a;
 }
 .top-utility-button {
   margin-left:0;
@@ -177,8 +163,8 @@ button { cursor: pointer; }
   padding-right:10px;
 }
 .top-utility-button + .top-utility-button {
-  margin-left:3px;
-  border-left:1px solid #292929;
+  margin-left:4px;
+  border-left:1px solid #333;
 }
 .top-utility-button svg { color:#8d969f; }
 
