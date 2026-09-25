@@ -902,12 +902,12 @@ json.dumps(_result)`;
     let cancelled = false;
     let firstLoad = true;
 
-    const loadQuote = async () => {
-      if (firstLoad) {
-        setQuoteLoading(true);
-        setQuoteError(false);
-      }
+    // Never carry the previous symbol's quote into the new symbol header.
+    setQuote(null);
+    setQuoteLoading(true);
+    setQuoteError(false);
 
+    const loadQuote = async () => {
       try {
         const response = await fetch(
           "/api/quote?symbol=" + encodeURIComponent(symbol),
@@ -928,8 +928,10 @@ json.dumps(_result)`;
       } catch {
         if (!cancelled) setQuoteError(true);
       } finally {
-        if (!cancelled && firstLoad) setQuoteLoading(false);
-        firstLoad = false;
+        if (!cancelled && firstLoad) {
+          setQuoteLoading(false);
+          firstLoad = false;
+        }
       }
     };
 
@@ -1289,7 +1291,7 @@ json.dumps(_result)`;
         <section className="chart-workspace">
           <div className="instrument-bar">
             <div className="instrument-main">
-              <strong>{selected.symbol === "BHARTIARTL" ? "BHARTI AIRTEL LTD" : selected.symbol}</strong>
+              <strong>{symbol === "BHARTIARTL" ? "BHARTI AIRTEL LTD" : symbol}</strong>
               <span>NSE</span>
               <b className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : hasLiveData ? price.toFixed(2) : "—"}</b>
               <span className={changePercent < 0 ? "negative" : "positive"}>{quoteLoading ? "..." : hasLiveData ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)` : "No data"}</span>
@@ -1337,7 +1339,7 @@ json.dumps(_result)`;
 
             <div className="chart-header-overlay">
               <span className="chart-header-symbol">
-                {selected.symbol} · {timeframe} · NSE
+                {symbol} · {timeframe} · NSE
               </span>
               <span className={`chart-header-price ${changePercent < 0 ? "negative" : "positive"}`}>
                 {hasLiveData ? price.toFixed(2) : "—"}
