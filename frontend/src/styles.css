@@ -109,6 +109,18 @@ button { cursor: pointer; }
   background:#5a2020;
   color:#ff6464;
 }
+.top-timeframes button.active:hover,
+.top-chart-type-section button.active:hover,
+.top-control-section-button.active:hover,
+.top-utility-button.active:hover {
+  background:#1b1b1b;
+  color:#fff;
+}
+.top-chart-type-section button.active:hover svg,
+.top-control-section-button.active:hover svg,
+.top-utility-button.active:hover svg {
+  color:#fff;
+}
 .top-section-divider {
   width:1px;
   height:20px;
