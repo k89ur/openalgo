@@ -1223,19 +1223,18 @@ json.dumps(_result)`;
       <div className="menu-bar">
         <div className="menu-left">
           <span className="brand">PIPSGOX</span>
-          <button>File</button>
-          <button>Account</button>
-          <button>Help</button>
         </div>
         <div className="menu-center">PIPSGOX WEB TERMINAL</div>
-        <div className="menu-right"><span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}</div>
+        <div className="menu-right">
+          <button>Account</button>
+          <button>Help</button>
+          <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
+        </div>
       </div>
 
       <header className="topbar">
-        <button className="top-command">NEW WINDOW</button>
         <button className="top-command">MARKET</button>
         <button className="top-command">WATCHLIST</button>
-        <button className="top-command">ORDERS</button>
 
         <div className="top-search-wrap">
           <div className="top-search">
