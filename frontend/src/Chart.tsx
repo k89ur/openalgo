@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { dispose, init, type Chart as KLineChartInstance, type KLineData } from "klinecharts";
+import { dispose, init, registerIndicator, type Chart as KLineChartInstance, type KLineData } from "klinecharts";
 
 export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
@@ -56,6 +56,103 @@ type HistoryCacheEntry = {
 
 const historyCache = new Map<string, HistoryCacheEntry>();
 const historyInflight = new Map<string, Promise<KLineData[]>>();
+
+const PIPSGOX_DEFAULT_MA = "PIPSGOX_DEFAULT_MA";
+const PIPSGOX_PIPSCRIPT_EMA = "PIPSGOX_PIPSCRIPT_EMA";
+
+registerIndicator({
+  name: PIPSGOX_DEFAULT_MA,
+  shortName: "MA",
+  series: "price",
+  calcParams: [50, 200],
+  precision: 2,
+  shouldOhlc: false,
+  figures: [
+    { key: "ma1", title: "MA50: ", type: "line" },
+    { key: "ma2", title: "MA200: ", type: "line" },
+  ],
+  calc: (dataList: KLineData[], indicator: any) => {
+    const params = (indicator.calcParams || [50, 200]).map(Number);
+    const sums = params.map(() => 0);
+    const result: Record<number, Record<string, number | null>> = {};
+
+    for (let i = 0; i < dataList.length; i += 1) {
+      const row: Record<string, number | null> = {};
+      params.forEach((period, index) => {
+        const close = Number(dataList[i].close);
+        sums[index] += close;
+        row["ma" + (index + 1)] = null;
+
+        if (i >= period - 1) {
+          row["ma" + (index + 1)] = sums[index] / period;
+          sums[index] -= Number(dataList[i - (period - 1)].close);
+        }
+      });
+      result[dataList[i].timestamp] = row;
+    }
+
+    return result;
+  },
+});
+
+registerIndicator({
+  name: PIPSGOX_PIPSCRIPT_EMA,
+  shortName: "PIPSGOX EMA",
+  series: "price",
+  calcParams: [9, 20, 50, 100, 200],
+  precision: 2,
+  shouldOhlc: false,
+  figures: [
+    { key: "ema1", title: "EMA9: ", type: "line" },
+    { key: "ema2", title: "EMA20: ", type: "line" },
+    { key: "ema3", title: "EMA50: ", type: "line" },
+    { key: "ema4", title: "EMA100: ", type: "line" },
+    { key: "ema5", title: "EMA200: ", type: "line" },
+  ],
+  regenerateFigures: (params) =>
+    params.map((period, index) => ({
+      key: "ema" + (index + 1),
+      title: "EMA" + period + ": ",
+      type: "line",
+    })),
+  calc: (dataList: KLineData[], indicator: any) => {
+    const params = (indicator.calcParams || [9, 20, 50, 100, 200]).map(Number);
+    const states = params.map(() => ({ value: 0, initialized: false }));
+    const result: Record<number, Record<string, number | null>> = {};
+
+    for (let i = 0; i < dataList.length; i += 1) {
+      const row: Record<string, number | null> = {};
+
+      params.forEach((period, index) => {
+        if (i < period - 1) {
+          row["ema" + (index + 1)] = null;
+          return;
+        }
+
+        const state = states[index];
+        const close = Number(dataList[i].close);
+
+        if (!state.initialized) {
+          let sum = 0;
+          for (let j = i - period + 1; j <= i; j += 1) {
+            sum += Number(dataList[j].close);
+          }
+          state.value = sum / period;
+          state.initialized = true;
+        } else {
+          const multiplier = 2 / (period + 1);
+          state.value = (close - state.value) * multiplier + state.value;
+        }
+
+        row["ema" + (index + 1)] = Number.isFinite(state.value) ? state.value : null;
+      });
+
+      result[dataList[i].timestamp] = row;
+    }
+
+    return result;
+  },
+});
 
 function historyCacheTtl(timeframe: Timeframe) {
   return timeframe === "D" || timeframe === "W" || timeframe === "M" ? 5 * 60_000 : 15_000;
@@ -428,28 +525,36 @@ export function Chart({
         });
       }
 
+      // Base indicators are registered explicitly so their calculation/figure
+      // definitions cannot be affected by Pipscript indicator overrides.
       chart.createIndicator(
-        { name: "MA", paneId: "candle_pane", calcParams: [50, 200] },
+        {
+          name: PIPSGOX_DEFAULT_MA,
+          id: "pipsgox-default-ma",
+          paneId: "candle_pane",
+          series: "price",
+          calcParams: [50, 200],
+          visible: true,
+          styles: {
+            lines: [
+              { style: "solid", color: "#f6c85f", size: 1 },
+              { style: "solid", color: "#b07cff", size: 1 },
+            ],
+          },
+        },
         true,
       );
+
       if (showVolume) {
-        chart.createIndicator({
-          name: "VOL",
-          paneId: "volume_pane",
-          series: "volume",
-          calcParams: [],
-          styles: {
-            bars: [{
-              style: "fill",
-              borderStyle: "solid",
-              borderSize: 0,
-              upColor: "#d9dde3",
-              downColor: "#d9dde3",
-              noChangeColor: "#d9dde3",
-            }],
-            lines: [],
+        chart.createIndicator(
+          {
+            name: "VOL",
+            id: "pipsgox-default-volume",
+            paneId: "volume_pane",
+            visible: true,
           },
-        });
+          false,
+        );
         chart.setPaneOptions({
           id: "volume_pane",
           height: 72,
@@ -640,62 +745,20 @@ export function Chart({
     if (emaLengths.length) {
       const emaIndicatorId = chart.createIndicator(
         {
-          name: "EMA",
-          shortName: "PIPSGOX EMA",
+          name: PIPSGOX_PIPSCRIPT_EMA,
+          id: "pipsgox-pipscript-ema",
           paneId: "candle_pane",
           series: "price",
-          shouldOhlc: false,
           calcParams: emaLengths,
-          figures: emaLengths.map((period, index) => ({
-            key: "pipEma" + index,
-            title: "EMA" + period + ": ",
-            type: "line",
-          })),
+          visible: true,
           styles: {
             lines: emaLengths.map((_, index) => ({
               style: "solid",
-              color: ["#c9daf8", "#a4c2f4", "#6d9eeb", "#3c78d8", "#0b5394"][index % 5],
+              color: ["#f6c85f", "#12d98b", "#6d9eeb", "#ef5350", "#c9daf8"][index % 5],
               size: 1,
             })),
           },
-          calc: (dataList: KLineData[], indicator: any) => {
-            const params = (indicator.calcParams || emaLengths).map(Number);
-            const states = params.map(() => ({ value: 0, initialized: false }));
-            const result: Record<number, Record<string, number | null>> = {};
-
-            for (let i = 0; i < dataList.length; i += 1) {
-              const row: Record<string, number | null> = {};
-
-              params.forEach((period, index) => {
-                if (i < period - 1) {
-                  row["pipEma" + index] = null;
-                  return;
-                }
-
-                const state = states[index];
-
-                if (!state.initialized) {
-                  let sum = 0;
-                  for (let j = i - period + 1; j <= i; j += 1) {
-                    sum += Number(dataList[j].close);
-                  }
-                  state.value = sum / period;
-                  state.initialized = true;
-                } else {
-                  const close = Number(dataList[i].close);
-                  const multiplier = 2 / (period + 1);
-                  state.value = (close - state.value) * multiplier + state.value;
-                }
-
-                row["pipEma" + index] = Number.isFinite(state.value) ? state.value : null;
-              });
-
-              result[dataList[i].timestamp] = row;
-            }
-
-            return result;
-          },
-        } as any,
+        },
         true,
       );
 
