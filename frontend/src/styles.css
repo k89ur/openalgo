@@ -64,6 +64,9 @@ button { cursor: pointer; }
   min-width:0;
   overflow-x:auto;
   scrollbar-width:none;
+  padding-right:6px;
+  margin-right:4px;
+  border-right:1px solid #292929;
 }
 .top-timeframes::-webkit-scrollbar { display:none; }
 .top-timeframes button,
@@ -87,8 +90,8 @@ button { cursor: pointer; }
 .top-timeframes button:hover,
 .top-chart-actions button:hover,
 .top-utility-button:hover {
-  background:#2a1414;
-  color:#f06a6a;
+  background:#1b1b1b;
+  color:#fff;
 }
 .top-timeframes button.active,
 .top-chart-actions button.active,
@@ -106,6 +109,7 @@ button { cursor: pointer; }
   display:flex;
   align-items:center;
   flex:0 0 auto;
+  gap:3px;
 }
 .top-icon-button {
   width:31px;
@@ -143,8 +147,14 @@ button { cursor: pointer; }
   color:#ff6464;
 }
 .top-utility-button {
+  margin-left:6px;
+  padding-left:10px;
+  border-left:1px solid #292929;
+}
+.top-utility-button + .top-utility-button {
   margin-left:2px;
-  border-left:1px solid #252525;
+  padding-left:10px;
+  border-left:1px solid #292929;
 }
 .top-utility-button svg { color:#8d969f; }
 
