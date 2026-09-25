@@ -624,25 +624,24 @@ export function Chart({
 
     if (!validLines.length) return;
 
-    // KLineCharts has a native EMA indicator. Use it for EMA lines so
-    // the Pipscript EMA series is rendered by the chart's own indicator
-    // engine and automatically follows the loaded candle data.
+    // EMA lines are rendered by KLineCharts' native EMA engine. This is
+    // deliberately independent of the other Pipscript lines: a table
+    // script may return EMA + 52W High/Low together.
     const emaLengths = validLines
       .map((line) => {
-        const match = line.name.match(/^EMA\\s+(\\d+)$/i);
+        const match = line.name.match(/^EMA\s+(\d+)$/i);
         return match ? Number(match[1]) : null;
       })
-      .filter((value): value is number => value != null);
+      .filter((value): value is number => value != null)
+      .filter((value, index, values) => values.indexOf(value) === index);
 
-    const allAreEma =
-      validLines.length > 0 &&
-      emaLengths.length === validLines.length &&
-      emaLengths.every((value) => [9, 20, 50, 100, 200].includes(value));
+    const indicatorIds: string[] = [];
 
-    if (allAreEma) {
-      const indicatorId = chart.createIndicator(
+    if (emaLengths.length) {
+      const emaIndicatorId = chart.createIndicator(
         {
           name: "EMA",
+          shortName: "PIPSGOX EMA",
           paneId: "candle_pane",
           series: "price",
           calcParams: emaLengths,
@@ -650,74 +649,77 @@ export function Chart({
         true,
       );
 
-      return () => {
+      if (emaIndicatorId) indicatorIds.push(emaIndicatorId);
+    }
+
+    // Keep support for non-EMA Pipscript lines such as 52W High/Low.
+    const nonEmaLines = validLines.filter(
+      (line) => !/^EMA\s+\d+$/i.test(line.name),
+    );
+
+    if (nonEmaLines.length) {
+      const valuesByLine = nonEmaLines.map((line) => new Map(
+        line.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
+      ));
+
+      const palette = [
+        "#d6a84f",
+        "#ef5350",
+        "#12d98b",
+        "#c9daf8",
+        "#6d9eeb",
+        "#3c78d8",
+      ];
+
+      const figures = nonEmaLines.map((line, index) => ({
+        key: `line${index}`,
+        title: line.name + ": ",
+        type: "line",
+      }));
+
+      const indicatorId = chart.createIndicator({
+        name: "PIPSGOX_SCRIPT_LINES",
+        shortName: nonEmaLines.map((line) => line.name).join(" / ").slice(0, 40),
+        paneId: "candle_pane",
+        series: "price",
+        shouldOhlc: false,
+        figures,
+        styles: {
+          lines: nonEmaLines.map((_, index) => ({
+            style: "solid",
+            color: palette[index % palette.length],
+            size: 1,
+          })),
+        },
+        calc: (dataList: KLineData[]) => {
+          const result: Record<number, Record<string, number | null>> = {};
+
+          for (const candle of dataList) {
+            const row: Record<string, number | null> = {};
+
+            valuesByLine.forEach((values, index) => {
+              const value = values.get(candle.timestamp);
+              row[`line${index}`] =
+                value != null && Number.isFinite(value) ? value : null;
+            });
+
+            result[candle.timestamp] = row;
+          }
+
+          return result;
+        },
+      } as any);
+
+      if (indicatorId) indicatorIds.push(indicatorId);
+    }
+
+    return () => {
+      for (const indicatorId of indicatorIds) {
         try {
-          if (indicatorId) chart.removeIndicator(indicatorId);
+          chart.removeIndicator(indicatorId);
         } catch {
           // Chart may already be disposed/recreated.
         }
-      };
-    }
-
-    const valuesByLine = validLines.map((line) => new Map(
-      line.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
-    ));
-
-    const palette = [
-      "#c9daf8",
-      "#a4c2f4",
-      "#6d9eeb",
-      "#3c78d8",
-      "#0b5394",
-      "#d6a84f",
-      "#ef5350",
-      "#12d98b",
-    ];
-
-    const figures = validLines.map((line, index) => ({
-      key: `line${index}`,
-      title: line.name + ": ",
-      type: "line",
-    }));
-
-    const indicatorId = chart.createIndicator({
-      name: "PIPSGOX_SCRIPT_LINES",
-      shortName: validLines.map((line) => line.name).join(" / ").slice(0, 40),
-      paneId: "candle_pane",
-      series: "price",
-      shouldOhlc: false,
-      figures,
-      styles: {
-        lines: validLines.map((_, index) => ({
-          style: "solid",
-          color: palette[index % palette.length],
-          size: 1,
-        })),
-      },
-      calc: (dataList: KLineData[]) => {
-        const result: Record<number, Record<string, number | null>> = {};
-
-        for (const candle of dataList) {
-          const row: Record<string, number | null> = {};
-
-          valuesByLine.forEach((values, index) => {
-            const value = values.get(candle.timestamp);
-            row[`line${index}`] =
-              value != null && Number.isFinite(value) ? value : null;
-          });
-
-          result[candle.timestamp] = row;
-        }
-
-        return result;
-      },
-    } as any);
-
-    return () => {
-      try {
-        if (indicatorId) chart.removeIndicator(indicatorId);
-      } catch {
-        // Chart may already be disposed/recreated.
       }
     };
   }, [pipscriptOutput, symbol, timeframe]);
