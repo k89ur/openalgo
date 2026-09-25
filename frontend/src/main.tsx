@@ -1357,61 +1357,62 @@ json.dumps(_result)`;
         <div className="top-spacer" />
 
         <div className="top-chart-controls" aria-label="Chart controls">
-          <div className="top-timeframes">
-            {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
+          <div className="top-control-section top-timeframe-section">
+            <div className="top-timeframes">
+              {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
+                <button
+                  key={item}
+                  className={timeframe === item ? "active" : ""}
+                  onClick={() => setTimeframe(item)}
+                  aria-label={"Timeframe " + item}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <span className="top-section-divider" />
+
+          <div className="top-control-section top-chart-type-section">
+            {([
+              ["candles", "candle", "Candle"],
+              ["bars", "bar", "Bar"],
+              ["line", "line", "Line"],
+            ] as Array<[ChartType, UiIconName, string]>).map(([type, icon, label]) => (
               <button
-                key={item}
-                className={timeframe === item ? "active" : ""}
-                onClick={() => setTimeframe(item)}
-                aria-label={"Timeframe " + item}
+                key={type}
+                className={"top-icon-button " + (chartType === type ? "active" : "")}
+                onClick={() => setChartType(type)}
+                title={label}
+                aria-label={label}
               >
-                {item}
+                <UiIcon name={icon} />
               </button>
             ))}
           </div>
 
-          <span className="top-control-divider" />
+          <span className="top-section-divider" />
 
-          <div className="top-chart-actions">
-            <div className="top-chart-type-group">
-              {([
-                ["candles", "candle", "Candle"],
-                ["bars", "bar", "Bar"],
-                ["line", "line", "Line"],
-              ] as Array<[ChartType, UiIconName, string]>).map(([type, icon, label]) => (
-                <button
-                  key={type}
-                  className={"top-icon-button " + (chartType === type ? "active" : "")}
-                  onClick={() => setChartType(type)}
-                  title={label}
-                  aria-label={label}
-                >
-                  <UiIcon name={icon} />
-                </button>
-              ))}
-            </div>
-            <span className="top-section-divider" />
-            <div className="top-analysis-group">
-              <button
-                className={"top-text-button " + (panel === "indicators" ? "active" : "")}
-                onClick={() => setPanel("indicators")}
-                title="Indicators"
-                aria-label="Indicators"
-              >
-                <UiIcon name="indicator" />
-                <span>Indicators</span>
-              </button>
-              <button
-                className={"top-text-button " + (panel === "pipscript" ? "active" : "")}
-                onClick={() => setPanel("pipscript")}
-                title="Pipscript"
-                aria-label="Pipscript"
-              >
-                <UiIcon name="pipscript" />
-                <span>Pipscript</span>
-              </button>
-            </div>
-          </div>
+          <button
+            className={"top-text-button top-control-section-button " + (panel === "indicators" ? "active" : "")}
+            onClick={() => setPanel("indicators")}
+            title="Indicators"
+            aria-label="Indicators"
+          >
+            <UiIcon name="indicator" />
+            <span>Indicators</span>
+          </button>
+
+          <button
+            className={"top-text-button top-control-section-button " + (panel === "pipscript" ? "active" : "")}
+            onClick={() => setPanel("pipscript")}
+            title="Pipscript"
+            aria-label="Pipscript"
+          >
+            <UiIcon name="pipscript" />
+            <span>Pipscript</span>
+          </button>
         </div>
 
         <div className="top-utility-group">
