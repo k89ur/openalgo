@@ -156,7 +156,7 @@ button { cursor: pointer; }
   position:absolute; z-index:4; left:12px; top:30px;
   display:flex; align-items:center; flex-wrap:wrap; gap:0 10px;
   max-width:calc(100% - 24px); min-height:20px;
-  color:#8f98a3; font-size:9px; line-height:16px;
+  color:#8f98a3; font-size:8px; line-height:15px;
   pointer-events:none; text-shadow:0 1px 3px #000;
 }
 .chart-crosshair-data span { white-space:nowrap; }
@@ -179,9 +179,9 @@ button { cursor: pointer; }
   pointer-events:none; text-shadow:0 1px 3px #000;
   font-size:10px;
 }
-.chart-header-symbol { color:#a7aeb8; }
-.chart-header-price { font-size:11px; font-weight:600; }
-.chart-header-change { font-size:10px; }
+.chart-header-symbol { color:#a7aeb8; font-size:9px; }
+.chart-header-price { font-size:9px; font-weight:600; }
+.chart-header-change { font-size:8px; }
 .plotted-indicators { display:flex; gap:14px; justify-content:flex-end; margin-top:5px; font-size:9px; }
 .plotted-indicators b { font-weight:500; }
 .ma20 { color:#32b6d4; } .ma50 { color:#e0a32d; } .ma200 { color:#a679cf; }
