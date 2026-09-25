@@ -61,39 +61,6 @@ const PIPSGOX_VOLUME_BARS = "PIPSGOX_VOLUME_BARS";
 const PIPSGOX_PIPSCRIPT_EMA = "PIPSGOX_PIPSCRIPT_EMA";
 
 registerIndicator({
-  name: PIPSGOX_VOLUME_BARS,
-  shortName: "VOLUME",
-  series: "volume",
-  calcParams: [],
-  precision: 0,
-  shouldOhlc: false,
-  figures: [
-    { key: "volume", title: "Volume: ", type: "bar", baseValue: 0 },
-  ],
-  calc: (dataList: KLineData[]) => {
-    const result: Record<number, { volume: number | null }> = {};
-    for (const candle of dataList) {
-      const volume = Number(candle.volume ?? 0);
-      result[candle.timestamp] = {
-        volume: Number.isFinite(volume) ? volume : null,
-      };
-    }
-    return result;
-  },
-  styles: {
-    bars: [{
-      style: "fill",
-      borderStyle: "solid",
-      borderSize: 0,
-      upColor: "#d9dde3",
-      downColor: "#d9dde3",
-      noChangeColor: "#d9dde3",
-    }],
-    lines: [],
-  },
-});
-
-registerIndicator({
   name: PIPSGOX_PIPSCRIPT_EMA,
   shortName: "PIPSGOX EMA",
   series: "price",
@@ -546,11 +513,23 @@ export function Chart({
       if (showVolume) {
         chart.createIndicator(
           {
-            name: PIPSGOX_VOLUME_BARS,
+            name: "VOL",
             id: "pipsgox-default-volume",
             paneId: "volume_pane",
             series: "volume",
+            calcParams: [],
             visible: true,
+            styles: {
+              bars: [{
+                style: "fill",
+                borderStyle: "solid",
+                borderSize: 0,
+                upColor: "#d9dde3",
+                downColor: "#d9dde3",
+                noChangeColor: "#d9dde3",
+              }],
+              lines: [],
+            },
           },
           false,
         );
@@ -742,26 +721,31 @@ export function Chart({
     const indicatorIds: string[] = [];
 
     if (emaLengths.length) {
-      const emaIndicatorId = chart.createIndicator(
-        {
-          name: PIPSGOX_PIPSCRIPT_EMA,
-          id: "pipsgox-pipscript-ema",
-          paneId: "candle_pane",
-          series: "price",
-          calcParams: emaLengths,
-          visible: true,
-          styles: {
-            lines: emaLengths.map((_, index) => ({
-              style: "solid",
-              color: ["#f6c85f", "#12d98b", "#6d9eeb", "#ef5350", "#c9daf8"][index % 5],
-              size: 1,
-            })),
-          },
-        },
-        true,
-      );
+      const emaColors = ["#f6c85f", "#12d98b", "#6d9eeb", "#ef5350", "#c9daf8"];
 
-      if (emaIndicatorId) indicatorIds.push(emaIndicatorId);
+      for (let index = 0; index < emaLengths.length; index += 1) {
+        const period = emaLengths[index];
+        const emaIndicatorId = chart.createIndicator(
+          {
+            name: "EMA",
+            id: "pipsgox-pipscript-ema-" + period,
+            paneId: "candle_pane",
+            series: "price",
+            calcParams: [period],
+            visible: true,
+            styles: {
+              lines: [{
+                style: "solid",
+                color: emaColors[index % emaColors.length],
+                size: 1,
+              }],
+            },
+          },
+          true,
+        );
+
+        if (emaIndicatorId) indicatorIds.push(emaIndicatorId);
+      }
     }
 
     // Keep support for non-EMA Pipscript lines such as 52W High/Low.
