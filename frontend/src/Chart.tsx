@@ -17,6 +17,10 @@ export type PipscriptOutput =
       title: string;
       columns: string[];
       rows: string[][];
+      lines?: Array<{
+        name: string;
+        points: Array<{ time: number; value: number }>;
+      }>;
     };
 
 type Props = {
@@ -560,42 +564,7 @@ export function Chart({
         })();
       }
 
-      if (pipscriptOutput?.type === "line" && pipscriptOutput.points.length) {
-        const values = new Map(
-          pipscriptOutput.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
-        );
 
-        chart.createIndicator({
-          name: "PIPSGOX_SCRIPT",
-          shortName: pipscriptOutput.name || "PIPScript",
-          paneId: "script_pane",
-          series: "normal",
-          precision: 2,
-          shouldOhlc: false,
-          figures: [{ key: "value", title: (pipscriptOutput.name || "PIPScript") + ": ", type: "line" }],
-          styles: {
-            lines: [{ style: "solid", color: "#d6a84f", size: 1 }],
-          },
-          calc: (dataList: KLineData[]) => {
-            const result: Record<number, { value: number | null }> = {};
-            for (const candle of dataList) {
-              const value = values.get(candle.timestamp);
-              result[candle.timestamp] = {
-                value: value != null && Number.isFinite(value) ? value : null,
-              };
-            }
-            return result;
-          },
-        } as any);
-
-        chart.setPaneOptions({
-          id: "script_pane",
-          height: 86,
-          minHeight: 70,
-          dragEnabled: false,
-          order: 10,
-        });
-      }
 
       const resizeObserver = new ResizeObserver(() => {
         chart.resize();
@@ -630,6 +599,93 @@ export function Chart({
     showPreviousClose,
     previousClose,
   ]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !pipscriptOutput) return;
+
+    const lines = pipscriptOutput.type === "line"
+      ? [{
+          name: pipscriptOutput.name || "PIPScript",
+          points: pipscriptOutput.points,
+        }]
+      : (pipscriptOutput.lines || []);
+
+    if (!lines.length) return;
+
+    const validLines = lines
+      .map((line) => ({
+        name: String(line.name || "PIPScript"),
+        points: line.points.filter(
+          (point) => Number.isFinite(Number(point.time)) && Number.isFinite(Number(point.value)),
+        ),
+      }))
+      .filter((line) => line.points.length);
+
+    if (!validLines.length) return;
+
+    const valuesByLine = validLines.map((line) => new Map(
+      line.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
+    ));
+
+    const palette = [
+      "#c9daf8",
+      "#a4c2f4",
+      "#6d9eeb",
+      "#3c78d8",
+      "#0b5394",
+      "#d6a84f",
+      "#ef5350",
+      "#12d98b",
+    ];
+
+    const figures = validLines.map((line, index) => ({
+      key: `line${index}`,
+      title: line.name + ": ",
+      type: "line",
+    }));
+
+    const indicator = chart.createIndicator({
+      name: "PIPSGOX_SCRIPT_LINES",
+      shortName: validLines.map((line) => line.name).join(" / ").slice(0, 40),
+      paneId: "candle_pane",
+      series: "price",
+      shouldOhlc: false,
+      figures,
+      styles: {
+        lines: validLines.map((_, index) => ({
+          style: "solid",
+          color: palette[index % palette.length],
+          size: 1,
+        })),
+      },
+      calc: (dataList: KLineData[]) => {
+        const result: Record<number, Record<string, number | null>> = {};
+
+        for (const candle of dataList) {
+          const row: Record<string, number | null> = {};
+
+          valuesByLine.forEach((values, index) => {
+            const value = values.get(candle.timestamp);
+            row[`line${index}`] =
+              value != null && Number.isFinite(value) ? value : null;
+          });
+
+          result[candle.timestamp] = row;
+        }
+
+        return result;
+      },
+    } as any);
+
+    return () => {
+      try {
+        if (indicator) chart.removeIndicator(indicator);
+      } catch {
+        // Chart may already be disposed/recreated.
+      }
+    };
+  }, [pipscriptOutput, symbol, timeframe]);
 
   return (
     <div className="chart-stage">
