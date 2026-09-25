@@ -17,8 +17,8 @@ button { cursor: pointer; }
   padding:0 9px; background:var(--panel3); border-bottom:1px solid #050505; color:var(--muted); font-size:11px;
 }
 .menu-left,.menu-right { display:flex; align-items:center; gap:15px; }
-.menu-left button { border:0; background:transparent; color:var(--muted); padding:0; font-size:11px; }
-.menu-left button:hover { color:var(--text); }
+.menu-left button,.menu-right button { border:0; background:transparent; color:var(--muted); padding:0; font-size:11px; }
+.menu-left button:hover,.menu-right button:hover { color:var(--text); }
 .brand { color:var(--text); font-weight:700; margin-right:5px; letter-spacing:.02em; }
 .menu-center { color:var(--faint); font-size:10px; letter-spacing:.06em; }
 .status-dot { width:6px; height:6px; border-radius:50%; background:#20a464; }
