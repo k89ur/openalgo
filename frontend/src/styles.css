@@ -277,7 +277,7 @@ button { cursor: pointer; }
   align-items:center;
   justify-content:center;
   padding:18px;
-  background:rgba(0,0,0,.62);
+  background:transparent;
 }
 .watch-dialog {
   width:min(340px,calc(100vw - 36px));
