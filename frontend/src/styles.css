@@ -1,5 +1,5 @@
 :root {
-  font-family: "Manrope", sans-serif;
+  font-family: "JetBrains Mono", monospace;
   color-scheme: dark;
   font-synthesis: none;
 }
@@ -670,7 +670,7 @@ button { cursor: pointer; }
 }
 .builder-hint code {
   color: #9ba9b5;
-  font-family: "Manrope", sans-serif;
+  font-family: "JetBrains Mono", monospace;
 }
 @media (max-width:620px) {
   .chart-header-ohlc {
