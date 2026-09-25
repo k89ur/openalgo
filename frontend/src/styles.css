@@ -208,8 +208,40 @@ button { cursor: pointer; }
 .watch-header strong { color:#ccc; font-size:11px; }
 .watch-header span { color:#555; font-size:9px; }
 .watch-spacer { flex:1; }
-.watch-header button { border:0; background:transparent; color:#777; font-size:7px; padding:4px 3px; }
-.watch-header button:hover { color:#ddd; }
+.watch-actions {
+  display:flex;
+  align-items:center;
+  gap:2px;
+}
+.watch-actions button {
+  width:25px;
+  height:25px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:0;
+  border-radius:4px;
+  background:transparent;
+  color:#686f76;
+  padding:0;
+  cursor:pointer;
+  transition:background .12s ease, color .12s ease;
+}
+.watch-actions button:hover,
+.watch-actions button:focus-visible {
+  background:#1b2934;
+  color:#8fb8d6;
+  outline:0;
+}
+.watch-actions button:active {
+  background:#28577d;
+  color:#fff;
+}
+.watch-actions svg {
+  width:13px;
+  height:13px;
+  stroke-width:1.7;
+}
 .watch-import-input { display:none; }
 .watch-message {
   min-height:22px; display:flex; align-items:center; padding:0 9px;
