@@ -535,6 +535,7 @@ function App() {
   const [quoteError, setQuoteError] = useState(false);
   const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
   const [watchImportMessage, setWatchImportMessage] = useState("");
+  const [watchDialog, setWatchDialog] = useState<{ type: "add" | "new" | "delete" | "export" | "import"; value: string } | null>(null);
   const [draggedSymbol, setDraggedSymbol] = useState<string | null>(null);
   const [fyersChecking, setFyersChecking] = useState(true);
   const watchImportRef = useRef<HTMLInputElement>(null);
@@ -587,6 +588,7 @@ function App() {
     link.download = "pipsgox-watchlist.csv";
     link.click();
     URL.revokeObjectURL(url);
+    setWatchDialog(null);
     setWatchImportMessage(`Exported ${watchlist.length} symbols`);
     window.setTimeout(() => setWatchImportMessage(""), 2500);
   };
@@ -622,19 +624,20 @@ function App() {
     }
   };
 
-  const createWatchlist = () => {
+  const createWatchlist = (rawName?: string) => {
     if (Object.keys(watchlists).length >= MAX_WATCHLISTS) {
+      setWatchDialog(null);
       setWatchImportMessage(`Maximum ${MAX_WATCHLISTS} watchlists`);
       window.setTimeout(() => setWatchImportMessage(""), 2500);
       return;
     }
 
-    const value = window.prompt("New watchlist name");
-    const name = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, 24);
+    const name = String(rawName ?? "").trim().replace(/\s+/g, " ").slice(0, 24);
     if (!name) return;
 
     if (watchlists[name]) {
       setActiveWatchlistName(name);
+      setWatchDialog(null);
       return;
     }
 
@@ -643,17 +646,17 @@ function App() {
     setSymbol("BHARTIARTL");
     setSearch("BHARTIARTL");
     setSearchOpen(false);
+    setWatchDialog(null);
   };
 
   const deleteWatchlist = () => {
     const names = Object.keys(watchlists);
     if (names.length <= 1) {
+      setWatchDialog(null);
       setWatchImportMessage("Keep at least one watchlist");
       window.setTimeout(() => setWatchImportMessage(""), 2500);
       return;
     }
-
-    if (!window.confirm(`Delete watchlist "${activeWatchlistName}"?`)) return;
 
     const next = { ...watchlists };
     delete next[activeWatchlistName];
@@ -662,6 +665,7 @@ function App() {
     setActiveWatchlistName(nextName);
     setSymbol(next[nextName]?.[0]?.symbol ?? "BHARTIARTL");
     setSearch(next[nextName]?.[0]?.symbol ?? "");
+    setWatchDialog(null);
   };
 
   const moveWatchSymbol = (currentIndex: number, direction: -1 | 1) => {
@@ -702,19 +706,20 @@ function App() {
     setDraggedSymbol(null);
   };
 
-  const addWatchSymbol = () => {
-    const value = window.prompt("Enter symbol to add");
-    const nextSymbol = normalizeImportedSymbol(value ?? "");
+  const addWatchSymbol = (rawSymbol?: string) => {
+    const nextSymbol = normalizeImportedSymbol(rawSymbol ?? "");
     if (!nextSymbol) return;
 
     if (watchlist.some((item) => item.symbol === nextSymbol)) {
       selectSymbol(nextSymbol);
+      setWatchDialog(null);
       setWatchImportMessage(`${nextSymbol} is already in the watchlist`);
       window.setTimeout(() => setWatchImportMessage(""), 2500);
       return;
     }
 
     if (watchlist.length >= MAX_WATCHLIST_SIZE) {
+      setWatchDialog(null);
       setWatchImportMessage("Watchlist limit reached: 1000 symbols");
       window.setTimeout(() => setWatchImportMessage(""), 2500);
       return;
@@ -722,6 +727,7 @@ function App() {
 
     setWatchlist((current) => [...current, { symbol: nextSymbol, price: "—", change: "—" }]);
     selectSymbol(nextSymbol);
+    setWatchDialog(null);
     setWatchImportMessage(`Added ${nextSymbol}`);
     window.setTimeout(() => setWatchImportMessage(""), 2500);
   };
@@ -1569,11 +1575,11 @@ json.dumps(_result)`;
               <span>{watchlist.length} / {MAX_WATCHLIST_SIZE}</span>
               <div className="watch-spacer" />
               <div className="watch-actions" aria-label="Watchlist actions">
-                <button onClick={addWatchSymbol} title="Add symbol" aria-label="Add symbol"><UiIcon name="add" /></button>
-                <button onClick={() => watchImportRef.current?.click()} title="Import watchlist" aria-label="Import watchlist"><UiIcon name="import" /></button>
-                <button onClick={exportWatchlist} title="Export watchlist" aria-label="Export watchlist"><UiIcon name="export" /></button>
-                <button onClick={createWatchlist} title="New watchlist" aria-label="New watchlist"><UiIcon name="new" /></button>
-                <button onClick={deleteWatchlist} title="Delete watchlist" aria-label="Delete watchlist"><UiIcon name="delete" /></button>
+                <button onClick={() => setWatchDialog({ type: "add", value: "" })} title="Add symbol" aria-label="Add symbol"><UiIcon name="add" /></button>
+                <button onClick={() => setWatchDialog({ type: "import", value: "" })} title="Import watchlist" aria-label="Import watchlist"><UiIcon name="import" /></button>
+                <button onClick={() => setWatchDialog({ type: "export", value: "" })} title="Export watchlist" aria-label="Export watchlist"><UiIcon name="export" /></button>
+                <button onClick={() => setWatchDialog({ type: "new", value: "" })} title="New watchlist" aria-label="New watchlist"><UiIcon name="new" /></button>
+                <button onClick={() => setWatchDialog({ type: "delete", value: "" })} title="Delete watchlist" aria-label="Delete watchlist"><UiIcon name="delete" /></button>
                 <button onClick={() => setWatchOpen(false)} title="Hide watchlist" aria-label="Hide watchlist"><UiIcon name="hide" /></button>
               </div>
               <input
@@ -1623,6 +1629,49 @@ json.dumps(_result)`;
           <button className="watch-open" onClick={() => setWatchOpen(true)}>SHOW WATCHLIST</button>
         )}
       </section>
+
+      {watchDialog && (
+        <div className="watch-dialog-backdrop" onClick={() => setWatchDialog(null)}>
+          <section className="watch-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="watch-dialog-icon">
+              <UiIcon name={watchDialog.type === "add" ? "add" : watchDialog.type === "new" ? "new" : watchDialog.type === "delete" ? "delete" : watchDialog.type === "export" ? "export" : "import"} />
+            </div>
+            <strong className="watch-dialog-title">
+              {watchDialog.type === "add" ? "Add symbol" : watchDialog.type === "new" ? "New watchlist" : watchDialog.type === "delete" ? "Delete watchlist" : watchDialog.type === "export" ? "Export watchlist" : "Import watchlist"}
+            </strong>
+            <p className="watch-dialog-subtitle">
+              {watchDialog.type === "add" ? "Enter an NSE symbol to add." : watchDialog.type === "new" ? "Create a new watchlist." : watchDialog.type === "delete" ? `Delete “${activeWatchlistName}” and its symbols?` : watchDialog.type === "export" ? `Export ${watchlist.length} symbols as CSV.` : "Choose a CSV or text watchlist file."}
+            </p>
+            {(watchDialog.type === "add" || watchDialog.type === "new") && (
+              <input
+                autoFocus
+                className="watch-dialog-input"
+                value={watchDialog.value}
+                placeholder={watchDialog.type === "add" ? "e.g. RELIANCE" : "Watchlist name"}
+                onChange={(event) => setWatchDialog((current) => current ? { ...current, value: event.target.value } : current)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setWatchDialog(null);
+                  if (event.key === "Enter") watchDialog.type === "add" ? addWatchSymbol(watchDialog.value) : createWatchlist(watchDialog.value);
+                }}
+              />
+            )}
+            <div className="watch-dialog-actions">
+              <button className="watch-dialog-cancel" onClick={() => setWatchDialog(null)}>Cancel</button>
+              {watchDialog.type === "delete" ? (
+                <button className="watch-dialog-danger" onClick={deleteWatchlist}>Delete</button>
+              ) : watchDialog.type === "export" ? (
+                <button className="watch-dialog-primary" onClick={exportWatchlist}>Export</button>
+              ) : watchDialog.type === "import" ? (
+                <button className="watch-dialog-primary" onClick={() => watchImportRef.current?.click()}>Choose file</button>
+              ) : (
+                <button className="watch-dialog-primary" onClick={() => watchDialog.type === "add" ? addWatchSymbol(watchDialog.value) : createWatchlist(watchDialog.value)}>
+                  {watchDialog.type === "add" ? "Add" : "Create"}
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
 
       {panel && (
         <div className="modal-backdrop" onClick={() => setPanel(null)}>
