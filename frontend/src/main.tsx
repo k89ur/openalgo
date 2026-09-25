@@ -122,11 +122,33 @@ function normalizePipscriptOutput(raw: unknown, preferredType: PipscriptOutputTy
       : [];
 
     if (!columns.length) throw new Error("Table output needs a non-empty columns array.");
+    const rawLines = Array.isArray(value.lines) ? value.lines : [];
+    const lines = rawLines
+      .filter((line): line is Record<string, unknown> => Boolean(line) && typeof line === "object")
+      .slice(0, 20)
+      .map((line) => {
+        const rawPoints = Array.isArray(line.points) ? line.points : [];
+        const points = rawPoints
+          .filter((point): point is Record<string, unknown> => Boolean(point) && typeof point === "object")
+          .map((point) => ({
+            time: Number(point.time),
+            value: Number(point.value),
+          }))
+          .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
+
+        return {
+          name: String(line.name || "PIPScript"),
+          points,
+        };
+      })
+      .filter((line) => line.points.length > 0);
+
     return {
       type: "table",
       title: String(value.title || "PIPScript Table"),
       columns,
       rows,
+      lines,
     };
   }
 
@@ -1398,189 +1420,3 @@ json.dumps(_result)`;
                   key={item.symbol}
                   className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}
                   draggable
-                  onDragStart={() => setDraggedSymbol(item.symbol)}
-                  onDragEnd={() => setDraggedSymbol(null)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => dropWatchSymbol(item.symbol)}
-                >
-                  <button className="watch-row-main" onClick={() => selectSymbol(item.symbol)}>
-                    <span className="watch-symbol">{item.symbol}</span>
-                    <span className="watch-price">{liveQuotes[item.symbol] ? liveQuotes[item.symbol].last.toFixed(2) : "—"}</span>
-                    <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
-                      {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
-                    </span>
-                  </button>
-                  <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), -1)} aria-label={`Move ${item.symbol} up`}>▲</button>
-                  <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), 1)} aria-label={`Move ${item.symbol} down`}>▼</button>
-                  <button className="watch-remove" onClick={() => removeWatchSymbol(item.symbol)} aria-label={`Remove ${item.symbol}`}>×</button>
-                </div>
-              ))}
-            </div>
-            <div className="watch-footer">
-              {watchlist.length ? "Click a symbol to load chart" : "Watchlist empty — use symbol search or ADD"}
-            </div>
-          </aside>
-        ) : (
-          <button className="watch-open" onClick={() => setWatchOpen(true)}>SHOW WATCHLIST</button>
-        )}
-      </section>
-
-      {panel && (
-        <div className="modal-backdrop" onClick={() => setPanel(null)}>
-          <section className={`modal ${panel === "pipscript" ? "pipscript-modal" : ""}`} onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <strong>{panel === "pipscript" ? "PIPSGOX PIPSCRIPT BUILDER" : panel === "settings" ? "CHART SETTINGS" : "INDICATORS"}</strong>
-              <button onClick={() => setPanel(null)}>CLOSE</button>
-            </div>
-
-            {panel === "indicators" ? (
-              <div className="indicator-panel">
-                <p>Select technical studies and optional overlays for the active chart.</p>
-
-                <div className="indicator-section-title">CORE CHART INDICATORS</div>
-                {coreIndicators.map((item) => (
-                  <div key={item} className="indicator-row indicator-row-static">
-                    <span>{item}</span><span>ON</span>
-                  </div>
-                ))}
-                <label className="indicator-toggle-row">
-                  <span>Volume</span>
-                  <input
-                    type="checkbox"
-                    checked={chartSettings.showVolume}
-                    onChange={(event) => updateChartSettings({ showVolume: event.target.checked })}
-                  />
-                  <i />
-                </label>
-
-                <div className="indicator-section-title optional">OPTIONAL CHART OVERLAYS</div>
-                <p className="indicator-help">These stay hidden unless you select them.</p>
-
-                <label className="indicator-toggle-row">
-                  <span>VWAP <small>intraday</small></span>
-                  <input
-                    type="checkbox"
-                    checked={chartSettings.showVwap}
-                    onChange={(event) => updateChartSettings({ showVwap: event.target.checked })}
-                  />
-                  <i />
-                </label>
-
-                <label className="indicator-toggle-row">
-                  <span>52W High</span>
-                  <input
-                    type="checkbox"
-                    checked={chartSettings.show52WeekHigh}
-                    onChange={(event) => updateChartSettings({ show52WeekHigh: event.target.checked })}
-                  />
-                  <i />
-                </label>
-
-                <label className="indicator-toggle-row">
-                  <span>52W Low</span>
-                  <input
-                    type="checkbox"
-                    checked={chartSettings.show52WeekLow}
-                    onChange={(event) => updateChartSettings({ show52WeekLow: event.target.checked })}
-                  />
-                  <i />
-                </label>
-
-                <label className="indicator-toggle-row">
-                  <span>Previous Close</span>
-                  <input
-                    type="checkbox"
-                    checked={chartSettings.showPreviousClose}
-                    onChange={(event) => updateChartSettings({ showPreviousClose: event.target.checked })}
-                  />
-                  <i />
-                </label>
-
-              </div>
-            ) : panel === "pipscript" ? (
-              <div className="builder-panel">
-                <div className="builder-toolbar">
-                  <select
-                    className="pipscript-saved-select"
-                    value={selectedSavedPipscriptId}
-                    onChange={(event) => selectSavedPipscript(event.target.value)}
-                    aria-label="Saved PIPScripts"
-                  >
-                    <option value="">Saved PIPScripts...</option>
-                    {savedPipscripts.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={pipscriptLanguage}
-                    onChange={(event) => {
-                      const language = event.target.value as PipscriptLanguage;
-                      setPipscriptLanguage(language);
-                      if (language === "python") {
-                        setPipscript(
-                          "def calculate(data):\n    values = []\n    for row in data:\n        values.append({\"time\": row[\"time\"], \"value\": row[\"close\"]})\n    return {\"type\": \"line\", \"name\": \"Close Script\", \"values\": values}",
-                        );
-                      } else {
-                        setPipscript(
-                          "function calculate(data) {\n  return {\n    type: \"line\",\n    name: \"Close Script\",\n    values: data.map(row => ({ time: row.time, value: row.close }))\n  };\n}",
-                        );
-                      }
-                    }}
-                  >
-                    <option value="python">Python</option>
-                    <option value="javascript">JavaScript</option>
-                  </select>
-                  <select value={pipscriptOutputType} onChange={(event) => setPipscriptOutputType(event.target.value as PipscriptOutputType)}>
-                    <option value="indicator">Indicator</option>
-                    <option value="table">Table</option>
-                  </select>
-                  <span className="builder-spacer" />
-                  <button onClick={loadPipscript} disabled={!selectedSavedPipscriptId}>LOAD</button>
-                  <button onClick={savePipscript}>SAVE</button>
-                  <button onClick={() => void applySavedPipscript()} disabled={!selectedSavedPipscriptId || pipscriptRunning}>
-                    APPLY
-                  </button>
-                  <button onClick={deleteSavedPipscript} disabled={!selectedSavedPipscriptId}>DELETE</button>
-                  <button className="builder-run" onClick={() => void runPipscript()} disabled={pipscriptRunning}>
-                    {pipscriptRunning ? "RUNNING..." : "RUN"}
-                  </button>
-                </div>
-                <div className="builder-hint">
-                  <code>calculate(data)</code> receives the current chart candles by default. Add <code>data_requests()</code> to fetch multiple symbols/timeframes through the PIPSGOX Data Gateway. Saved scripts are stored in this browser. <b>APPLY</b> loads and runs the selected script; <b>DELETE</b> removes it.
-                </div>
-                <textarea value={pipscript} onChange={(event) => setPipscript(event.target.value)} spellCheck={false} />
-                <div className="builder-output">
-                  <strong>Output</strong>
-                  <span>{pipscriptStatus}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="settings-panel">
-                <div className="settings-section">
-                  <div className="settings-section-title">APPEARANCE</div>
-                  <label className="settings-field">
-                    <span>Chart theme</span>
-                    <select value={chartSettings.theme} onChange={(event) => updateChartSettings({ theme: event.target.value as ChartTheme })}>
-                      <option value="pipsgox">PIPSGOX Dark</option>
-                      <option value="classic">Classic Dark</option>
-                      <option value="light">Clean Light</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="settings-section">
-                  <div className="settings-section-title">CHART ELEMENTS</div>
-                  <label className="settings-toggle"><span>Grid</span><input type="checkbox" checked={chartSettings.showGrid} onChange={(event) => updateChartSettings({ showGrid: event.target.checked })} /><i /></label>
-                  <label className="settings-toggle"><span>Crosshair</span><input type="checkbox" checked={chartSettings.showCrosshair} onChange={(event) => updateChartSettings({ showCrosshair: event.target.checked })} /><i /></label>
-                  <label className="settings-toggle"><span>Volume pane</span><input type="checkbox" checked={chartSettings.showVolume} onChange={(event) => updateChartSettings({ showVolume: event.target.checked })} /><i /></label>
-                </div>
-                <div className="settings-note">Changes apply immediately and are saved in this browser.</div>
-              </div>
-            )}
-          </section>
-        </div>
-      )}
-    </main>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
