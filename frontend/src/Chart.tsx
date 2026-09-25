@@ -301,12 +301,12 @@ export function Chart({
           vertical: { show: showCrosshair, line: { show: showCrosshair, color: palette.crosshair, size: 1, style: "dashed", dashedValue: [4, 2] } },
         },
         xAxis: {
-          tickText: { color: palette.text },
+          tickText: { color: palette.text, size: 9 },
           axisLine: { color: palette.axis },
           tickLine: { color: palette.axis },
         },
         yAxis: {
-          tickText: { color: palette.text },
+          tickText: { color: palette.text, size: 9 },
           axisLine: { color: palette.axis },
           tickLine: { color: palette.axis },
         },
