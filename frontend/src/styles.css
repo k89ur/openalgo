@@ -283,20 +283,20 @@ button { cursor: pointer; }
   .menu-center { display:none; }
   .top-command:nth-child(4) { display:none; }
   .top-search { flex:1; width:auto; }
-  .top-chart-controls { flex:0 1 auto; max-width:46vw; }
-  .top-text-button { padding:0 6px; }
+  .top-control-hub { flex:0 1 auto; max-width:46vw; }
+  .top-label-button { padding:0 6px; }
   .watchlist { display:none; }
 }
 @media (max-width:620px) {
   .menu-bar { height:24px; }
   .topbar { height:40px; padding:0 5px; gap:0; }
   .workspace { height:calc(100dvh - 64px); }
-  .top-chart-controls { max-width:43vw; height:32px; }
+  .top-control-hub { max-width:43vw; height:32px; }
   .top-timeframes button { min-width:27px; padding:0 6px; font-size:8px; }
   .top-icon-button { width:29px; min-width:29px !important; }
-  .top-text-button { padding:0 5px; gap:4px; font-size:8px; }
-  .top-text-button svg { width:13px; height:13px; }
-  .top-control-divider { margin:0 1px; }
+  .top-label-button { padding:0 5px; gap:4px; font-size:8px; }
+  .top-hub-button svg { width:13px; height:13px; }
+  .top-hub-divider { margin:0 2px; }
   .chart-header-overlay { left:8px; top:7px; gap:7px; font-size:8px; }
   .chart-crosshair-data { left:8px; top:27px; max-width:calc(100% - 16px); gap:0 7px; font-size:8px; }
   .chart-header-price { font-size:9px; }
