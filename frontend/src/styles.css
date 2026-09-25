@@ -109,7 +109,24 @@ button { cursor: pointer; }
   display:flex;
   align-items:center;
   flex:0 0 auto;
-  gap:3px;
+  gap:0;
+  height:30px;
+}
+.top-chart-type-group,
+.top-analysis-group {
+  display:flex;
+  align-items:center;
+  height:30px;
+  padding:0 3px;
+}
+.top-analysis-group {
+  padding-left:5px;
+}
+.top-section-divider {
+  width:1px;
+  height:20px;
+  background:#343434;
+  margin:0 4px;
 }
 .top-icon-button {
   width:31px;
@@ -146,14 +163,21 @@ button { cursor: pointer; }
 .top-text-button.active svg {
   color:#ff6464;
 }
+.top-utility-group {
+  display:flex;
+  align-items:center;
+  height:32px;
+  margin-left:8px;
+  padding-left:5px;
+  border-left:1px solid #343434;
+}
 .top-utility-button {
-  margin-left:6px;
+  margin-left:0;
   padding-left:10px;
-  border-left:1px solid #292929;
+  padding-right:10px;
 }
 .top-utility-button + .top-utility-button {
-  margin-left:2px;
-  padding-left:10px;
+  margin-left:3px;
   border-left:1px solid #292929;
 }
 .top-utility-button svg { color:#8d969f; }
