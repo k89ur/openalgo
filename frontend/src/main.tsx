@@ -1633,9 +1633,6 @@ json.dumps(_result)`;
       {watchDialog && (
         <div className="watch-dialog-backdrop" onClick={() => setWatchDialog(null)}>
           <section className="watch-dialog" onClick={(event) => event.stopPropagation()}>
-            <div className="watch-dialog-icon">
-              <UiIcon name={watchDialog.type === "add" ? "add" : watchDialog.type === "new" ? "new" : watchDialog.type === "delete" ? "delete" : watchDialog.type === "export" ? "export" : "import"} />
-            </div>
             <strong className="watch-dialog-title">
               {watchDialog.type === "add" ? "Add symbol" : watchDialog.type === "new" ? "New watchlist" : watchDialog.type === "delete" ? "Delete watchlist" : watchDialog.type === "export" ? "Export watchlist" : "Import watchlist"}
             </strong>
