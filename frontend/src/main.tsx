@@ -362,6 +362,82 @@ function loadSavedPipscripts(): SavedPipscript[] {
 
 const coreIndicators = ["MA 50", "MA 200"];
 
+type UiIconName = "candle" | "bar" | "line" | "indicator" | "pipscript" | "sun" | "settings";
+
+function UiIcon({ name }: { name: UiIconName }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.7,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (name === "candle") {
+    return (
+      <svg {...common}>
+        <path d="M7 3v4M7 17v4M7 7h0M5 7h4v10H5z" />
+        <path d="M17 3v7M17 19v2M15 10h4v9h-4z" />
+      </svg>
+    );
+  }
+
+  if (name === "bar") {
+    return (
+      <svg {...common}>
+        <path d="M6 4v16M4 7h4M4 17h4M15 7v10M13 9h4M13 15h4" />
+      </svg>
+    );
+  }
+
+  if (name === "line") {
+    return (
+      <svg {...common}>
+        <path d="M4 17l5-5 4 3 7-8" />
+        <path d="M17 7h3v3" />
+      </svg>
+    );
+  }
+
+  if (name === "indicator") {
+    return (
+      <svg {...common}>
+        <path d="M5 19V9M12 19V5M19 19v-7" />
+        <path d="M3 19h18" />
+      </svg>
+    );
+  }
+
+  if (name === "pipscript") {
+    return (
+      <svg {...common}>
+        <path d="M8 6l-5 6 5 6M16 6l5 6-5 6M14 4l-4 16" />
+      </svg>
+    );
+  }
+
+  if (name === "sun") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="3.5" />
+        <path d="M12 2.5v2M12 19.5v2M4.5 4.5l1.4 1.4M18.1 18.1l1.4 1.4M2.5 12h2M19.5 12h2M4.5 19.5l1.4-1.4M18.1 5.9l1.4-1.4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M12 3.5l1.1 1.9 2.2.4.4 2.2 1.9 1.1-1.9 1.1-.4 2.2-2.2.4-1.1 1.9-1.1-1.9-2.2-.4-.4-2.2-1.9-1.1 1.9-1.1.4-2.2 2.2-.4z" />
+      <circle cx="12" cy="9.1" r="2.1" />
+      <path d="M5.5 20.5h13" />
+    </svg>
+  );
+}
+
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
@@ -1298,45 +1374,59 @@ json.dumps(_result)`;
 
           <div className="top-chart-actions">
             {([
-              ["candles", "▥", "Candle"],
-              ["bars", "│", "Bar"],
-              ["line", "╱", "Line"],
-            ] as Array<[ChartType, string, string]>).map(([type, icon, label]) => (
+              ["candles", "candle", "Candle"],
+              ["bars", "bar", "Bar"],
+              ["line", "line", "Line"],
+            ] as Array<[ChartType, UiIconName, string]>).map(([type, icon, label]) => (
               <button
                 key={type}
-                className={chartType === type ? "active" : ""}
+                className={"top-icon-button " + (chartType === type ? "active" : "")}
                 onClick={() => setChartType(type)}
                 title={label}
                 aria-label={label}
               >
-                <span className="top-control-icon">{icon}</span>
-                <span>{label}</span>
+                <UiIcon name={icon} />
               </button>
             ))}
             <button
-              className={panel === "indicators" ? "active" : ""}
+              className={"top-text-button " + (panel === "indicators" ? "active" : "")}
               onClick={() => setPanel("indicators")}
               title="Indicators"
               aria-label="Indicators"
             >
-              <span className="top-control-icon">◒</span>
+              <UiIcon name="indicator" />
               <span>Indicators</span>
             </button>
             <button
-              className={panel === "pipscript" ? "active" : ""}
+              className={"top-text-button " + (panel === "pipscript" ? "active" : "")}
               onClick={() => setPanel("pipscript")}
               title="Pipscript"
               aria-label="Pipscript"
             >
-              <span className="top-control-icon">ƒx</span>
+              <UiIcon name="pipscript" />
               <span>Pipscript</span>
             </button>
           </div>
         </div>
 
-        <button className="top-command" onClick={() => setDark((value) => !value)}>
-          {dark ? "LIGHT" : "DARK"}</button>
-        <button className="top-command" onClick={() => setPanel("settings")}>SETTINGS</button>
+        <button
+          className="top-text-button top-utility-button"
+          onClick={() => setDark((value) => !value)}
+          title={dark ? "Switch to light theme" : "Switch to dark theme"}
+          aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+        >
+          <UiIcon name="sun" />
+          <span>{dark ? "Light" : "Dark"}</span>
+        </button>
+        <button
+          className={"top-text-button top-utility-button " + (panel === "settings" ? "active" : "")}
+          onClick={() => setPanel("settings")}
+          title="Settings"
+          aria-label="Settings"
+        >
+          <UiIcon name="settings" />
+          <span>Settings</span>
+        </button>
       </header>
 
       <section className="workspace">
