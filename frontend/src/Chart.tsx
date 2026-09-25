@@ -624,6 +624,41 @@ export function Chart({
 
     if (!validLines.length) return;
 
+    // KLineCharts has a native EMA indicator. Use it for EMA lines so
+    // the Pipscript EMA series is rendered by the chart's own indicator
+    // engine and automatically follows the loaded candle data.
+    const emaLengths = validLines
+      .map((line) => {
+        const match = line.name.match(/^EMA\\s+(\\d+)$/i);
+        return match ? Number(match[1]) : null;
+      })
+      .filter((value): value is number => value != null);
+
+    const allAreEma =
+      validLines.length > 0 &&
+      emaLengths.length === validLines.length &&
+      emaLengths.every((value) => [9, 20, 50, 100, 200].includes(value));
+
+    if (allAreEma) {
+      const indicatorId = chart.createIndicator(
+        {
+          name: "EMA",
+          paneId: "candle_pane",
+          series: "price",
+          calcParams: emaLengths,
+        },
+        true,
+      );
+
+      return () => {
+        try {
+          if (indicatorId) chart.removeIndicator(indicatorId);
+        } catch {
+          // Chart may already be disposed/recreated.
+        }
+      };
+    }
+
     const valuesByLine = validLines.map((line) => new Map(
       line.points.map((point) => [Number(point.time) * 1000, Number(point.value)]),
     ));
@@ -645,7 +680,7 @@ export function Chart({
       type: "line",
     }));
 
-    const indicator = chart.createIndicator({
+    const indicatorId = chart.createIndicator({
       name: "PIPSGOX_SCRIPT_LINES",
       shortName: validLines.map((line) => line.name).join(" / ").slice(0, 40),
       paneId: "candle_pane",
@@ -680,7 +715,7 @@ export function Chart({
 
     return () => {
       try {
-        if (indicator) chart.removeIndicator(indicator);
+        if (indicatorId) chart.removeIndicator(indicatorId);
       } catch {
         // Chart may already be disposed/recreated.
       }
