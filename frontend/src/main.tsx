@@ -1356,25 +1356,23 @@ json.dumps(_result)`;
 
         <div className="top-spacer" />
 
-        <div className="top-chart-controls" aria-label="Chart controls">
-          <div className="top-control-section top-timeframe-section">
-            <div className="top-timeframes">
-              {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
-                <button
-                  key={item}
-                  className={timeframe === item ? "active" : ""}
-                  onClick={() => setTimeframe(item)}
-                  aria-label={"Timeframe " + item}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+        <div className="top-control-hub" aria-label="Chart and workspace controls">
+          <div className="top-control-group top-timeframe-group">
+            {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
+              <button
+                key={item}
+                className={"top-hub-button top-timeframe-button " + (timeframe === item ? "active" : "")}
+                onClick={() => setTimeframe(item)}
+                aria-label={"Timeframe " + item}
+              >
+                {item}
+              </button>
+            ))}
           </div>
 
-          <span className="top-section-divider" />
+          <span className="top-hub-divider" />
 
-          <div className="top-control-section top-chart-type-section">
+          <div className="top-control-group top-chart-type-group">
             {([
               ["candles", "candle", "Candle"],
               ["bars", "bar", "Bar"],
@@ -1382,7 +1380,7 @@ json.dumps(_result)`;
             ] as Array<[ChartType, UiIconName, string]>).map(([type, icon, label]) => (
               <button
                 key={type}
-                className={"top-icon-button " + (chartType === type ? "active" : "")}
+                className={"top-hub-button top-icon-button " + (chartType === type ? "active" : "")}
                 onClick={() => setChartType(type)}
                 title={label}
                 aria-label={label}
@@ -1392,10 +1390,10 @@ json.dumps(_result)`;
             ))}
           </div>
 
-          <span className="top-section-divider" />
+          <span className="top-hub-divider" />
 
           <button
-            className={"top-text-button top-control-section-button " + (panel === "indicators" ? "active" : "")}
+            className={"top-hub-button top-label-button " + (panel === "indicators" ? "active" : "")}
             onClick={() => setPanel("indicators")}
             title="Indicators"
             aria-label="Indicators"
@@ -1405,7 +1403,7 @@ json.dumps(_result)`;
           </button>
 
           <button
-            className={"top-text-button top-control-section-button " + (panel === "pipscript" ? "active" : "")}
+            className={"top-hub-button top-label-button " + (panel === "pipscript" ? "active" : "")}
             onClick={() => setPanel("pipscript")}
             title="Pipscript"
             aria-label="Pipscript"
@@ -1413,20 +1411,21 @@ json.dumps(_result)`;
             <UiIcon name="pipscript" />
             <span>Pipscript</span>
           </button>
-        </div>
 
-        <div className="top-utility-group">
+          <span className="top-hub-divider" />
+
           <button
-            className="top-text-button top-utility-button"
+            className="top-hub-button top-label-button"
             onClick={() => setDark((value) => !value)}
             title={dark ? "Switch to light theme" : "Switch to dark theme"}
             aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
           >
-          <UiIcon name="sun" />
-          <span>{dark ? "Light" : "Dark"}</span>
-        </button>
-        <button
-            className={"top-text-button top-utility-button " + (panel === "settings" ? "active" : "")}
+            <UiIcon name="sun" />
+            <span>{dark ? "Light" : "Dark"}</span>
+          </button>
+
+          <button
+            className={"top-hub-button top-label-button " + (panel === "settings" ? "active" : "")}
             onClick={() => setPanel("settings")}
             title="Settings"
             aria-label="Settings"
