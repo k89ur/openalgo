@@ -278,7 +278,6 @@ button { cursor: pointer; }
   justify-content:center;
   padding:18px;
   background:rgba(0,0,0,.62);
-  backdrop-filter:blur(3px);
 }
 .watch-dialog {
   width:min(340px,calc(100vw - 36px));
