@@ -95,24 +95,10 @@ button { cursor: pointer; }
 .top-chart-type-section {
   padding:0 4px;
 }
-.top-timeframes button:hover,
-.top-chart-type-section button:hover,
-.top-control-section-button:hover,
-.top-utility-button:hover {
-  background:#1b1b1b;
-  color:#777;
-}
 .top-timeframes button.active,
 .top-chart-type-section button.active,
 .top-control-section-button.active,
 .top-utility-button.active {
-  background:#28577d;
-  color:#fff;
-}
-.top-timeframes button.active:hover,
-.top-chart-type-section button.active:hover,
-.top-control-section-button.active:hover,
-.top-utility-button.active:hover {
   background:#28577d;
   color:#fff;
 }
@@ -121,22 +107,55 @@ button { cursor: pointer; }
 .top-utility-button.active svg {
   color:#fff;
 }
+
+/* Plain utility controls: no hover treatment or boxed chrome. */
+.top-control-section-button,
+.top-utility-button {
+  border:0;
+  background:transparent;
+  color:#777;
+  transition:none;
+}
+.top-control-section-button:hover,
+.top-control-section-button:focus-visible,
+.top-utility-button:hover,
+.top-utility-button:focus-visible {
+  background:transparent;
+  color:#777;
+}
+.top-control-section-button.active,
+.top-control-section-button.active:hover,
+.top-control-section-button.active:focus-visible,
+.top-utility-button.active,
+.top-utility-button.active:hover,
+.top-utility-button.active:focus-visible {
+  background:#28577d;
+  color:#fff;
+}
+.top-control-section-button.active svg,
+.top-control-section-button.active:hover svg,
+.top-control-section-button.active:focus-visible svg,
+.top-utility-button.active svg,
+.top-utility-button.active:hover svg,
+.top-utility-button.active:focus-visible svg {
+  color:#fff;
+}
 .top-utility-group {
   display:flex;
   align-items:center;
   height:32px;
   margin-left:10px;
-  padding-left:7px;
-  border-left:1px solid #3a3a3a;
+  padding-left:0;
+  border-left:0;
 }
 .top-utility-button {
-  margin-left:0;
-  padding-left:10px;
-  padding-right:10px;
+  margin-left:2px;
+  padding-left:8px;
+  padding-right:8px;
 }
 .top-utility-button + .top-utility-button {
-  margin-left:4px;
-  border-left:1px solid #333;
+  margin-left:2px;
+  border-left:0;
 }
 .top-utility-button svg { color:#8d969f; }
 
