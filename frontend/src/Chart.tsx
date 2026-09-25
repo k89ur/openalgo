@@ -58,6 +58,7 @@ const historyCache = new Map<string, HistoryCacheEntry>();
 const historyInflight = new Map<string, Promise<KLineData[]>>();
 
 const PIPSGOX_VOLUME_BARS = "PIPSGOX_VOLUME_BARS";
+const PIPSGOX_PIPSCRIPT_EMA = "PIPSGOX_PIPSCRIPT_EMA";
 
 registerIndicator({
   name: PIPSGOX_VOLUME_BARS,
