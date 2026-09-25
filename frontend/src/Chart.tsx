@@ -644,8 +644,58 @@ export function Chart({
           shortName: "PIPSGOX EMA",
           paneId: "candle_pane",
           series: "price",
+          shouldOhlc: false,
           calcParams: emaLengths,
-        },
+          figures: emaLengths.map((period, index) => ({
+            key: "pipEma" + index,
+            title: "EMA" + period + ": ",
+            type: "line",
+          })),
+          styles: {
+            lines: emaLengths.map((_, index) => ({
+              style: "solid",
+              color: ["#c9daf8", "#a4c2f4", "#6d9eeb", "#3c78d8", "#0b5394"][index % 5],
+              size: 1,
+            })),
+          },
+          calc: (dataList: KLineData[], indicator: any) => {
+            const params = (indicator.calcParams || emaLengths).map(Number);
+            const states = params.map(() => ({ value: 0, initialized: false }));
+            const result: Record<number, Record<string, number | null>> = {};
+
+            for (let i = 0; i < dataList.length; i += 1) {
+              const row: Record<string, number | null> = {};
+
+              params.forEach((period, index) => {
+                if (i < period - 1) {
+                  row["pipEma" + index] = null;
+                  return;
+                }
+
+                const state = states[index];
+
+                if (!state.initialized) {
+                  let sum = 0;
+                  for (let j = i - period + 1; j <= i; j += 1) {
+                    sum += Number(dataList[j].close);
+                  }
+                  state.value = sum / period;
+                  state.initialized = true;
+                } else {
+                  const close = Number(dataList[i].close);
+                  const multiplier = 2 / (period + 1);
+                  state.value = (close - state.value) * multiplier + state.value;
+                }
+
+                row["pipEma" + index] = Number.isFinite(state.value) ? state.value : null;
+              });
+
+              result[dataList[i].timestamp] = row;
+            }
+
+            return result;
+          },
+        } as any,
         true,
       );
 
