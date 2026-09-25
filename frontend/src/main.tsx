@@ -362,7 +362,7 @@ function loadSavedPipscripts(): SavedPipscript[] {
 
 const coreIndicators = ["MA 50", "MA 200"];
 
-type UiIconName = "candle" | "bar" | "line" | "indicator" | "pipscript" | "sun" | "settings";
+type UiIconName = "candle" | "bar" | "line" | "indicator" | "pipscript" | "sun" | "settings" | "add" | "import" | "export" | "new" | "delete" | "hide";
 
 function UiIcon({ name }: { name: UiIconName }) {
   const common = {
@@ -416,6 +416,59 @@ function UiIcon({ name }: { name: UiIconName }) {
     return (
       <svg {...common}>
         <path d="M8 6l-5 6 5 6M16 6l5 6-5 6M14 4l-4 16" />
+      </svg>
+    );
+  }
+
+  if (name === "add") {
+    return (
+      <svg {...common}>
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    );
+  }
+
+  if (name === "import") {
+    return (
+      <svg {...common}>
+        <path d="M12 4v11M8 11l4 4 4-4" />
+        <path d="M5 19h14" />
+      </svg>
+    );
+  }
+
+  if (name === "export") {
+    return (
+      <svg {...common}>
+        <path d="M12 20V9M8 13l4-4 4 4" />
+        <path d="M5 5h14" />
+      </svg>
+    );
+  }
+
+  if (name === "new") {
+    return (
+      <svg {...common}>
+        <path d="M6 4h9l3 3v13H6z" />
+        <path d="M14 4v4h4M12 11v6M9 14h6" />
+      </svg>
+    );
+  }
+
+  if (name === "delete") {
+    return (
+      <svg {...common}>
+        <path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8" />
+        <path d="M6 7l1 14h10l1-14" />
+      </svg>
+    );
+  }
+
+  if (name === "hide") {
+    return (
+      <svg {...common}>
+        <path d="M3.5 12s3.2-5 8.5-5 8.5 5 8.5 5-3.2 5-8.5 5-8.5-5-8.5-5z" />
+        <path d="M5 5l14 14" />
       </svg>
     );
   }
@@ -1515,12 +1568,14 @@ json.dumps(_result)`;
               <strong>{activeWatchlistName}</strong>
               <span>{watchlist.length} / {MAX_WATCHLIST_SIZE}</span>
               <div className="watch-spacer" />
-              <button onClick={() => setWatchOpen(false)}>HIDE</button>
-              <button onClick={createWatchlist}>NEW</button>
-              <button onClick={deleteWatchlist}>DEL</button>
-              <button onClick={() => watchImportRef.current?.click()}>IMPORT</button>
-              <button onClick={exportWatchlist}>EXPORT</button>
-              <button onClick={addWatchSymbol}>ADD</button>
+              <div className="watch-actions" aria-label="Watchlist actions">
+                <button onClick={addWatchSymbol} title="Add symbol" aria-label="Add symbol"><UiIcon name="add" /></button>
+                <button onClick={() => watchImportRef.current?.click()} title="Import watchlist" aria-label="Import watchlist"><UiIcon name="import" /></button>
+                <button onClick={exportWatchlist} title="Export watchlist" aria-label="Export watchlist"><UiIcon name="export" /></button>
+                <button onClick={createWatchlist} title="New watchlist" aria-label="New watchlist"><UiIcon name="new" /></button>
+                <button onClick={deleteWatchlist} title="Delete watchlist" aria-label="Delete watchlist"><UiIcon name="delete" /></button>
+                <button onClick={() => setWatchOpen(false)} title="Hide watchlist" aria-label="Hide watchlist"><UiIcon name="hide" /></button>
+              </div>
               <input
                 ref={watchImportRef}
                 className="watch-import-input"
