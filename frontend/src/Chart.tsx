@@ -57,41 +57,38 @@ type HistoryCacheEntry = {
 const historyCache = new Map<string, HistoryCacheEntry>();
 const historyInflight = new Map<string, Promise<KLineData[]>>();
 
-const PIPSGOX_DEFAULT_MA = "PIPSGOX_DEFAULT_MA";
-const PIPSGOX_PIPSCRIPT_EMA = "PIPSGOX_PIPSCRIPT_EMA";
+const PIPSGOX_VOLUME_BARS = "PIPSGOX_VOLUME_BARS";
 
 registerIndicator({
-  name: PIPSGOX_DEFAULT_MA,
-  shortName: "MA",
-  series: "price",
-  calcParams: [50, 200],
-  precision: 2,
+  name: PIPSGOX_VOLUME_BARS,
+  shortName: "VOLUME",
+  series: "volume",
+  calcParams: [],
+  precision: 0,
   shouldOhlc: false,
   figures: [
-    { key: "ma1", title: "MA50: ", type: "line" },
-    { key: "ma2", title: "MA200: ", type: "line" },
+    { key: "volume", title: "Volume: ", type: "bar", baseValue: 0 },
   ],
-  calc: (dataList: KLineData[], indicator: any) => {
-    const params = (indicator.calcParams || [50, 200]).map(Number);
-    const sums = params.map(() => 0);
-    const result: Record<number, Record<string, number | null>> = {};
-
-    for (let i = 0; i < dataList.length; i += 1) {
-      const row: Record<string, number | null> = {};
-      params.forEach((period, index) => {
-        const close = Number(dataList[i].close);
-        sums[index] += close;
-        row["ma" + (index + 1)] = null;
-
-        if (i >= period - 1) {
-          row["ma" + (index + 1)] = sums[index] / period;
-          sums[index] -= Number(dataList[i - (period - 1)].close);
-        }
-      });
-      result[dataList[i].timestamp] = row;
+  calc: (dataList: KLineData[]) => {
+    const result: Record<number, { volume: number | null }> = {};
+    for (const candle of dataList) {
+      const volume = Number(candle.volume ?? 0);
+      result[candle.timestamp] = {
+        volume: Number.isFinite(volume) ? volume : null,
+      };
     }
-
     return result;
+  },
+  styles: {
+    bars: [{
+      style: "fill",
+      borderStyle: "solid",
+      borderSize: 0,
+      upColor: "#d9dde3",
+      downColor: "#d9dde3",
+      noChangeColor: "#d9dde3",
+    }],
+    lines: [],
   },
 });
 
@@ -525,11 +522,10 @@ export function Chart({
         });
       }
 
-      // Base indicators are registered explicitly so their calculation/figure
-      // definitions cannot be affected by Pipscript indicator overrides.
+      // Base indicators: native MA stays on the candle pane.
       chart.createIndicator(
         {
-          name: PIPSGOX_DEFAULT_MA,
+          name: "MA",
           id: "pipsgox-default-ma",
           paneId: "candle_pane",
           series: "price",
@@ -545,12 +541,14 @@ export function Chart({
         true,
       );
 
+      // Volume is a bars-only indicator. No volume MA lines are calculated.
       if (showVolume) {
         chart.createIndicator(
           {
-            name: "VOL",
+            name: PIPSGOX_VOLUME_BARS,
             id: "pipsgox-default-volume",
             paneId: "volume_pane",
+            series: "volume",
             visible: true,
           },
           false,
