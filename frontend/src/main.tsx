@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe, type PipscriptOutput, type ChartColors } from "./Chart";
 import "./styles.css";
 
-type WatchItem = { symbol: string; price: string; change: string };
+type WatchItem = { symbol: string; price: string; change: string; apiSymbol?: string };
 export type ChartTheme = "pipsgox" | "classic" | "light";
 type PipscriptLanguage = "python" | "javascript";
 type PipscriptOutputType = "indicator" | "table";
@@ -254,13 +254,21 @@ const DEFAULT_WATCHLIST: WatchItem[] = [
 function normalizeWatchItems(value: unknown): WatchItem[] {
   if (!Array.isArray(value)) return [];
 
-  const symbols = value
-    .map((item) => (typeof item === "string" ? item : (item as Partial<WatchItem>)?.symbol))
-    .map((item) => String(item ?? "").trim().toUpperCase())
-    .filter(Boolean);
-
-  const unique = [...new Set(symbols)].slice(0, MAX_WATCHLIST_SIZE);
-  return unique.map((item) => ({ symbol: item, price: "—", change: "—" }));
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        return { symbol: item, price: "—", change: "—" };
+      }
+      const source = item as Partial<WatchItem>;
+      return {
+        symbol: String(source.symbol ?? "").trim().toUpperCase(),
+        price: String(source.price ?? "—"),
+        change: String(source.change ?? "—"),
+        ...(source.apiSymbol ? { apiSymbol: String(source.apiSymbol).trim().toUpperCase() } : {}),
+      };
+    })
+    .filter((item) => item.symbol)
+    .slice(0, MAX_WATCHLIST_SIZE);
 }
 
 function loadWatchlists(): Record<string, WatchItem[]> {
@@ -538,7 +546,7 @@ function App() {
       return { ...current, [activeWatchlistName]: nextList };
     });
   };
-  const [symbol, setSymbol] = useState(() => {
+  const [chartApiSymbol, setChartApiSymbol] = useState<string | null>(null);\n  const [symbol, setSymbol] = useState(() => {
     const initialLists = loadWatchlists();
     const initial = Object.values(initialLists)[0] ?? DEFAULT_WATCHLIST;
     return initial[0]?.symbol ?? "BHARTIARTL";
@@ -1099,7 +1107,7 @@ json.dumps(_result)`;
     const loadQuote = async () => {
       try {
         const response = await fetch(
-          "/api/quote?symbol=" + encodeURIComponent(symbol),
+          "/api/quote?symbol=" + encodeURIComponent(chartApiSymbol || symbol),
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("quote request failed");
@@ -1131,7 +1139,7 @@ json.dumps(_result)`;
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [symbol]);
+  }, [symbol, chartApiSymbol]);
 
   useEffect(() => {
     setLiveQuotes({});
@@ -1312,22 +1320,19 @@ json.dumps(_result)`;
   const low = quote?.low;
   const previousClose = quote ? quote.last - quote.change : undefined;
 
-  const selectSymbol = (next: string) => {
+  const selectSymbol = (next: string, apiSymbol?: string) => {
     const cleanSymbol = next.trim().toUpperCase();
     if (!cleanSymbol) return;
-
     setSymbol(cleanSymbol);
     setSearch(cleanSymbol);
-
-    // Re-run the active Pipscript immediately for the selected symbol.
-    // Passing the symbol directly avoids waiting for the React state update.
+    setChartApiSymbol(apiSymbol?.trim().toUpperCase() || null);
     const active = activePipscriptRef.current;
     if (active) {
       void runPipscript({
         language: active.language,
         outputType: active.outputType,
         code: active.code,
-        symbol: cleanSymbol,
+        symbol: apiSymbol?.trim().toUpperCase() || cleanSymbol,
       });
     }
   };
@@ -1390,6 +1395,34 @@ json.dumps(_result)`;
     setSearchOpen(false);
     setWatchImportMessage("Added " + result.symbol + " to " + activeWatchlistName);
     window.setTimeout(() => setWatchImportMessage(""), 2500);
+  };
+
+  const selectWatchItem = async (item: WatchItem) => {
+    if (item.apiSymbol) {
+      selectSymbol(item.symbol, item.apiSymbol);
+      return;
+    }
+
+    selectSymbol(item.symbol);
+    try {
+      const response = await fetch(
+        `/api/symbols/resolve?symbol=${encodeURIComponent(item.symbol)}&timeframe=${encodeURIComponent(timeframe)}&test_history=true&test_quote=false`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) return;
+      const payload = await response.json() as { selected?: string | null };
+      if (payload.selected) {
+        setWatchlists((current) => ({
+          ...current,
+          [activeWatchlistName]: (current[activeWatchlistName] ?? []).map((watch) =>
+            watch.symbol === item.symbol ? { ...watch, apiSymbol: payload.selected!.toUpperCase() } : watch,
+          ),
+        }));
+        selectSymbol(item.symbol, payload.selected);
+      }
+    } catch {
+      // Chart backend fallback remains available when resolution is unavailable.
+    }
   };
 
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1663,7 +1696,7 @@ json.dumps(_result)`;
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={() => dropWatchSymbol(item.symbol)}
                 >
-                  <button className="watch-row-main" onClick={() => selectSymbol(item.symbol)}>
+                  <button className="watch-row-main" onClick={() => void selectWatchItem(item)}>
                     <span className="watch-symbol">{item.symbol}</span>
                     <span className="watch-price">{liveQuotes[item.symbol] ? liveQuotes[item.symbol].last.toFixed(2) : "—"}</span>
                     <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
