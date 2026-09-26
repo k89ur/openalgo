@@ -15,6 +15,9 @@ export type ChartColors = {
   volumeDown: string;
   ma50: string;
   ma200: string;
+  barUp: string;
+  barDown: string;
+  lineColor: string;
 };
 
 export type PipscriptOutput =
@@ -495,6 +498,17 @@ export function Chart({
         chart.setStyles({
           candle: {
             type: "ohlc",
+            bar: {
+              upColor: chartColors.barUp,
+              downColor: chartColors.barDown,
+              noChangeColor: chartColors.barUp,
+              upBorderColor: chartColors.barUp,
+              downBorderColor: chartColors.barDown,
+              noChangeBorderColor: chartColors.barUp,
+              upWickColor: chartColors.barUp,
+              downWickColor: chartColors.barDown,
+              noChangeWickColor: chartColors.barUp,
+            },
           },
         });
       } else if (chartType === "line") {
@@ -502,7 +516,7 @@ export function Chart({
           candle: {
             type: "area",
             area: {
-              lineColor: chartTheme === "light" ? "#1976d2" : chartTheme === "classic" ? "#42a5f5" : "#38bdf8",
+              lineColor: chartColors.lineColor,
               lineSize: 2,
               backgroundColor: [
                 { offset: 0, color: chartTheme === "light" ? "rgba(25,118,210,0.10)" : chartTheme === "classic" ? "rgba(66,165,245,0.10)" : "rgba(56,189,248,0.12)" },
