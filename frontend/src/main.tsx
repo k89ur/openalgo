@@ -552,6 +552,21 @@ function App() {
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
   const [drawingToolbarOpen, setDrawingToolbarOpen] = useState(false);
+  const [drawingToolbarPosition, setDrawingToolbarPosition] = useState(() => {
+    try {
+      const saved = localStorage.getItem("pipsgox-drawing-toolbar-position");
+      if (saved) {
+        const parsed = JSON.parse(saved) as { x?: unknown; y?: unknown };
+        if (Number.isFinite(Number(parsed.x)) && Number.isFinite(Number(parsed.y))) {
+          return { x: Number(parsed.x), y: Number(parsed.y) };
+        }
+      }
+    } catch {
+      // Ignore invalid saved toolbar position.
+    }
+    return { x: 10, y: 10 };
+  });
+  const drawingToolbarDragRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
   const [activeDrawingTool, setActiveDrawingTool] = useState<DrawingTool | null>(null);
   const [drawingCommand, setDrawingCommand] = useState<{ type: "delete" | "clear"; nonce: number } | undefined>();
 
@@ -571,6 +586,58 @@ function App() {
     setChartRange(preset);
     setTimeframe(chartRangeTimeframes[preset]);
   };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pipsgox-drawing-toolbar-position", JSON.stringify(drawingToolbarPosition));
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [drawingToolbarPosition]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const drag = drawingToolbarDragRef.current;
+      const container = document.querySelector<HTMLElement>(".chart-container");
+      const toolbar = document.querySelector<HTMLElement>(".drawing-toolbar");
+      if (!drag || !container || !toolbar) return;
+
+      const rect = container.getBoundingClientRect();
+      const maxX = Math.max(0, rect.width - toolbar.offsetWidth);
+      const maxY = Math.max(0, rect.height - toolbar.offsetHeight);
+      const x = Math.min(Math.max(0, event.clientX - rect.left - drag.offsetX), maxX);
+      const y = Math.min(Math.max(0, event.clientY - rect.top - drag.offsetY), maxY);
+
+      setDrawingToolbarPosition({ x, y });
+    };
+
+    const handlePointerUp = () => {
+      drawingToolbarDragRef.current = null;
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, []);
+
+  const startDrawingToolbarDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("button")) return;
+
+    const toolbar = event.currentTarget;
+    const container = toolbar.closest<HTMLElement>(".chart-container");
+    if (!container) return;
+
+    const toolbarRect = toolbar.getBoundingClientRect();
+    drawingToolbarDragRef.current = {
+      offsetX: event.clientX - toolbarRect.left,
+      offsetY: event.clientY - toolbarRect.top,
+    };
+    event.preventDefault();
+  };
+
   const [watchlists, setWatchlists] = useState<Record<string, WatchItem[]>>(loadWatchlists);
   const [activeWatchlistName, setActiveWatchlistName] = useState(() => Object.keys(loadWatchlists())[0] ?? DEFAULT_WATCHLIST_NAME);
   const watchlist = watchlists[activeWatchlistName] ?? [];
@@ -1660,7 +1727,12 @@ json.dumps(_result)`;
               pipscriptOutput={pipscriptOutput}
             />
 
-            <div className={"drawing-toolbar" + (drawingToolbarOpen ? "" : " is-hidden")} aria-label="Drawing tools">
+            <div
+              className={"drawing-toolbar" + (drawingToolbarOpen ? "" : " is-hidden")}
+              aria-label="Drawing tools"
+              style={{ left: drawingToolbarPosition.x, top: drawingToolbarPosition.y }}
+              onPointerDown={startDrawingToolbarDrag}
+            >
               {drawingToolbarOpen && (
                 <>
                   <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray">↔</button>
