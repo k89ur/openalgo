@@ -716,6 +716,29 @@ button { cursor: pointer; }
   font-size:8px;
   padding:0;
 }
+.settings-chart-type {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:5px;
+}
+.settings-chart-type button {
+  height:30px;
+  border:1px solid #2a2a2a;
+  background:#151515;
+  color:#777;
+  font:500 9px "Manrope",sans-serif;
+  cursor:pointer;
+}
+.settings-chart-type button:hover {
+  color:#bbb;
+  background:#1b1b1b;
+}
+.settings-chart-type button.active {
+  border-color:#315f82;
+  background:#162b3a;
+  color:#d4e6f3;
+}
+
 .settings-color-grid {
   display:grid;
   grid-template-columns:1fr 1fr;
