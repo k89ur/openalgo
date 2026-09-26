@@ -313,20 +313,23 @@ def resolve_api_symbol(symbol: str) -> str | None:
         if base and series in {"EQ", "BE"}:
             return f"NSE:{base}-{series}"
 
-    # Fast path for ordinary NSE equities. FYERS uses the deterministic
-    # NSE:<SYMBOL>-EQ form, so interactive chart/quote requests must not wait
-    # for the large daily symbol-master download. Invalid symbols will still
-    # be rejected by the FYERS provider and surfaced as an API error.
+    # Resolve ordinary NSE equities against the current FYERS master first.
+    # This is important because many valid NSE stocks are currently in BE
+    # rather than EQ (for example LOTUSDEV, SWANDEF and NURECA). Constructing
+    # NSE:<SYMBOL>-EQ first can make a valid BE-only stock look unavailable.
+    candidates = _master_symbol_candidates(clean)
+    if candidates:
+        return candidates[0]
+
+    # Keep the deterministic EQ form as a temporary fallback if the daily
+    # master is unavailable. The FYERS provider remains the authority on
+    # whether that exact instrument exists.
     if clean.replace("&", "").replace("-", "").replace("_", "").isalnum():
         return provider.symbol_info(clean).api_symbol
 
     try:
         master = _load_nse_symbol_master()
     except ValueError:
-        # The symbol master is a discovery/normalization source, not the
-        # quote API itself. If it is temporarily unavailable, keep the
-        # provider's standard candidate so FYERS can validate it. A candidate
-        # is never treated as valid merely because it was constructed here.
         return provider.symbol_info(clean).api_symbol
 
     for api_symbol, item in master.items():
@@ -336,16 +339,10 @@ def resolve_api_symbol(symbol: str) -> str | None:
         api = str(api_symbol or "").strip().upper()
         ticker = str(item.get("symTicker") or "").strip().upper()
         exchange_symbol = str(item.get("exSymbol") or "").strip().upper()
+        api_base = api.rsplit(":", 1)[-1].rsplit("-", 1)[0]
 
-        # FYERS documents symTicker/exSymbol as symbol identifiers. Also
-        # accept the exact API-symbol key because that is the authoritative
-        # key of the JSON master.
-        api_base = api.rsplit(":", 1)[-1]
-        api_base = api_base.rsplit("-", 1)[0]
-
-        if clean in {ticker, exchange_symbol, api_base}:
-            if api:
-                return api
+        if clean in {ticker, exchange_symbol, api_base} and api:
+            return api
 
     return None
 
