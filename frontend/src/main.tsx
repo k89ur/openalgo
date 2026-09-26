@@ -1635,6 +1635,7 @@ json.dumps(_result)`;
               show52WeekHigh={chartSettings.show52WeekHigh}
               show52WeekLow={chartSettings.show52WeekLow}
               showPreviousClose={chartSettings.showPreviousClose}
+              lineSize={chartSettings.lineSize}
               previousClose={previousClose}
               pipscriptOutput={pipscriptOutput}
             />
