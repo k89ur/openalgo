@@ -417,6 +417,22 @@ def _master_symbol_candidates(symbol: str) -> list[str]:
     candidates.sort(key=lambda item: (item[0], item[1]))
     symbols = [api for _, api in candidates]
 
+    # The search endpoint uses the same live FYERS master but matches the
+    # ticker field directly. Use it as a second authoritative lookup path.
+    # This matters for older/variant master records where the API-key/base
+    # fields above do not line up even though symbol search can find the stock.
+    if not symbols:
+        try:
+            search_matches = search_nse_symbols(clean, limit=25)
+            exact = [
+                item.api_symbol.upper()
+                for item in search_matches
+                if item.symbol.strip().upper() == clean
+            ]
+            symbols = list(dict.fromkeys(exact))
+        except ValueError:
+            symbols = []
+
     if symbols:
         with _symbol_master_lock:
             _symbol_resolution_cache[clean] = list(symbols)
