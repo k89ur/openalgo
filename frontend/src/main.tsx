@@ -1342,7 +1342,7 @@ json.dumps(_result)`;
     const watchMatch = watchlist.find((item) => item.symbol === query);
 
     if (watchMatch) {
-      selectSymbol(watchMatch.symbol);
+      selectSymbol(watchMatch.symbol, watchMatch.apiSymbol);
       setSearchOpen(false);
       return;
     }
