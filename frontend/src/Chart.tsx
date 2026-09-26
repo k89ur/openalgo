@@ -389,7 +389,7 @@ export function Chart({
           // Indian equities have roughly 120-130 trading sessions in six
           // calendar months. Calculate bar width from the actual chart area
           // so approximately 126 sessions fit on desktop and mobile alike.
-          const targetVisibleBars = 126;
+          const targetVisibleBars = 150;
           const chartWidth = Math.max(container.clientWidth, 1);
           const barSpace = Math.max(
             1,
