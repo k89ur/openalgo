@@ -3,6 +3,7 @@ import { dispose, init, registerIndicator, type Chart as KLineChartInstance, typ
 
 export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
+export type ChartRange = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "5Y" | "ALL";
 
 export type ChartTheme = "pipsgox" | "classic" | "light";
 export type ChartColors = {
@@ -39,6 +40,7 @@ type Props = {
   dark: boolean;
   symbol: string;
   timeframe: Timeframe;
+  range: ChartRange;
   chartTheme: ChartTheme;
   chartColors: ChartColors;
   showGrid: boolean;
@@ -215,6 +217,68 @@ function getLimit(timeframe: Timeframe) {
   return 300;
 }
 
+function getRangeVisibleBars(timeframe: Timeframe, range: ChartRange, availableBars: number) {
+  if (range === "ALL") return Math.max(1, availableBars);
+
+  if (timeframe === "D") {
+    const dailyTargets: Record<ChartRange, number> = {
+      "1D": 20,
+      "5D": 20,
+      "1M": 22,
+      "3M": 66,
+      "6M": 150,
+      YTD: 190,
+      "1Y": 252,
+      "5Y": 1260,
+      ALL: availableBars,
+    };
+    return dailyTargets[range];
+  }
+
+  if (timeframe === "W") {
+    const weeklyTargets: Record<ChartRange, number> = {
+      "1D": 2,
+      "5D": 2,
+      "1M": 5,
+      "3M": 13,
+      "6M": 26,
+      YTD: 40,
+      "1Y": 52,
+      "5Y": 260,
+      ALL: availableBars,
+    };
+    return weeklyTargets[range];
+  }
+
+  if (timeframe === "M") {
+    const monthlyTargets: Record<ChartRange, number> = {
+      "1D": 2,
+      "5D": 2,
+      "1M": 2,
+      "3M": 4,
+      "6M": 7,
+      YTD: 10,
+      "1Y": 13,
+      "5Y": 61,
+      ALL: availableBars,
+    };
+    return monthlyTargets[range];
+  }
+
+  const intradayTargets: Record<ChartRange, number> = {
+    "1D": 75,
+    "5D": 125,
+    "1M": 22,
+    "3M": 66,
+    "6M": 150,
+    YTD: 190,
+    "1Y": 252,
+    "5Y": 1260,
+    ALL: availableBars,
+  };
+  return intradayTargets[range];
+}
+
 function dateBeforeTimestamp(timestamp: number) {
   const date = new Date(timestamp);
   date.setUTCDate(date.getUTCDate() - 1);
@@ -226,6 +290,7 @@ export function Chart({
   dark,
   symbol,
   timeframe,
+  range,
   chartTheme,
   chartColors,
   showGrid,
@@ -374,26 +439,23 @@ export function Chart({
 
       chart.subscribeAction("onCrosshairChange", crosshairHandler);
 
-      // Daily charts should open at roughly six months of trading history.
-      // Apply the viewport after the data-loader callback so the initial
-      // visible range is set after KLineCharts has loaded its data.
-      let initialDailyViewportApplied = false;
-      const applyInitialDailyViewport = () => {
-        if (initialDailyViewportApplied || timeframe !== "D" || disposed) return;
-        if (!chart.getDataList().length) return;
+      // Apply the selected bottom date-range preset after the data-loader
+      // callback so the visible range is set only after data is available.
+      let initialRangeApplied = false;
+      const applyInitialRange = () => {
+        if (initialRangeApplied || disposed) return;
+        const dataList = chart.getDataList();
+        if (!dataList.length) return;
 
-        initialDailyViewportApplied = true;
+        initialRangeApplied = true;
         requestAnimationFrame(() => {
           if (disposed) return;
 
-          // Indian equities have roughly 120-130 trading sessions in six
-          // calendar months. Calculate bar width from the actual chart area
-          // so approximately 126 sessions fit on desktop and mobile alike.
-          const targetVisibleBars = 150;
+          const targetVisibleBars = getRangeVisibleBars(timeframe, range, dataList.length);
           const chartWidth = Math.max(container.clientWidth, 1);
           const barSpace = Math.max(
             1,
-            Math.min(50, (chartWidth * 0.94) / targetVisibleBars),
+            Math.min(50, (chartWidth * 0.94) / Math.max(targetVisibleBars, 1)),
           );
 
           chart.setBarSpace(barSpace);
@@ -429,7 +491,7 @@ export function Chart({
                 forward: type === "backward" ? false : cached.bars.length >= pageSize,
                 backward: false,
               });
-              if (type === "init") applyInitialDailyViewport();
+              if (type === "init") applyInitialRange();
             }
             if (cacheFresh) return;
 
@@ -491,7 +553,7 @@ export function Chart({
               forward: type === "backward" ? false : bars.length >= pageSize,
               backward: false,
             });
-            if (type === "init") applyInitialDailyViewport();
+            if (type === "init") applyInitialRange();
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") return;
             console.error("PIPSGOX history error:", error);
@@ -727,7 +789,7 @@ export function Chart({
         disposed = true;
         resizeObserver.disconnect();
         chart.unsubscribeAction("onCrosshairChange", crosshairHandler);
-        chart.unsubscribeAction("onDataReady", applyInitialDailyViewport);
+        chart.unsubscribeAction("onDataReady", applyInitialRange);
         chartRef.current = null;
         dispose(chart);
       };
@@ -753,6 +815,28 @@ export function Chart({
     previousClose,
     chartColors,
   ]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    const container = containerRef.current;
+    if (!chart || !container) return;
+
+    const dataList = chart.getDataList();
+    if (!dataList.length) return;
+
+    const targetVisibleBars = getRangeVisibleBars(timeframe, range, dataList.length);
+    const chartWidth = Math.max(container.clientWidth, 1);
+    const barSpace = Math.max(
+      1,
+      Math.min(50, (chartWidth * 0.94) / Math.max(targetVisibleBars, 1)),
+    );
+
+    requestAnimationFrame(() => {
+      if (!chartRef.current || chartRef.current !== chart) return;
+      chart.setBarSpace(barSpace);
+      chart.scrollToRealTime(0);
+    });
+  }, [range, timeframe]);
 
   useEffect(() => {
     const chart = chartRef.current;
