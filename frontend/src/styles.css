@@ -196,7 +196,7 @@ button { cursor: pointer; }
 .bottom-spacer { flex:1; }
 
 .watchlist {
-  position:relative; flex:0 0 auto; min-width:240px; max-width:480px;
+  position:relative; flex:0 0 340px; width:340px; min-width:340px; max-width:480px;
   border-left:1px solid #303030; background:#0d0d0d; display:flex; flex-direction:column;
 }
 .watch-resize-handle { position:absolute; left:-3px; top:0; bottom:0; width:6px; cursor:ew-resize; z-index:4; }
