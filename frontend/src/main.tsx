@@ -705,6 +705,7 @@ function App() {
 
     setWatchlists((current) => ({ ...current, [name]: [] }));
     setActiveWatchlistName(name);
+    setChartApiSymbol(null);
     setSymbol("BHARTIARTL");
     setSearch("BHARTIARTL");
     setSearchOpen(false);
@@ -725,8 +726,13 @@ function App() {
     const nextName = Object.keys(next)[0];
     setWatchlists(next);
     setActiveWatchlistName(nextName);
-    setSymbol(next[nextName]?.[0]?.symbol ?? "BHARTIARTL");
-    setSearch(next[nextName]?.[0]?.symbol ?? "");
+    const nextItem = next[nextName]?.[0];
+    if (nextItem) selectSymbol(nextItem.symbol, nextItem.apiSymbol);
+    else {
+      setChartApiSymbol(null);
+      setSymbol("BHARTIARTL");
+      setSearch("");
+    }
     setWatchDialog(null);
   };
 
@@ -746,8 +752,13 @@ function App() {
     if (symbol === itemSymbol) {
       const remaining = watchlist.filter((item) => item.symbol !== itemSymbol);
       const next = remaining[0]?.symbol ?? "BHARTIARTL";
-      setSymbol(next);
-      setSearch(next);
+      const nextItem = remaining[0];
+      if (nextItem) selectSymbol(nextItem.symbol, nextItem.apiSymbol);
+      else {
+        setChartApiSymbol(null);
+        setSymbol("BHARTIARTL");
+        setSearch("BHARTIARTL");
+      }
     }
   };
 
@@ -1645,10 +1656,8 @@ json.dumps(_result)`;
                   const name = event.target.value;
                   setActiveWatchlistName(name);
                   const first = watchlists[name]?.[0]?.symbol;
-                  if (first) {
-                    setSymbol(first);
-                    setSearch(first);
-                  }
+                  const firstItem = watchlists[name]?.[0];
+                  if (firstItem) selectSymbol(firstItem.symbol, firstItem.apiSymbol);
                 }}
                 aria-label="Select watchlist"
               >
