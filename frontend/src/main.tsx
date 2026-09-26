@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import ReactDOM from "react-dom/client";
-import { Chart, type ChartType, type Timeframe, type PipscriptOutput } from "./Chart";
+import { Chart, type ChartType, type Timeframe, type PipscriptOutput, type ChartColors } from "./Chart";
 import "./styles.css";
 
 type WatchItem = { symbol: string; price: string; change: string };
@@ -178,6 +178,7 @@ function normalizePipscriptOutput(raw: unknown, preferredType: PipscriptOutputTy
 
 type ChartSettings = {
   theme: ChartTheme;
+  colors: ChartColors;
   showGrid: boolean;
   showCrosshair: boolean;
   showVolume: boolean;
@@ -187,8 +188,22 @@ type ChartSettings = {
   showPreviousClose: boolean;
 };
 
+const DEFAULT_CHART_COLORS: ChartColors = {
+  background: "#090909", grid: "#202020", axis: "#626b75",
+  candleUp: "#12d98b", candleDown: "#ff4d5a",
+  volumeUp: "#d9dde3", volumeDown: "#d9dde3",
+  ma50: "#f6c85f", ma200: "#b07cff",
+};
+
+const CHART_COLOR_PRESETS: Record<ChartTheme, ChartColors> = {
+  pipsgox: DEFAULT_CHART_COLORS,
+  classic: { background:"#101317", grid:"#28303a", axis:"#697482", candleUp:"#26a69a", candleDown:"#ef5350", volumeUp:"#7d8792", volumeDown:"#7d8792", ma50:"#f6c85f", ma200:"#b07cff" },
+  light: { background:"#ffffff", grid:"#e5e7eb", axis:"#9ca3af", candleUp:"#168a59", candleDown:"#c93643", volumeUp:"#8b95a1", volumeDown:"#8b95a1", ma50:"#c27a00", ma200:"#7654a8" },
+};
+
 const DEFAULT_CHART_SETTINGS: ChartSettings = {
   theme: "pipsgox",
+  colors: DEFAULT_CHART_COLORS,
   showGrid: true,
   showCrosshair: true,
   showVolume: true,
@@ -202,7 +217,8 @@ function loadChartSettings(): ChartSettings {
   try {
     const raw = localStorage.getItem("pipsgox-chart-settings");
     if (!raw) return DEFAULT_CHART_SETTINGS;
-    return { ...DEFAULT_CHART_SETTINGS, ...(JSON.parse(raw) as Partial<ChartSettings>) };
+    const parsed = JSON.parse(raw) as Partial<ChartSettings>;
+    return { ...DEFAULT_CHART_SETTINGS, ...parsed, colors: { ...DEFAULT_CHART_COLORS, ...(parsed.colors || {}) } };
   } catch {
     return DEFAULT_CHART_SETTINGS;
   }
@@ -534,11 +550,31 @@ function App() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState(false);
   const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
+  const [savedChartThemes, setSavedChartThemes] = useState<Record<string, ChartColors>>(() => {
+    try { return JSON.parse(localStorage.getItem("pipsgox-chart-themes") || "{}") as Record<string, ChartColors>; } catch { return {}; }
+  });
+  const [chartThemeName, setChartThemeName] = useState("");
   const [watchImportMessage, setWatchImportMessage] = useState("");
   const [watchDialog, setWatchDialog] = useState<{ type: "add" | "new" | "delete" | "export" | "import"; value: string } | null>(null);
   const [draggedSymbol, setDraggedSymbol] = useState<string | null>(null);
   const [fyersChecking, setFyersChecking] = useState(true);
   const watchImportRef = useRef<HTMLInputElement>(null);
+  const applyChartPreset = (theme: ChartTheme) => updateChartSettings({ theme, colors: { ...CHART_COLOR_PRESETS[theme] } });
+  const updateChartColor = (key: keyof ChartColors, value: string) => updateChartSettings({ colors: { ...chartSettings.colors, [key]: value } });
+  const saveChartTheme = () => {
+    const name = chartThemeName.trim().slice(0, 24);
+    if (!name) return;
+    const next = { ...savedChartThemes, [name]: { ...chartSettings.colors } };
+    setSavedChartThemes(next);
+    localStorage.setItem("pipsgox-chart-themes", JSON.stringify(next));
+    setChartThemeName("");
+  };
+  const loadChartTheme = (name: string) => {
+    if (!name) return;
+    const colors = savedChartThemes[name];
+    if (colors) updateChartSettings({ colors: { ...DEFAULT_CHART_COLORS, ...colors } });
+  };
+
   const updateChartSettings = (patch: Partial<ChartSettings>) => {
     setChartSettings((current) => {
       const next = { ...current, ...patch };
@@ -1802,15 +1838,42 @@ json.dumps(_result)`;
             ) : (
               <div className="settings-panel">
                 <div className="settings-section">
-                  <div className="settings-section-title">APPEARANCE</div>
+                  <div className="settings-section-title">CHART THEME</div>
                   <label className="settings-field">
-                    <span>Chart theme</span>
-                    <select value={chartSettings.theme} onChange={(event) => updateChartSettings({ theme: event.target.value as ChartTheme })}>
+                    <span>Preset</span>
+                    <select value={chartSettings.theme} onChange={(event) => applyChartPreset(event.target.value as ChartTheme)}>
                       <option value="pipsgox">PIPSGOX Dark</option>
                       <option value="classic">Classic Dark</option>
                       <option value="light">Clean Light</option>
                     </select>
                   </label>
+                  <div className="settings-theme-save">
+                    <select value="" onChange={(event) => loadChartTheme(event.target.value)}>
+                      <option value="">Load saved theme</option>
+                      {Object.keys(savedChartThemes).map((name) => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                    <input value={chartThemeName} onChange={(event) => setChartThemeName(event.target.value)} placeholder="Theme name" maxLength={24} />
+                    <button onClick={saveChartTheme}>SAVE</button>
+                  </div>
+                </div>
+                <div className="settings-section">
+                  <div className="settings-section-title">COLORS</div>
+                  <div className="settings-color-grid">
+                    {([
+                      ["background", "Background"], ["grid", "Grid"], ["axis", "Price / date axis"],
+                      ["candleUp", "Bullish candle"], ["candleDown", "Bearish candle"],
+                      ["volumeUp", "Volume up"], ["volumeDown", "Volume down"],
+                      ["ma50", "MA 50"], ["ma200", "MA 200"],
+                    ] as Array<[keyof ChartColors, string]>).map(([key, label]) => (
+                      <label className="settings-color-field" key={key}>
+                        <span>{label}</span>
+                        <span className="settings-color-control">
+                          <input type="color" value={chartSettings.colors[key]} onChange={(event) => updateChartColor(key, event.target.value)} />
+                          <code>{chartSettings.colors[key].toUpperCase()}</code>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="settings-section">
                   <div className="settings-section-title">CHART ELEMENTS</div>
