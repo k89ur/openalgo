@@ -1401,7 +1401,7 @@ json.dumps(_result)`;
 
     setWatchlist((current) => [
       ...current,
-      { symbol: result.symbol, price: "—", change: "—" },
+      { symbol: result.symbol, price: "—", change: "—", apiSymbol: result.api_symbol },
     ]);
     selectSymbol(result.symbol);
     setSearchOpen(false);
