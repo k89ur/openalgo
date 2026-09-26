@@ -777,6 +777,70 @@ def symbol_search(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@app.get("/api/symbols/resolve")
+def symbol_resolve(
+    symbol: str = Query(..., min_length=1, max_length=40),
+    timeframe: Timeframe = "D",
+    test_history: bool = Query(default=True),
+    test_quote: bool = Query(default=True),
+) -> dict[str, object]:
+    """Diagnose one user-facing ticker through the current FYERS symbol master."""
+    clean = symbol.strip().upper()
+    if not clean:
+        raise HTTPException(status_code=400, detail="Symbol is required.")
+
+    try:
+        master_candidates = _master_symbol_candidates(clean)
+        resolved = resolve_api_symbol(clean)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    candidates = list(dict.fromkeys(
+        [*master_candidates, resolved] if resolved else master_candidates
+    ))
+    results: list[dict[str, object]] = []
+    selected: str | None = None
+
+    for candidate in candidates:
+        record: dict[str, object] = {
+            "api_symbol": candidate,
+            "series": candidate.rsplit("-", 1)[-1] if "-" in candidate else None,
+            "history": None,
+            "quote": None,
+        }
+        if test_history:
+            try:
+                bars = provider.get_history(candidate, timeframe, 50)
+                record["history"] = {"ok": True, "bars": len(bars)}
+                if selected is None and bars:
+                    selected = candidate
+            except Exception as exc:
+                record["history"] = {"ok": False, "error": str(exc)}
+        if test_quote:
+            try:
+                quote_result = provider.get_quote(candidate)
+                record["quote"] = {
+                    "ok": True,
+                    "last": quote_result.last,
+                    "change_percent": quote_result.change_percent,
+                }
+                if selected is None:
+                    selected = candidate
+            except Exception as exc:
+                record["quote"] = {"ok": False, "error": str(exc)}
+        results.append(record)
+
+    return {
+        "input": clean,
+        "master_found": bool(master_candidates),
+        "master_candidates": master_candidates,
+        "resolved": resolved,
+        "selected": selected,
+        "timeframe": timeframe,
+        "candidates": results,
+    }
+
+
 @app.get("/api/history", response_model=list[Candle])
 def history(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
