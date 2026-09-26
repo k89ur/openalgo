@@ -194,12 +194,13 @@ const DEFAULT_CHART_COLORS: ChartColors = {
   candleUp: "#12d98b", candleDown: "#ff4d5a",
   volumeUp: "#d9dde3", volumeDown: "#d9dde3",
   ma50: "#f6c85f", ma200: "#b07cff",
+  barUp: "#12d98b", barDown: "#ff4d5a", lineColor: "#38bdf8",
 };
 
 const CHART_COLOR_PRESETS: Record<ChartTheme, ChartColors> = {
   pipsgox: DEFAULT_CHART_COLORS,
-  classic: { background:"#101317", grid:"#28303a", axis:"#697482", candleUp:"#26a69a", candleDown:"#ef5350", volumeUp:"#7d8792", volumeDown:"#7d8792", ma50:"#f6c85f", ma200:"#b07cff" },
-  light: { background:"#ffffff", grid:"#e5e7eb", axis:"#9ca3af", candleUp:"#168a59", candleDown:"#c93643", volumeUp:"#8b95a1", volumeDown:"#8b95a1", ma50:"#c27a00", ma200:"#7654a8" },
+  classic: { background:"#101317", grid:"#28303a", axis:"#697482", candleUp:"#26a69a", candleDown:"#ef5350", volumeUp:"#7d8792", volumeDown:"#7d8792", ma50:"#f6c85f", ma200:"#b07cff", barUp:"#26a69a", barDown:"#ef5350", lineColor:"#42a5f5" },
+  light: { background:"#ffffff", grid:"#e5e7eb", axis:"#9ca3af", candleUp:"#168a59", candleDown:"#c93643", volumeUp:"#8b95a1", volumeDown:"#8b95a1", ma50:"#c27a00", ma200:"#7654a8", barUp:"#168a59", barDown:"#c93643", lineColor:"#1976d2" },
 };
 
 const DEFAULT_CHART_SETTINGS: ChartSettings = {
@@ -1946,11 +1947,25 @@ json.dumps(_result)`;
                   </div>
                 </div>
                 <div className="settings-section">
+                  <div className="settings-section-title">CHART TYPE</div>
+                  <div className="settings-chart-type">
+                    {([
+                      ["candles", "Candlestick"],
+                      ["bars", "Bar"],
+                      ["line", "Line"],
+                    ] as Array<[ChartType, string]>).map(([type, label]) => (
+                      <button key={type} className={chartType === type ? "active" : ""} onClick={() => setChartType(type)}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="settings-section">
                   <div className="settings-section-title">COLORS</div>
                   <div className="settings-color-grid">
                     {([
                       ["background", "Background"], ["grid", "Grid"], ["axis", "Price / date axis"],
-                      ["candleUp", "Bullish candle"], ["candleDown", "Bearish candle"],
+                      ...(chartType === "candles" ? [["candleUp", "Bullish candle"], ["candleDown", "Bearish candle"]] : []),
+                      ...(chartType === "bars" ? [["barUp", "Up bar"], ["barDown", "Down bar"]] : []),
+                      ...(chartType === "line" ? [["lineColor", "Line color"]] : []),
                       ["volumeUp", "Volume up"], ["volumeDown", "Volume down"],
                       ["ma50", "MA 50"], ["ma200", "MA 200"],
                     ] as Array<[keyof ChartColors, string]>).map(([key, label]) => (
