@@ -1963,9 +1963,9 @@ json.dumps(_result)`;
                   <div className="settings-color-grid">
                     {([
                       ["background", "Background"], ["grid", "Grid"], ["axis", "Price / date axis"],
-                      ...(chartType === "candles" ? [["candleUp", "Bullish candle"], ["candleDown", "Bearish candle"]] : []),
-                      ...(chartType === "bars" ? [["barUp", "Up bar"], ["barDown", "Down bar"]] : []),
-                      ...(chartType === "line" ? [["lineColor", "Line color"]] : []),
+                      ...(chartType === "candles" ? ([["candleUp", "Bullish candle"], ["candleDown", "Bearish candle"]] as Array<[keyof ChartColors, string]>) : []),
+                      ...(chartType === "bars" ? ([["barUp", "Up bar"], ["barDown", "Down bar"]] as Array<[keyof ChartColors, string]>) : []),
+                      ...(chartType === "line" ? ([["lineColor", "Line color"]] as Array<[keyof ChartColors, string]>) : []),
                       ["volumeUp", "Volume up"], ["volumeDown", "Volume down"],
                       ["ma50", "MA 50"], ["ma200", "MA 200"],
                     ] as Array<[keyof ChartColors, string]>).map(([key, label]) => (
