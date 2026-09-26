@@ -982,6 +982,10 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
             pairs.append((clean, api_symbol))
 
     results: list[Quote] = []
+    api_to_original: dict[str, str] = {
+        api_symbol.upper(): original
+        for original, api_symbol in pairs
+    }
 
     for start in range(0, len(pairs), 50):
         chunk_pairs = pairs[start:start + 50]
@@ -1002,6 +1006,8 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
                 for original, api in chunk_pairs
             ]
             fallback_chunk = [api for _, api in fallback_pairs]
+            for original, fallback_api in fallback_pairs:
+                api_to_original[fallback_api.upper()] = original
 
             if fallback_chunk == chunk:
                 # Preserve the existing per-symbol fallback behavior for a
@@ -1022,13 +1028,6 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
                         results.extend(provider.get_quotes([api_symbol]))
                     except ValueError:
                         continue
-
-    api_to_original: dict[str, str] = {}
-    for original, api_symbol in pairs:
-        api_to_original[api_symbol.upper()] = original
-        fallback = _resolve_api_symbol_from_master(original)
-        if fallback:
-            api_to_original[fallback.upper()] = original
 
     output: list[Quote] = []
     for item in results:
