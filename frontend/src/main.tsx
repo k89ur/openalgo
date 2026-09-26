@@ -1170,7 +1170,7 @@ json.dumps(_result)`;
       socket.onopen = () => {
         socket?.send(JSON.stringify({
           action: "subscribe",
-          symbols: watchlist.map((item) => item.symbol),
+          symbols: watchlist.map((item) => item.apiSymbol || item.symbol),
         }));
       };
 
