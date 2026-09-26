@@ -35,7 +35,7 @@ port_owner() {
 check_port_free() {
   local name="$1" port="$2"
   if port_owner "$port" | grep -q "LISTEN"; then
-    echo "✗ $name port :$port is already occupied."
+    echo "STATUS: FAIL — $name port :$port is already occupied."
     port_owner "$port"
     return 1
   fi
@@ -47,29 +47,30 @@ start_backend() {
   local logfile="$RUN_DIR/backend.log"
 
   if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
-    echo "✓ Backend already running (PID $(cat "$pidfile"))"
+    echo "STATUS: PASS — Backend already running (PID $(cat "$pidfile"))"
     return 0
   fi
 
   rm -f "$pidfile"
   : > "$logfile"
-  echo "Starting Backend..."
+  echo "ACTION: Starting Backend..."
 
   (
     cd "$ROOT/backend" || exit 1
-    exec env PIPSGOX_WEB_URL="$WEB_URL" FYERS_REDIRECT_URI="$FYERS_CALLBACK"       python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    exec env PIPSGOX_WEB_URL="$WEB_URL" FYERS_REDIRECT_URI="$FYERS_CALLBACK" \
+      python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
   ) >"$logfile" 2>&1 &
   local pid=$!
   echo "$pid" > "$pidfile"
 
   for _ in {1..30}; do
     if curl -fsS --max-time 2 http://127.0.0.1:8000/health >/dev/null 2>&1; then
-      echo "✓ Backend :8000 (PID $pid)"
+      echo "STATUS: PASS — Backend :8000 (PID $pid)"
       return 0
     fi
 
     if ! kill -0 "$pid" 2>/dev/null; then
-      echo "✗ Backend exited during startup (PID $pid)."
+      echo "STATUS: FAIL — Backend exited during startup (PID $pid)."
       log_tail "$logfile"
       rm -f "$pidfile"
       return 1
@@ -77,7 +78,7 @@ start_backend() {
     sleep 1
   done
 
-  echo "✗ Backend did not become ready within 30 seconds."
+  echo "STATUS: FAIL — Backend did not become ready within 30 seconds."
   log_tail "$logfile"
   return 1
 }
@@ -87,13 +88,13 @@ start_frontend() {
   local logfile="$RUN_DIR/frontend.log"
 
   if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
-    echo "✓ Frontend already running (PID $(cat "$pidfile"))"
+    echo "STATUS: PASS — Frontend already running (PID $(cat "$pidfile"))"
     return 0
   fi
 
   rm -f "$pidfile"
   : > "$logfile"
-  echo "Starting Frontend..."
+  echo "ACTION: Starting Frontend..."
 
   (
     cd "$ROOT/frontend" || exit 1
@@ -104,12 +105,12 @@ start_frontend() {
 
   for _ in {1..30}; do
     if curl -fsS --max-time 2 http://127.0.0.1:3001/ >/dev/null 2>&1; then
-      echo "✓ Frontend :3001 (PID $pid)"
+      echo "STATUS: PASS — Frontend :3001 (PID $pid)"
       return 0
     fi
 
     if ! kill -0 "$pid" 2>/dev/null; then
-      echo "✗ Frontend exited during startup (PID $pid)."
+      echo "STATUS: FAIL — Frontend exited during startup (PID $pid)."
       log_tail "$logfile"
       rm -f "$pidfile"
       return 1
@@ -117,7 +118,7 @@ start_frontend() {
     sleep 1
   done
 
-  echo "✗ Frontend did not become ready within 30 seconds."
+  echo "STATUS: FAIL — Frontend did not become ready within 30 seconds."
   log_tail "$logfile"
   return 1
 }
@@ -131,42 +132,52 @@ echo "FYERS callback: $FYERS_CALLBACK"
 echo
 
 if ! check_port_free "Backend" 8000; then
-  echo "Use ./scripts/stop-pipsgox.sh first, or inspect with ./scripts/pipsgox-doctor.sh."
+  echo "ACTION: Use ./scripts/stop-pipsgox.sh first, or inspect with ./scripts/pipsgox-doctor.sh."
   exit 1
 fi
 
 if ! check_port_free "Frontend" 3001; then
-  echo "Use ./scripts/stop-pipsgox.sh first, or inspect with ./scripts/pipsgox-doctor.sh."
+  echo "ACTION: Use ./scripts/stop-pipsgox.sh first, or inspect with ./scripts/pipsgox-doctor.sh."
   exit 1
 fi
 
 if ! start_backend; then
   echo
-  echo "PIPSGOX START FAILED: backend"
-  echo "Run: ./scripts/pipsgox-doctor.sh"
+  echo "STATUS: FAIL — PIPSGOX start failed: backend"
+  echo "ACTION: Run ./scripts/pipsgox-doctor.sh"
   exit 1
 fi
 
 if ! start_frontend; then
   echo
-  echo "PIPSGOX START FAILED: frontend"
-  echo "Run: ./scripts/pipsgox-doctor.sh"
+  echo "STATUS: FAIL — PIPSGOX start failed: frontend"
+  echo "ACTION: Run ./scripts/pipsgox-doctor.sh"
   exit 1
 fi
 
 echo
-echo "Health:"
-curl -fsS http://127.0.0.1:8000/health || true
-echo
+echo "HEALTH CHECK"
+echo "============"
+HEALTH="$(curl -fsS --max-time 3 http://127.0.0.1:8000/health || true)"
+if [[ -n "$HEALTH" ]]; then
+  echo "STATUS: PASS — Backend health"
+  echo "$HEALTH"
+else
+  echo "STATUS: FAIL — Backend health unavailable"
+fi
+
 FYERS_STATUS="$(curl -fsS --max-time 3 http://127.0.0.1:8000/api/fyers/status || true)"
 if grep -q '"configured":true' <<<"$FYERS_STATUS"; then
   if grep -q '"connected":true' <<<"$FYERS_STATUS"; then
-    echo "FYERS: connected"
+    echo "STATUS: PASS — FYERS connected"
   else
-    echo "FYERS: login required — the web app will open FYERS login automatically."
+    echo "STATUS: WARN — FYERS login required"
   fi
 else
-  echo "FYERS: credentials not configured in backend/.env"
+  echo "STATUS: WARN — FYERS credentials not configured"
 fi
+
 echo
-echo "PIPSGOX is running."
+echo "STATUS: PASS — PIPSGOX is running"
+echo "WEB: $WEB_URL"
+echo "API: $API_URL"
