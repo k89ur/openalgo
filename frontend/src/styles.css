@@ -264,6 +264,7 @@ button { cursor: pointer; }
 .watch-price { color:#bdbdbd; text-align:right; font-size:10px; }
 .watch-change { text-align:right; font-size:9px; font-weight:500; }
 .watch-volume { color:#9b9b9b; text-align:right; font-size:8px; white-space:nowrap; }
+.watch-volume.low-volume { color:#ef5b63; }
 .watch-bid-ask { text-align:right; font-size:7px; white-space:nowrap; }
 .watch-bid-value { color:#35c98a; }
 .watch-ask-value { color:#ef5b63; }
