@@ -576,7 +576,7 @@ function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [watchSearch, setWatchSearch] = useState("");
   const [watchOpen, setWatchOpen] = useState(true);
-  const [watchWidth, setWatchWidth] = useState(360);
+  const [watchWidth, setWatchWidth] = useState(430);
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
   const [quote, setQuote] = useState<{
