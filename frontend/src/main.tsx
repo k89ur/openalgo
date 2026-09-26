@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import ReactDOM from "react-dom/client";
-import { Chart, type ChartType, type Timeframe, type ChartRange, type PipscriptOutput, type ChartColors } from "./Chart";
+import { Chart, type ChartType, type Timeframe, type ChartRange, type DrawingTool, type PipscriptOutput, type ChartColors } from "./Chart";
 import "./styles.css";
 import { DevConsole } from "./DevConsole";
 
@@ -552,6 +552,8 @@ function App() {
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
   const [drawingToolbarOpen, setDrawingToolbarOpen] = useState(true);
+  const [activeDrawingTool, setActiveDrawingTool] = useState<DrawingTool | null>(null);
+  const [drawingCommand, setDrawingCommand] = useState<{ type: "delete" | "clear"; nonce: number } | undefined>();
 
   const chartRangeTimeframes: Record<ChartRange, Timeframe> = {
     "1D": "5m",
@@ -1640,18 +1642,18 @@ json.dumps(_result)`;
             <div className={"drawing-toolbar" + (drawingToolbarOpen ? "" : " is-hidden")} aria-label="Drawing tools">
               {drawingToolbarOpen && (
                 <>
-                  <button type="button" title="Horizontal Ray" aria-label="Horizontal Ray">↔</button>
-                  <button type="button" title="Trendline" aria-label="Trendline">／</button>
-                  <button type="button" title="Rectangle" aria-label="Rectangle">▭</button>
+                  <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray">↔</button>
+                  <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trendline" aria-label="Trendline">／</button>
+                  <button type="button" className={activeDrawingTool === "rectangle" ? "active" : ""} onClick={() => setActiveDrawingTool("rectangle")} title="Rectangle" aria-label="Rectangle">▭</button>
                   <span className="drawing-toolbar-divider" />
-                  <button type="button" title="Long Position" aria-label="Long Position">↗</button>
-                  <button type="button" title="Short Position" aria-label="Short Position">↘</button>
-                  <button type="button" title="Arrow" aria-label="Arrow">→</button>
-                  <button type="button" title="Brush" aria-label="Brush">✎</button>
-                  <button type="button" title="Text" aria-label="Text">T</button>
+                  <button type="button" className={activeDrawingTool === "long" ? "active" : ""} onClick={() => setActiveDrawingTool("long")} title="Long Position" aria-label="Long Position">↗</button>
+                  <button type="button" className={activeDrawingTool === "short" ? "active" : ""} onClick={() => setActiveDrawingTool("short")} title="Short Position" aria-label="Short Position">↘</button>
+                  <button type="button" className={activeDrawingTool === "arrow" ? "active" : ""} onClick={() => setActiveDrawingTool("arrow")} title="Arrow" aria-label="Arrow">→</button>
+                  <button type="button" className={activeDrawingTool === "brush" ? "active" : ""} onClick={() => setActiveDrawingTool("brush")} title="Brush" aria-label="Brush">✎</button>
+                  <button type="button" className={activeDrawingTool === "text" ? "active" : ""} onClick={() => setActiveDrawingTool("text")} title="Text" aria-label="Text">T</button>
                   <span className="drawing-toolbar-divider" />
-                  <button type="button" title="Delete Selected Drawing" aria-label="Delete Selected Drawing">⌫</button>
-                  <button type="button" title="Clear Drawings" aria-label="Clear Drawings">⌧</button>
+                  <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete Last Drawing" aria-label="Delete Last Drawing">⌫</button>
+                  <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear Drawings" aria-label="Clear Drawings">⌧</button>
                 </>
               )}
               <button type="button" className="drawing-toolbar-toggle" onClick={() => setDrawingToolbarOpen((value) => !value)} title={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"} aria-label={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"}>
@@ -1664,6 +1666,8 @@ json.dumps(_result)`;
               symbol={symbol}
               timeframe={timeframe}
               range={chartRange}
+              activeDrawingTool={activeDrawingTool}
+              drawingCommand={drawingCommand}
               chartTheme={chartSettings.theme}
               chartColors={chartSettings.colors}
               showGrid={chartSettings.showGrid}
