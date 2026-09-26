@@ -994,13 +994,46 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
             continue
 
         try:
-            results.extend(provider.get_quotes(chunk))
+            batch_results = provider.get_quotes(chunk)
+            results.extend(batch_results)
+
+            returned = {item.symbol.upper() for item in batch_results}
+            missing_pairs = [
+                (original, api)
+                for original, api in chunk_pairs
+                if api.upper() not in returned
+            ]
+            if not missing_pairs:
+                continue
+
+            # FYERS may return the valid part of a mixed batch without raising
+            # an error. Resolve only the missing tickers against the current
+            # symbol master so BE/other-series stocks are recovered too.
+            fallback_pairs = [
+                (original, _resolve_api_symbol_from_master(original) or api)
+                for original, api in missing_pairs
+            ]
+            fallback_chunk = [api for _, api in fallback_pairs]
+            for original, fallback_api in fallback_pairs:
+                api_to_original[fallback_api.upper()] = original
+
+            fallback_changed = any(
+                fallback_api.upper() != api.upper()
+                for (_, api), (_, fallback_api) in zip(missing_pairs, fallback_pairs)
+            )
+            if fallback_changed:
+                try:
+                    results.extend(provider.get_quotes(fallback_chunk))
+                except ValueError:
+                    for api_symbol in fallback_chunk:
+                        try:
+                            results.extend(provider.get_quotes([api_symbol]))
+                        except ValueError:
+                            continue
             continue
-        except ValueError as first_error:
-            # Some NSE securities are valid but currently use BE/another
-            # supported series instead of the deterministic -EQ form.
-            # Resolve the failed batch against FYERS' current symbol master
-            # once, then retry the whole batch.
+        except ValueError:
+            # A whole batch can fail when FYERS rejects one or more symbols.
+            # Resolve the batch against the current symbol master and retry.
             fallback_pairs = [
                 (original, _resolve_api_symbol_from_master(original) or api)
                 for original, api in chunk_pairs
@@ -1010,8 +1043,6 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
                 api_to_original[fallback_api.upper()] = original
 
             if fallback_chunk == chunk:
-                # Preserve the existing per-symbol fallback behavior for a
-                # transient/individual provider failure.
                 for api_symbol in chunk:
                     try:
                         results.extend(provider.get_quotes([api_symbol]))
@@ -1022,7 +1053,6 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
             try:
                 results.extend(provider.get_quotes(fallback_chunk))
             except ValueError:
-                # One bad symbol should not block the rest of the watchlist.
                 for api_symbol in fallback_chunk:
                     try:
                         results.extend(provider.get_quotes([api_symbol]))
