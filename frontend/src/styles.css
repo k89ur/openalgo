@@ -684,3 +684,71 @@ button { cursor: pointer; }
     max-width: calc(100% - 16px);
   }
 }
+
+
+.settings-theme-save {
+  display:grid;
+  grid-template-columns: 1fr 110px 44px;
+  gap:5px;
+  margin-top:8px;
+}
+.settings-theme-save select,
+.settings-theme-save input {
+  min-width:0;
+  height:28px;
+  border:1px solid #303030;
+  background:#171717;
+  color:#aaa;
+  padding:0 7px;
+  outline:0;
+  font-size:9px;
+}
+.settings-theme-save button {
+  height:28px;
+  border:1px solid #315f82;
+  background:#1a3447;
+  color:#d7e6f2;
+  font-size:8px;
+  padding:0;
+}
+.settings-color-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:5px;
+}
+.settings-color-field {
+  min-width:0;
+  min-height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  padding:0 7px;
+  border:1px solid #252525;
+  background:#151515;
+  color:#aaa;
+  font-size:9px;
+}
+.settings-color-control {
+  display:flex;
+  align-items:center;
+  gap:5px;
+  min-width:0;
+}
+.settings-color-control input[type="color"] {
+  width:23px;
+  height:20px;
+  padding:1px;
+  border:1px solid #3a3a3a;
+  background:#111;
+  cursor:pointer;
+}
+.settings-color-control code {
+  color:#666;
+  font-size:7px;
+  font-family:"Manrope",sans-serif;
+}
+@media (max-width:620px) {
+  .settings-color-grid { grid-template-columns:1fr; }
+  .settings-theme-save { grid-template-columns:1fr 90px 44px; }
+}
