@@ -229,6 +229,7 @@ def _load_nse_symbol_master() -> dict[str, dict]:
 
         _symbol_master_cache = payload
         _symbol_master_date = today
+        _symbol_resolution_cache.clear()
         return _symbol_master_cache
 
 
