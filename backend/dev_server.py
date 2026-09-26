@@ -33,7 +33,7 @@ def tail_log(name, lines=100):
         return "Log file not found."
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
-        return "\\n".join(content.splitlines()[-max(1, min(lines, 200)):])
+        return "\n".join(content.splitlines()[-max(1, min(lines, 200)):])
     except OSError as exc:
         return f"Could not read log: {exc}"
 
