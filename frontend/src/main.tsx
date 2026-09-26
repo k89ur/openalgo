@@ -1540,6 +1540,7 @@ json.dumps(_result)`;
               symbol={symbol}
               timeframe={timeframe}
               chartTheme={chartSettings.theme}
+              chartColors={chartSettings.colors}
               showGrid={chartSettings.showGrid}
               showCrosshair={chartSettings.showCrosshair}
               showVolume={chartSettings.showVolume}
