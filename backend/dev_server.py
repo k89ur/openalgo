@@ -60,10 +60,26 @@ def current_status():
         "backend_health": backend_health(), "fyers": fyers_status(),
     }
 
-def launch(script):
+ACTION_LOG = RUN_DIR / "control-actions.log"
+
+def launch(script, label):
     RUN_DIR.mkdir(parents=True, exist_ok=True)
-    subprocess.Popen(["bash", str(script)], cwd=str(ROOT), stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    with ACTION_LOG.open("a", encoding="utf-8") as log:
+        log.write(f"\n=== {label} ===\n")
+        log.flush()
+        return subprocess.Popen(
+            ["bash", str(script)], cwd=str(ROOT), stdin=subprocess.DEVNULL,
+            stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+        )
+
+def action_log(lines=120):
+    if not ACTION_LOG.exists():
+        return "No control actions yet."
+    try:
+        content = ACTION_LOG.read_text(encoding="utf-8", errors="replace")
+        return "\n".join(content.splitlines()[-max(1, min(lines, 300)):])
+    except OSError as exc:
+        return f"Could not read control log: {exc}"
 
 HTML = r"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PIPSGOX Dev Control</title><style>
@@ -83,14 +99,15 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word;background:#0d0f12;borde
 <div class="card"><div class="label">Backend</div><div class="value" id="backend">Checking...</div></div><div class="card"><div class="label">Frontend</div><div class="value" id="frontend">Checking...</div></div>
 <div class="card"><div class="label">FYERS</div><div class="value" id="fyers">Checking...</div></div></div>
 <div class="actions"><button class="primary" onclick="action('start')">START</button><button class="danger" onclick="action('stop')">STOP</button><button onclick="action('restart')">RESTART</button><button onclick="refresh()">REFRESH</button></div>
-<div class="links" id="links"></div><div class="panel"><h2>Backend log</h2><pre id="backendLog">Loading...</pre></div>
+<div class="links" id="links"></div><div class="panel"><h2>Control action log</h2><pre id="controlLog">Loading...</pre></div>
+<div class="panel"><h2>Backend log</h2><pre id="backendLog">Loading...</pre></div>
 <div class="panel"><h2>Frontend log</h2><pre id="frontendLog">Loading...</pre></div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));function state(v){return v?'<span class="dot on"></span>RUNNING':'<span class="dot"></span>STOPPED'}
 async function refresh(){const s=await fetch('/api/status').then(r=>r.json());document.getElementById('backend').innerHTML=state(s.backend);document.getElementById('frontend').innerHTML=state(s.frontend);
 document.getElementById('fyers').innerHTML=s.fyers?.connected?'<span class="dot on"></span>CONNECTED':(s.fyers?.configured?'<span class="dot warn"></span>LOGIN REQUIRED':'<span class="dot"></span>NOT CONFIGURED');
 document.getElementById('links').innerHTML='<a href="'+s.frontend_url+'" target="_blank">OPEN PIPSGOX ↗</a><a href="'+s.backend_url+'/docs" target="_blank">API DOCS ↗</a><span class="small">Control: '+esc(s.control_url)+'</span>';
-const logs=await Promise.all(['backend','frontend'].map(n=>fetch('/api/logs/'+n).then(r=>r.text())));document.getElementById('backendLog').textContent=logs[0];document.getElementById('frontendLog').textContent=logs[1]}
+const logs=await Promise.all(['control','backend','frontend'].map(n=>fetch('/api/logs/'+n).then(r=>r.text())));document.getElementById('controlLog').textContent=logs[0];document.getElementById('backendLog').textContent=logs[1];document.getElementById('frontendLog').textContent=logs[2]}
 async function action(name){const response=await fetch('/api/'+name,{method:'POST'});const data=await response.json();if(!response.ok)alert(data.error||'Action failed');setTimeout(refresh,1000)}refresh();setInterval(refresh,3000);
 </script></main></body></html>"""
 
@@ -100,14 +117,25 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path=="/": self._send(200,HTML); return
         if self.path=="/api/status": self._send(200,json.dumps(current_status()),"application/json"); return
+        if self.path == "/api/logs/control": self._send(200,action_log(),"text/plain; charset=utf-8"); return
         if self.path.startswith("/api/logs/"): self._send(200,tail_log(self.path.rsplit("/",1)[-1]),"text/plain; charset=utf-8"); return
         self._send(404,"Not found","text/plain; charset=utf-8")
     def do_POST(self):
         if self.path not in {"/api/start","/api/stop","/api/restart"}: self._send(404,json.dumps({"error":"Not found"}),"application/json"); return
         try:
-            if self.path=="/api/start": launch(START_SCRIPT)
-            elif self.path=="/api/stop": launch(STOP_SCRIPT)
-            else: subprocess.Popen(["bash","-lc",f"sleep 1; bash {STOP_SCRIPT!s}; sleep 1; bash {START_SCRIPT!s}"],cwd=str(ROOT),stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+            if self.path=="/api/start":
+                process = launch(START_SCRIPT, "START")
+            elif self.path=="/api/stop":
+                process = launch(STOP_SCRIPT, "STOP")
+            else:
+                RUN_DIR.mkdir(parents=True, exist_ok=True)
+                log = ACTION_LOG.open("a", encoding="utf-8")
+                log.write("\n=== RESTART ===\n"); log.flush()
+                process = subprocess.Popen(
+                    ["bash","-lc",f"sleep 1; bash {STOP_SCRIPT!s}; sleep 1; bash {START_SCRIPT!s}"],
+                    cwd=str(ROOT), stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
             self._send(200,json.dumps({"ok":True}),"application/json")
         except OSError as exc: self._send(500,json.dumps({"error":str(exc)}),"application/json")
     def log_message(self,format,*args): return
