@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe, type PipscriptOutput, type ChartColors } from "./Chart";
 import "./styles.css";
+import { DevConsole } from "./DevConsole";
 
 type WatchItem = { symbol: string; price: string; change: string; apiSymbol?: string };
 export type ChartTheme = "pipsgox" | "classic" | "light";
@@ -1979,4 +1980,6 @@ json.dumps(_result)`;
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  window.location.pathname === "/dev" ? <DevConsole /> : <App />,
+);
