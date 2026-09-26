@@ -395,15 +395,24 @@ def _master_symbol_candidates(symbol: str) -> list[str]:
             continue
         base, series = api_base.rsplit("-", 1)
 
-        if clean not in {ticker, exchange_symbol, base}:
+        # The master has used slightly different identifier fields across
+        # versions. Match the authoritative API key as well as ticker/name
+        # fields, and tolerate a series suffix in symTicker/exSymbol.
+        ticker_base = ticker.rsplit("-", 1)[0] if "-" in ticker else ticker
+        exchange_base = (
+            exchange_symbol.rsplit("-", 1)[0]
+            if "-" in exchange_symbol
+            else exchange_symbol
+        )
+
+        if clean not in {ticker, ticker_base, exchange_symbol, exchange_base, base}:
             continue
 
-        # FYERS enables NSE EQ/BE equity series. Keep any other exact master
-        # match out of the automatic retry path because FYERS marks those
-        # restricted/SME series as unavailable.
-        priority = {"EQ": 0, "BE": 1}.get(series)
-        if priority is not None:
-            candidates.append((priority, api))
+        # Prefer the two NSE equity series that FYERS currently enables.
+        # Other NSE-CM records are retained after them so the resolver can
+        # identify the exact master instrument instead of silently forcing EQ.
+        priority = {"EQ": 0, "BE": 1}.get(series, 10)
+        candidates.append((priority, api))
 
     candidates.sort(key=lambda item: (item[0], item[1]))
     symbols = [api for _, api in candidates]
