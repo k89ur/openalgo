@@ -306,6 +306,13 @@ def resolve_api_symbol(symbol: str) -> str | None:
     if clean in alias_symbols:
         return provider.symbol_info(clean).api_symbol
 
+    # CSVs may already contain the FYERS series, e.g. MBECL-BE or MBECL-EQ.
+    # Preserve that exact series instead of appending another -EQ suffix.
+    if "-" in clean:
+        base, series = clean.rsplit("-", 1)
+        if base and series in {"EQ", "BE"}:
+            return f"NSE:{base}-{series}"
+
     # Fast path for ordinary NSE equities. FYERS uses the deterministic
     # NSE:<SYMBOL>-EQ form, so interactive chart/quote requests must not wait
     # for the large daily symbol-master download. Invalid symbols will still
