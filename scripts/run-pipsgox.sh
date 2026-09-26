@@ -207,6 +207,12 @@ echo "API: $API_URL"
 echo "FYERS callback: $FYERS_CALLBACK"
 echo
 
+echo "DEV CONTROL: http://127.0.0.1:9000 (Codespaces: ${CODESPACE_NAME:-local}-9000.${CODESPACE_DOMAIN})"
+if ! bash "$ROOT/scripts/run-pipsgox-control.sh"; then
+  status_warn "Dev Control could not start. Backend/frontend startup will continue."
+fi
+echo
+
 if ! run_preflight; then
   status_fail "PIPSGOX pre-flight check failed. Startup stopped."
   echo "ACTION: Fix the item marked FAIL above, then run ./scripts/run-pipsgox.sh again."
