@@ -107,6 +107,22 @@ port_owner() {
   ss -ltnp 2>/dev/null | grep -E ":$port([[:space:]]|$)" || true
 }
 
+service_running() {
+  local name="$1" port="$2" url="$3" pidfile="$4"
+  if curl -fsS --max-time 2 "$url" >/dev/null 2>&1; then
+    local pid=""
+    pid="$(port_owner "$port" | grep -oE 'pid=[0-9]+' | head -n1 | cut -d= -f2 || true)"
+    if [[ -n "$pid" ]]; then echo "$pid" > "$pidfile"; fi
+    if [[ -n "$pid" ]]; then
+      echo "STATUS: PASS — $name already running on :$port (PID $pid)"
+    else
+      echo "STATUS: PASS — $name already running on :$port"
+    fi
+    return 0
+  fi
+  return 1
+}
+
 check_port_free() {
   local name="$1" port="$2"
   if port_owner "$port" | grep -q "LISTEN"; then
@@ -116,7 +132,6 @@ check_port_free() {
   fi
   return 0
 }
-
 start_backend() {
   local pidfile="$RUN_DIR/backend.pid"
   local logfile="$RUN_DIR/backend.log"
@@ -219,12 +234,16 @@ if ! run_preflight; then
   exit 1
 fi
 
-if ! check_port_free "Backend" 8000; then
+if service_running "Backend" 8000 "http://127.0.0.1:8000/health" "$RUN_DIR/backend.pid"; then
+  :
+elif ! check_port_free "Backend" 8000; then
   echo "ACTION: Use ./scripts/stop-pipsgox.sh first, or inspect with ./scripts/pipsgox-doctor.sh."
   exit 1
 fi
 
-if ! check_port_free "Frontend" 3001; then
+if service_running "Frontend" 3001 "http://127.0.0.1:3001/" "$RUN_DIR/frontend.pid"; then
+  :
+elif ! check_port_free "Frontend" 3001; then
   echo "ACTION: Use ./scripts/stop-pipsgox.sh first, or inspect with ./scripts/pipsgox-doctor.sh."
   exit 1
 fi
