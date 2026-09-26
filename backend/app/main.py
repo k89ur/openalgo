@@ -573,9 +573,15 @@ class FyersWatchlistStream:
             def on_connect() -> None:
                 with self._symbol_lock:
                     symbols = set(self._subscribed)
-                if symbols:
+
+                # _subscribed contains user-facing tickers (e.g. NURECA),
+                # not FYERS API symbols. Resolve them again on every socket
+                # connection before subscribing. This is critical after a
+                # reconnect and on the first connection of a fresh Codespace.
+                api_symbols = self._api_symbols(symbols)
+                if api_symbols:
                     self._socket.subscribe(
-                        symbols=sorted(symbols),
+                        symbols=sorted(api_symbols),
                         data_type="SymbolUpdate",
                     )
                 self._socket.keep_running()
