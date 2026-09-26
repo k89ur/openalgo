@@ -343,28 +343,39 @@ def resolve_api_symbol(symbol: str) -> str | None:
     return None
 
 
-def _resolve_api_symbol_from_master(symbol: str) -> str | None:
-    """Resolve a ticker to its exact current FYERS symbol, including BE/other series.
+def _master_symbol_candidates(symbol: str) -> list[str]:
+    """Return all supported current FYERS NSE symbols for a ticker.
 
-    The fast resolver intentionally avoids downloading the large symbol master for
-    normal interactive requests. This fallback is used when FYERS rejects the
-    deterministic -EQ candidate, which covers stocks that currently trade under
-    another supported NSE series such as BE.
+    A ticker can exist in more than one exchange series. We prefer EQ, then BE,
+    and keep the exact API symbols from FYERS' daily master instead of inventing
+    a suffix. FYERS currently documents EQ and BE as the enabled NSE equity
+    series; other restricted/SME series are not enabled for trading/data access.
     """
     clean = symbol.strip().upper()
-    if not clean or ":" in clean:
-        return clean or None
+    if not clean:
+        return []
+
+    # Explicit FYERS symbols are already authoritative.
+    if ":" in clean:
+        return [clean]
+
+    # CSVs commonly contain "TICKER-EQ"/"TICKER-BE" without the exchange prefix.
+    if "-" in clean:
+        head, suffix = clean.rsplit("-", 1)
+        if suffix in {"EQ", "BE"} and head:
+            return [f"NSE:{head}-{suffix}"]
 
     with _symbol_master_lock:
         cached = _symbol_resolution_cache.get(clean)
     if cached:
-        return cached
+        return [cached]
 
     try:
         master = _load_nse_symbol_master()
     except ValueError:
-        return None
+        return []
 
+    candidates: list[tuple[int, str]] = []
     for api_symbol, item in master.items():
         if not isinstance(item, dict):
             continue
@@ -372,16 +383,37 @@ def _resolve_api_symbol_from_master(symbol: str) -> str | None:
         api = str(api_symbol or "").strip().upper()
         ticker = str(item.get("symTicker") or "").strip().upper()
         exchange_symbol = str(item.get("exSymbol") or "").strip().upper()
+        if not api or not api.startswith("NSE:"):
+            continue
+
         api_base = api.rsplit(":", 1)[-1]
-        api_base = api_base.rsplit("-", 1)[0]
+        if "-" not in api_base:
+            continue
+        base, series = api_base.rsplit("-", 1)
 
-        if clean in {ticker, exchange_symbol, api_base}:
-            if api:
-                with _symbol_master_lock:
-                    _symbol_resolution_cache[clean] = api
-                return api
+        if clean not in {ticker, exchange_symbol, base}:
+            continue
 
-    return None
+        # FYERS enables NSE EQ/BE equity series. Keep any other exact master
+        # match out of the automatic retry path because FYERS marks those
+        # restricted/SME series as unavailable.
+        priority = {"EQ": 0, "BE": 1}.get(series)
+        if priority is not None:
+            candidates.append((priority, api))
+
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    symbols = [api for _, api in candidates]
+
+    if symbols:
+        with _symbol_master_lock:
+            _symbol_resolution_cache[clean] = symbols[0]
+
+    return symbols
+
+
+def _resolve_api_symbol_from_master(symbol: str) -> str | None:
+    candidates = _master_symbol_candidates(symbol)
+    return candidates[0] if candidates else None
 
 
 def unresolved_symbol_error(symbol: str) -> ValueError:
@@ -753,16 +785,25 @@ def history(
                 end=to_date,
             )
         except ValueError as first_error:
-            fallback = _resolve_api_symbol_from_master(symbol)
-            if not fallback or fallback == api_symbol:
-                raise first_error
-            candles = provider.get_history(
-                fallback,
-                timeframe,
-                limit,
-                start=from_date,
-                end=to_date,
-            )
+            candidates = _master_symbol_candidates(symbol)
+            last_error = first_error
+            candles = None
+            for candidate in candidates:
+                if candidate == api_symbol:
+                    continue
+                try:
+                    candles = provider.get_history(
+                        candidate,
+                        timeframe,
+                        limit,
+                        start=from_date,
+                        end=to_date,
+                    )
+                    break
+                except ValueError as exc:
+                    last_error = exc
+            if candles is None:
+                raise last_error
 
         return [to_candle(item) for item in candles]
     except ValueError as exc:
@@ -816,17 +857,26 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                         pace=pace_history,
                     )
                 except ValueError as first_error:
-                    fallback = _resolve_api_symbol_from_master(original)
-                    if not fallback or fallback == api_symbol:
-                        raise first_error
-                    candles = _pipscript_get_history(
-                        fallback,
-                        item.timeframe,
-                        item.limit,
-                        start=item.from_date,
-                        end=item.to_date,
-                        pace=pace_history,
-                    )
+                    candidates = _master_symbol_candidates(original)
+                    last_error = first_error
+                    candles = None
+                    for candidate in candidates:
+                        if candidate == api_symbol:
+                            continue
+                        try:
+                            candles = _pipscript_get_history(
+                                candidate,
+                                item.timeframe,
+                                item.limit,
+                                start=item.from_date,
+                                end=item.to_date,
+                                pace=pace_history,
+                            )
+                            break
+                        except ValueError as exc:
+                            last_error = exc
+                    if candles is None:
+                        raise last_error
                 history_data[name] = {
                     "symbol": original,
                     "timeframe": item.timeframe,
@@ -845,10 +895,19 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                 try:
                     result = provider.get_quote(api_symbol)
                 except ValueError as first_error:
-                    fallback = _resolve_api_symbol_from_master(original)
-                    if not fallback or fallback == api_symbol:
-                        raise first_error
-                    result = provider.get_quote(fallback)
+                    candidates = _master_symbol_candidates(original)
+                    last_error = first_error
+                    result = None
+                    for candidate in candidates:
+                        if candidate == api_symbol:
+                            continue
+                        try:
+                            result = provider.get_quote(candidate)
+                            break
+                        except ValueError as exc:
+                            last_error = exc
+                    if result is None:
+                        raise last_error
                 result = replace(result, symbol=original)
                 quotes_data[name] = to_quote(result).model_dump()
 
@@ -895,10 +954,19 @@ def quote(
         try:
             result = provider.get_quote(api_symbol)
         except ValueError as first_error:
-            fallback = _resolve_api_symbol_from_master(original)
-            if not fallback or fallback == api_symbol:
-                raise first_error
-            result = provider.get_quote(fallback)
+            candidates = _master_symbol_candidates(original)
+            last_error = first_error
+            result = None
+            for candidate in candidates:
+                if candidate == api_symbol:
+                    continue
+                try:
+                    result = provider.get_quote(candidate)
+                    break
+                except ValueError as exc:
+                    last_error = exc
+            if result is None:
+                raise last_error
         result = replace(result, symbol=original)
         return to_quote(result)
     except ValueError as exc:
@@ -1010,19 +1078,16 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
             # FYERS may return the valid part of a mixed batch without raising
             # an error. Resolve only the missing tickers against the current
             # symbol master so BE/other-series stocks are recovered too.
-            fallback_pairs = [
-                (original, _resolve_api_symbol_from_master(original) or api)
-                for original, api in missing_pairs
-            ]
-            fallback_chunk = [api for _, api in fallback_pairs]
-            for original, fallback_api in fallback_pairs:
-                api_to_original[fallback_api.upper()] = original
+            fallback_pairs: list[tuple[str, str]] = []
+            for original, api in missing_pairs:
+                candidates = _master_symbol_candidates(original)
+                for candidate in candidates:
+                    if candidate.upper() != api.upper():
+                        fallback_pairs.append((original, candidate))
+                        api_to_original[candidate.upper()] = original
 
-            fallback_changed = any(
-                fallback_api.upper() != api.upper()
-                for (_, api), (_, fallback_api) in zip(missing_pairs, fallback_pairs)
-            )
-            if fallback_changed:
+            fallback_chunk = [api for _, api in fallback_pairs]
+            if fallback_chunk:
                 try:
                     results.extend(provider.get_quotes(fallback_chunk))
                 except ValueError:
@@ -1035,14 +1100,19 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
         except ValueError:
             # A whole batch can fail when FYERS rejects one or more symbols.
             # Resolve the batch against the current symbol master and retry.
-            fallback_pairs = [
-                (original, _resolve_api_symbol_from_master(original) or api)
-                for original, api in chunk_pairs
-            ]
-            fallback_chunk = [api for _, api in fallback_pairs]
-            for original, fallback_api in fallback_pairs:
-                api_to_original[fallback_api.upper()] = original
+            fallback_pairs: list[tuple[str, str]] = []
+            for original, api in chunk_pairs:
+                candidates = _master_symbol_candidates(original)
+                added = False
+                for candidate in candidates:
+                    if candidate.upper() != api.upper():
+                        fallback_pairs.append((original, candidate))
+                        api_to_original[candidate.upper()] = original
+                        added = True
+                if not added:
+                    fallback_pairs.append((original, api))
 
+            fallback_chunk = [api for _, api in fallback_pairs]
             if fallback_chunk == chunk:
                 for api_symbol in chunk:
                     try:
