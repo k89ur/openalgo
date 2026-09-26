@@ -302,6 +302,13 @@ def resolve_api_symbol(symbol: str) -> str | None:
     if clean in alias_symbols:
         return provider.symbol_info(clean).api_symbol
 
+    # Fast path for ordinary NSE equities. FYERS uses the deterministic
+    # NSE:<SYMBOL>-EQ form, so interactive chart/quote requests must not wait
+    # for the large daily symbol-master download. Invalid symbols will still
+    # be rejected by the FYERS provider and surfaced as an API error.
+    if clean.replace("&", "").replace("-", "").replace("_", "").isalnum():
+        return provider.symbol_info(clean).api_symbol
+
     try:
         master = _load_nse_symbol_master()
     except ValueError:
