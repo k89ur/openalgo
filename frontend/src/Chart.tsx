@@ -51,6 +51,7 @@ type Props = {
   show52WeekHigh: boolean;
   show52WeekLow: boolean;
   showPreviousClose: boolean;
+  lineSize: number;
   previousClose?: number;
   pipscriptOutput?: PipscriptOutput | null;
 };
@@ -517,7 +518,7 @@ export function Chart({
             type: "area",
             area: {
               lineColor: chartColors.lineColor,
-              lineSize: 2,
+              lineSize,
               backgroundColor: [
                 { offset: 0, color: chartTheme === "light" ? "rgba(25,118,210,0.10)" : chartTheme === "classic" ? "rgba(66,165,245,0.10)" : "rgba(56,189,248,0.12)" },
                 { offset: 1, color: "rgba(0,0,0,0)" },
