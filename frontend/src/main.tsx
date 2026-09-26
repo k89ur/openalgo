@@ -546,7 +546,8 @@ function App() {
       return { ...current, [activeWatchlistName]: nextList };
     });
   };
-  const [chartApiSymbol, setChartApiSymbol] = useState<string | null>(null);\n  const [symbol, setSymbol] = useState(() => {
+  const [chartApiSymbol, setChartApiSymbol] = useState<string | null>(null);
+  const [symbol, setSymbol] = useState(() => {
     const initialLists = loadWatchlists();
     const initial = Object.values(initialLists)[0] ?? DEFAULT_WATCHLIST;
     return initial[0]?.symbol ?? "BHARTIARTL";
