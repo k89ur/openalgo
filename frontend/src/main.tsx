@@ -1735,6 +1735,7 @@ json.dumps(_result)`;
             >
               {drawingToolbarOpen && (
                 <>
+                  <span className="drawing-toolbar-grip" title="Drag toolbar" aria-label="Drag toolbar">⠿</span>
                   <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray">↔</button>
                   <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trendline" aria-label="Trendline">／</button>
                   <button type="button" className={activeDrawingTool === "rectangle" ? "active" : ""} onClick={() => setActiveDrawingTool("rectangle")} title="Rectangle" aria-label="Rectangle">▭</button>
