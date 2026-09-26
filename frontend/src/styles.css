@@ -828,6 +828,8 @@ button { cursor: pointer; }
 
 /* Floating drawing toolbar: visible by default and collapsible without reducing chart width. */
 .drawing-toolbar{position:absolute;z-index:20;display:flex;touch-action:none;user-select:none;flex-direction:row;align-items:center;gap:1px;padding:2px 4px;border:1px solid var(--border);border-radius:6px;background:rgba(18,18,20,.94);box-shadow:0 2px 8px rgba(0,0,0,.22);backdrop-filter:blur(6px)}
+.drawing-toolbar-grip{width:14px;height:25px;display:inline-flex;align-items:center;justify-content:center;color:#666;font-size:13px;line-height:25px;cursor:grab;flex:0 0 14px}
+.drawing-toolbar-grip:active{cursor:grabbing}
 .drawing-toolbar button{width:26px;height:25px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--muted);font-size:14px;line-height:25px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .drawing-toolbar button:hover,.drawing-toolbar button.active{color:var(--text);background:var(--selected)}
 .drawing-toolbar-divider{width:1px;height:17px;margin:0 3px;background:var(--border)}
