@@ -547,6 +547,31 @@ function UiIcon({ name }: { name: UiIconName }) {
   );
 }
 
+function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" }) {
+  const common = {
+    width: 15,
+    height: 15,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.7,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (name === "horizontalRay") return <svg {...common}><path d="M3 12h17" /><path d="M17 8l4 4-4 4" /></svg>;
+  if (name === "trendline") return <svg {...common}><path d="M4 18L20 6" /><path d="M17 6h3v3" /></svg>;
+  if (name === "rectangle") return <svg {...common}><rect x="4" y="6" width="16" height="12" rx="1" /></svg>;
+  if (name === "long") return <svg {...common}><path d="M5 18L18 5" /><path d="M12 5h6v6" /><path d="M5 18h6" /></svg>;
+  if (name === "short") return <svg {...common}><path d="M5 6l13 13" /><path d="M12 19h6v-6" /><path d="M5 6h6" /></svg>;
+  if (name === "arrow") return <svg {...common}><path d="M4 20L19 5" /><path d="M11 5h8v8" /></svg>;
+  if (name === "brush") return <svg {...common}><path d="M14 5l5 5-9.5 9.5H5V15z" /><path d="M13 6l5 5" /><path d="M5 20c1.5-2 3-2 4 0" /></svg>;
+  if (name === "text") return <svg {...common}><path d="M5 5h14M12 5v14M8 19h8" /></svg>;
+  if (name === "delete") return <svg {...common}><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></svg>;
+  return <svg {...common}><path d="M6 6l12 12M18 6L6 18" /><rect x="3.5" y="3.5" width="17" height="17" rx="2" /></svg>;
+}
+
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
@@ -1736,18 +1761,18 @@ json.dumps(_result)`;
               {drawingToolbarOpen && (
                 <>
                   <span className="drawing-toolbar-grip" title="Drag toolbar" aria-label="Drag toolbar">⠿</span>
-                  <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray">↔</button>
-                  <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trendline" aria-label="Trendline">／</button>
-                  <button type="button" className={activeDrawingTool === "rectangle" ? "active" : ""} onClick={() => setActiveDrawingTool("rectangle")} title="Rectangle" aria-label="Rectangle">▭</button>
+                  <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray"><DrawingIcon name="horizontalRay" /></button>
+                  <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trendline" aria-label="Trendline"><DrawingIcon name="trendline" /></button>
+                  <button type="button" className={activeDrawingTool === "rectangle" ? "active" : ""} onClick={() => setActiveDrawingTool("rectangle")} title="Rectangle" aria-label="Rectangle"><DrawingIcon name="rectangle" /></button>
                   <span className="drawing-toolbar-divider" />
-                  <button type="button" className={activeDrawingTool === "long" ? "active" : ""} onClick={() => setActiveDrawingTool("long")} title="Long Position" aria-label="Long Position">↗</button>
-                  <button type="button" className={activeDrawingTool === "short" ? "active" : ""} onClick={() => setActiveDrawingTool("short")} title="Short Position" aria-label="Short Position">↘</button>
-                  <button type="button" className={activeDrawingTool === "arrow" ? "active" : ""} onClick={() => setActiveDrawingTool("arrow")} title="Arrow" aria-label="Arrow">→</button>
-                  <button type="button" className={activeDrawingTool === "brush" ? "active" : ""} onClick={() => setActiveDrawingTool("brush")} title="Brush" aria-label="Brush">✎</button>
-                  <button type="button" className={activeDrawingTool === "text" ? "active" : ""} onClick={() => setActiveDrawingTool("text")} title="Text" aria-label="Text">T</button>
+                  <button type="button" className={activeDrawingTool === "long" ? "active" : ""} onClick={() => setActiveDrawingTool("long")} title="Long Position" aria-label="Long Position"><DrawingIcon name="long" /></button>
+                  <button type="button" className={activeDrawingTool === "short" ? "active" : ""} onClick={() => setActiveDrawingTool("short")} title="Short Position" aria-label="Short Position"><DrawingIcon name="short" /></button>
+                  <button type="button" className={activeDrawingTool === "arrow" ? "active" : ""} onClick={() => setActiveDrawingTool("arrow")} title="Arrow" aria-label="Arrow"><DrawingIcon name="arrow" /></button>
+                  <button type="button" className={activeDrawingTool === "brush" ? "active" : ""} onClick={() => setActiveDrawingTool("brush")} title="Brush" aria-label="Brush"><DrawingIcon name="brush" /></button>
+                  <button type="button" className={activeDrawingTool === "text" ? "active" : ""} onClick={() => setActiveDrawingTool("text")} title="Text" aria-label="Text"><DrawingIcon name="text" /></button>
                   <span className="drawing-toolbar-divider" />
-                  <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete Last Drawing" aria-label="Delete Last Drawing"><UiIcon name="delete" /></button>
-                  <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear Drawings" aria-label="Clear Drawings">⌧</button>
+                  <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete Last Drawing" aria-label="Delete Last Drawing"><DrawingIcon name="delete" /></button>
+                  <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear Drawings" aria-label="Clear Drawings"><DrawingIcon name="clear" /></button>
                 </>
               )}
               <button type="button" className="drawing-toolbar-toggle" onClick={() => setDrawingToolbarOpen((value) => !value)} title={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"} aria-label={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"}>
