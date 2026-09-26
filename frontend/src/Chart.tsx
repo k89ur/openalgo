@@ -208,10 +208,11 @@ function getPeriod(timeframe: Timeframe) {
 }
 
 function getLimit(timeframe: Timeframe) {
-  if (timeframe === "D") return 800;
-  if (timeframe === "W") return 400;
-  if (timeframe === "M") return 240;
-  return 500;
+  // Keep first paint fast; KLineCharts requests older pages as the user scrolls left.
+  if (timeframe === "D") return 300;
+  if (timeframe === "W") return 160;
+  if (timeframe === "M") return 120;
+  return 300;
 }
 
 function dateBeforeTimestamp(timestamp: number) {
