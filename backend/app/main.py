@@ -468,14 +468,25 @@ class FyersWatchlistStream:
         return self._socket is not None
 
     def _api_symbols(self, symbols: set[str]) -> set[str]:
-        result = set()
+        """Resolve all usable FYERS EQ/BE series for live watchlist data."""
+        result: set[str] = set()
         with self._symbol_lock:
             for symbol in symbols:
-                api_symbol = resolve_api_symbol(symbol)
-                if not api_symbol:
+                clean = symbol.strip().upper()
+                if not clean:
                     continue
-                result.add(api_symbol)
-                self._api_to_app[api_symbol.upper()] = symbol
+
+                candidates = _master_symbol_candidates(clean)
+                if not candidates:
+                    api_symbol = resolve_api_symbol(clean)
+                    candidates = [api_symbol] if api_symbol else []
+
+                for api_symbol in candidates:
+                    suffix = api_symbol.rsplit("-", 1)[-1].upper()
+                    if "-" in api_symbol and suffix not in {"EQ", "BE", "INDEX"}:
+                        continue
+                    result.add(api_symbol)
+                    self._api_to_app[api_symbol.upper()] = clean
         return result
 
     def _connect(self) -> None:
@@ -1049,104 +1060,86 @@ def quotes_post(request: QuotesRequest) -> list[Quote]:
 
 
 def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
+    """Fetch watchlist quotes across the exact FYERS EQ/BE series.
+
+    The PIPSGOX watchlist stores only the ticker, such as LOTUSDEV. Some NSE
+    instruments are available to FYERS in BE instead of EQ, so asking only for
+    NSE:<ticker>-EQ can silently produce no quote.
+    """
     if not requested:
         return []
     if len(requested) > 1000:
-        raise HTTPException(status_code=400, detail="A maximum of 1000 symbols can be requested at once.")
+        raise HTTPException(
+            status_code=400,
+            detail="A maximum of 1000 symbols can be requested at once.",
+        )
 
-    pairs: list[tuple[str, str]] = []
+    original_candidates: dict[str, list[str]] = {}
+    all_candidates: list[str] = []
+
     for original in requested:
         clean = original.strip().upper()
         if not clean:
             continue
-        api_symbol = resolve_api_symbol(clean)
-        if api_symbol:
-            pairs.append((clean, api_symbol))
 
-    results: list[Quote] = []
-    api_to_original: dict[str, str] = {
-        api_symbol.upper(): original
-        for original, api_symbol in pairs
-    }
+        candidates = _master_symbol_candidates(clean)
+        if not candidates:
+            api_symbol = resolve_api_symbol(clean)
+            candidates = [api_symbol] if api_symbol else []
 
-    for start in range(0, len(pairs), 50):
-        chunk_pairs = pairs[start:start + 50]
-        chunk = [api for _, api in chunk_pairs]
+        # Only request the supported NSE equity series for ordinary equities.
+        # Keep index symbols intact.
+        filtered = [
+            candidate
+            for candidate in candidates
+            if candidate.rsplit("-", 1)[-1].upper() in {"EQ", "BE", "INDEX"}
+        ]
+        if filtered:
+            candidates = list(dict.fromkeys(filtered))
+
+        if candidates:
+            original_candidates[clean] = candidates
+            all_candidates.extend(candidates)
+
+    all_candidates = list(dict.fromkeys(all_candidates))
+    quote_by_api: dict[str, Quote] = {}
+
+    # FYERS Quotes supports batches of up to 50 symbols.
+    for start in range(0, len(all_candidates), 50):
+        chunk = all_candidates[start:start + 50]
         if not chunk:
             continue
 
         try:
             batch_results = provider.get_quotes(chunk)
-            results.extend(batch_results)
-
-            returned = {item.symbol.upper() for item in batch_results}
-            missing_pairs = [
-                (original, api)
-                for original, api in chunk_pairs
-                if api.upper() not in returned
-            ]
-            if not missing_pairs:
-                continue
-
-            # FYERS may return the valid part of a mixed batch without raising
-            # an error. Resolve only the missing tickers against the current
-            # symbol master so BE/other-series stocks are recovered too.
-            fallback_pairs: list[tuple[str, str]] = []
-            for original, api in missing_pairs:
-                candidates = _master_symbol_candidates(original)
-                for candidate in candidates:
-                    if candidate.upper() != api.upper():
-                        fallback_pairs.append((original, candidate))
-                        api_to_original[candidate.upper()] = original
-
-            fallback_chunk = [api for _, api in fallback_pairs]
-            if fallback_chunk:
-                try:
-                    results.extend(provider.get_quotes(fallback_chunk))
-                except ValueError:
-                    for api_symbol in fallback_chunk:
-                        try:
-                            results.extend(provider.get_quotes([api_symbol]))
-                        except ValueError:
-                            continue
-            continue
         except ValueError:
-            # A whole batch can fail when FYERS rejects one or more symbols.
-            # Resolve the batch against the current symbol master and retry.
-            fallback_pairs: list[tuple[str, str]] = []
-            for original, api in chunk_pairs:
-                candidates = _master_symbol_candidates(original)
-                added = False
-                for candidate in candidates:
-                    if candidate.upper() != api.upper():
-                        fallback_pairs.append((original, candidate))
-                        api_to_original[candidate.upper()] = original
-                        added = True
-                if not added:
-                    fallback_pairs.append((original, api))
+            # A single invalid/restricted symbol must not hide valid symbols
+            # in the same batch.
+            batch_results = []
+            for candidate in chunk:
+                try:
+                    batch_results.extend(provider.get_quotes([candidate]))
+                except ValueError:
+                    continue
 
-            fallback_chunk = [api for _, api in fallback_pairs]
-            if fallback_chunk == chunk:
-                for api_symbol in chunk:
-                    try:
-                        results.extend(provider.get_quotes([api_symbol]))
-                    except ValueError:
-                        continue
-                continue
-
-            try:
-                results.extend(provider.get_quotes(fallback_chunk))
-            except ValueError:
-                for api_symbol in fallback_chunk:
-                    try:
-                        results.extend(provider.get_quotes([api_symbol]))
-                    except ValueError:
-                        continue
+        for item in batch_results:
+            quote_by_api[item.symbol.upper()] = item
 
     output: list[Quote] = []
-    for item in results:
-        original = api_to_original.get(item.symbol.upper(), item.symbol)
-        item = replace(item, symbol=original)
-        output.append(to_quote(item))
+    for original in requested:
+        clean = original.strip().upper()
+        if not clean:
+            continue
+
+        # _master_symbol_candidates() is ordered EQ -> BE. The first returned
+        # candidate is therefore the preferred working series.
+        for candidate in original_candidates.get(clean, []):
+            item = quote_by_api.get(candidate.upper())
+            if item is None:
+                continue
+
+            # Keep the user's symbol-only watchlist representation in the UI.
+            output.append(to_quote(replace(item, symbol=clean)))
+            break
 
     return output
