@@ -27,6 +27,81 @@ log_tail() {
   echo "-----------------------------------"
 }
 
+
+
+status_pass() {
+  echo "STATUS: PASS — $1"
+}
+
+status_warn() {
+  echo "STATUS: WARN — $1"
+}
+
+status_fail() {
+  echo "STATUS: FAIL — $1"
+}
+
+run_preflight() {
+  local failed=0
+
+  echo
+  echo "PRE-FLIGHT CHECK"
+  echo "================"
+
+  if command -v python >/dev/null 2>&1; then
+    status_pass "Python available: $(python --version 2>&1)"
+  else
+    status_fail "Python is not installed or not on PATH."
+    failed=1
+  fi
+
+  if command -v npm >/dev/null 2>&1; then
+    status_pass "npm available: $(npm --version 2>&1)"
+  else
+    status_fail "npm is not installed or not on PATH."
+    failed=1
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    status_pass "curl available"
+  else
+    status_fail "curl is required for health checks."
+    failed=1
+  fi
+
+  if [[ "$failed" -ne 0 ]]; then
+    return 1
+  fi
+
+  if ! python -c "import uvicorn" >/dev/null 2>&1; then
+    status_warn "Backend dependency 'uvicorn' is missing. Installing backend requirements..."
+    if python -m pip install -r "$ROOT/backend/requirements.txt"; then
+      status_pass "Backend Python dependencies installed"
+    else
+      status_fail "Backend dependency installation failed."
+      echo "ACTION: python -m pip install -r backend/requirements.txt"
+      return 1
+    fi
+  else
+    status_pass "Backend Python dependencies ready"
+  fi
+
+  if [[ ! -x "$ROOT/frontend/node_modules/.bin/vite" ]]; then
+    status_warn "Frontend dependencies are missing. Installing npm dependencies..."
+    if npm --prefix "$ROOT/frontend" install; then
+      status_pass "Frontend npm dependencies installed"
+    else
+      status_fail "Frontend npm dependency installation failed."
+      echo "ACTION: npm --prefix frontend install"
+      return 1
+    fi
+  else
+    status_pass "Frontend npm dependencies ready"
+  fi
+
+  return 0
+}
+
 port_owner() {
   local port="$1"
   ss -ltnp 2>/dev/null | grep -E ":$port([[:space:]]|$)" || true
@@ -126,10 +201,17 @@ start_frontend() {
 echo
 echo "PIPSGOX DEV SERVER"
 echo "=================="
+echo "Time: $(date)"
 echo "Web: $WEB_URL"
 echo "API: $API_URL"
 echo "FYERS callback: $FYERS_CALLBACK"
 echo
+
+if ! run_preflight; then
+  status_fail "PIPSGOX pre-flight check failed. Startup stopped."
+  echo "ACTION: Fix the item marked FAIL above, then run ./scripts/run-pipsgox.sh again."
+  exit 1
+fi
 
 if ! check_port_free "Backend" 8000; then
   echo "ACTION: Use ./scripts/stop-pipsgox.sh first, or inspect with ./scripts/pipsgox-doctor.sh."
@@ -144,6 +226,7 @@ fi
 if ! start_backend; then
   echo
   echo "STATUS: FAIL — PIPSGOX start failed: backend"
+  echo "ACTION: Check .pipsgox/backend.log for the full error."
   echo "ACTION: Run ./scripts/pipsgox-doctor.sh"
   exit 1
 fi
@@ -151,10 +234,15 @@ fi
 if ! start_frontend; then
   echo
   echo "STATUS: FAIL — PIPSGOX start failed: frontend"
+  echo "ACTION: Check .pipsgox/frontend.log for the full error."
   echo "ACTION: Run ./scripts/pipsgox-doctor.sh"
   exit 1
 fi
 
+echo
+echo "FINAL STATUS"
+echo "============"
+echo "STATUS: PASS — Backend process and Frontend process started"
 echo
 echo "HEALTH CHECK"
 echo "============"
@@ -178,6 +266,7 @@ else
 fi
 
 echo
-echo "STATUS: PASS — PIPSGOX is running"
+echo "STATUS: PASS — PIPSGOX is running and health checks completed"
+
 echo "WEB: $WEB_URL"
 echo "API: $API_URL"
