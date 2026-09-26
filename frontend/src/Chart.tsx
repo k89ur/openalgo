@@ -409,7 +409,18 @@ export function Chart({
             if (!barsPromise) {
               console.log("PIPSGOX history request:", url);
               barsPromise = fetch(url, { cache: "no-store" }).then(async (response) => {
-                if (!response.ok) throw new Error("History HTTP " + response.status);
+                if (!response.ok) {
+            let detail = "";
+            try {
+              const payload = await response.json() as { detail?: unknown };
+              detail = typeof payload.detail === "string" ? payload.detail : "";
+            } catch {
+              // Keep the HTTP status when the backend does not return JSON.
+            }
+            throw new Error(
+              "History HTTP " + response.status + (detail ? ": " + detail : ""),
+            );
+          }
                 return response.json() as Promise<HistoryCandle[]>;
               }).then((raw) => {
                 const bars = raw
@@ -456,6 +467,21 @@ export function Chart({
             if (error instanceof DOMException && error.name === "AbortError") return;
             console.error("PIPSGOX history error:", error);
             if (!disposed) {
+              // Only failed symbols trigger the diagnostic request, so normal
+              // chart loads do not incur an extra network call.
+              try {
+                const diagnostic = await fetch(
+                  `/api/symbols/resolve?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&test_history=true&test_quote=true`,
+                  { cache: "no-store" },
+                );
+                if (diagnostic.ok) {
+                  console.warn("PIPSGOX symbol diagnostic:", await diagnostic.json());
+                } else {
+                  console.warn("PIPSGOX symbol diagnostic HTTP " + diagnostic.status);
+                }
+              } catch (diagnosticError) {
+                console.warn("PIPSGOX symbol diagnostic failed:", diagnosticError);
+              }
               callback([], {
                 forward: false,
                 backward: false,
