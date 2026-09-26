@@ -388,16 +388,11 @@ export function Chart({
           if (disposed) return;
 
           // Indian equities have roughly 120-130 trading sessions in six
-          // calendar months. Size each bar from the available chart width so
-          // the target remains consistent on desktop and mobile.
+          // calendar months. Use KLineChart's visible-bar constraint so the
+          // initial viewport is based on candle count rather than screen size.
+          // This adapts automatically across desktop and mobile widths.
           const targetVisibleBars = 126;
-          const chartWidth = Math.max(container.clientWidth, 1);
-          const barSpace = Math.max(
-            1,
-            Math.min(50, (chartWidth * 0.94) / targetVisibleBars),
-          );
-
-          chart.setBarSpace(barSpace);
+          chart.setLeftMinVisibleBarCount(targetVisibleBars);
           chart.scrollToRealTime(0);
         });
       };
