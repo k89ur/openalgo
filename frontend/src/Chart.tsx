@@ -295,7 +295,7 @@ export function Chart({
         grid: {
           show: showGrid,
           horizontal: { show: showGrid, color: chartColors.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
-          vertical: { show: showGrid, color: palette.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
+          vertical: { show: showGrid, color: chartColors.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
         },
         candle: {
           tooltip: {
