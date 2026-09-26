@@ -484,14 +484,32 @@ class FyersWatchlistStream:
         return self._socket is not None
 
     def _api_symbols(self, symbols: set[str]) -> set[str]:
-        result = set()
+        """Expand app tickers to every current FYERS series for live quotes.
+
+        Watchlists intentionally store/display only the ticker (e.g. NURECA).
+        A BE-only instrument can have an EQ-looking master candidate that does
+        not produce live updates. Subscribe to every current candidate so the
+        first valid FYERS tick wins, while mapping every API symbol back to the
+        same user-facing ticker.
+        """
+        result: set[str] = set()
         with self._symbol_lock:
             for symbol in symbols:
-                api_symbol = resolve_api_symbol(symbol)
-                if not api_symbol:
+                clean = symbol.strip().upper()
+                if not clean:
                     continue
-                result.add(api_symbol)
-                self._api_to_app[api_symbol.upper()] = symbol
+
+                candidates = _master_symbol_candidates(clean)
+                if not candidates:
+                    resolved = resolve_api_symbol(clean)
+                    candidates = [resolved] if resolved else []
+
+                for api_symbol in candidates:
+                    api = api_symbol.strip().upper()
+                    if not api:
+                        continue
+                    result.add(api)
+                    self._api_to_app[api] = clean
         return result
 
     def _connect(self) -> None:
