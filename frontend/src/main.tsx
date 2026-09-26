@@ -551,6 +551,23 @@ function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
+
+  const chartRangeTimeframes: Record<ChartRange, Timeframe> = {
+    "1D": "5m",
+    "5D": "15m",
+    "1M": "1h",
+    "3M": "1h",
+    "6M": "D",
+    YTD: "D",
+    "1Y": "W",
+    "5Y": "M",
+    ALL: "M",
+  };
+
+  const selectChartRange = (preset: ChartRange) => {
+    setChartRange(preset);
+    setTimeframe(chartRangeTimeframes[preset]);
+  };
   const [watchlists, setWatchlists] = useState<Record<string, WatchItem[]>>(loadWatchlists);
   const [activeWatchlistName, setActiveWatchlistName] = useState(() => Object.keys(loadWatchlists())[0] ?? DEFAULT_WATCHLIST_NAME);
   const watchlist = watchlists[activeWatchlistName] ?? [];
@@ -1666,7 +1683,7 @@ json.dumps(_result)`;
               <button
                 key={preset}
                 className={chartRange === preset ? "active" : ""}
-                onClick={() => setChartRange(preset)}
+                onClick={() => selectChartRange(preset)}
               >
                 {preset}
               </button>
