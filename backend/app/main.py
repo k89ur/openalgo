@@ -196,6 +196,9 @@ if _fyers_access_token:
 _symbol_master_cache: dict[str, dict] = {}
 _symbol_master_date: str | None = None
 _symbol_master_lock = threading.Lock()
+# Exact ticker -> FYERS API symbol mappings discovered from the master are cached
+# so a BE/other-series stock is resolved once and stays fast afterward.
+_symbol_resolution_cache: dict[str, str] = {}
 
 
 def _load_nse_symbol_master() -> dict[str, dict]:
@@ -334,6 +337,47 @@ def resolve_api_symbol(symbol: str) -> str | None:
 
         if clean in {ticker, exchange_symbol, api_base}:
             if api:
+                return api
+
+    return None
+
+
+def _resolve_api_symbol_from_master(symbol: str) -> str | None:
+    """Resolve a ticker to its exact current FYERS symbol, including BE/other series.
+
+    The fast resolver intentionally avoids downloading the large symbol master for
+    normal interactive requests. This fallback is used when FYERS rejects the
+    deterministic -EQ candidate, which covers stocks that currently trade under
+    another supported NSE series such as BE.
+    """
+    clean = symbol.strip().upper()
+    if not clean or ":" in clean:
+        return clean or None
+
+    with _symbol_master_lock:
+        cached = _symbol_resolution_cache.get(clean)
+    if cached:
+        return cached
+
+    try:
+        master = _load_nse_symbol_master()
+    except ValueError:
+        return None
+
+    for api_symbol, item in master.items():
+        if not isinstance(item, dict):
+            continue
+
+        api = str(api_symbol or "").strip().upper()
+        ticker = str(item.get("symTicker") or "").strip().upper()
+        exchange_symbol = str(item.get("exSymbol") or "").strip().upper()
+        api_base = api.rsplit(":", 1)[-1]
+        api_base = api_base.rsplit("-", 1)[0]
+
+        if clean in {ticker, exchange_symbol, api_base}:
+            if api:
+                with _symbol_master_lock:
+                    _symbol_resolution_cache[clean] = api
                 return api
 
     return None
@@ -699,16 +743,27 @@ def history(
         api_symbol = resolve_api_symbol(symbol)
         if not api_symbol:
             raise unresolved_symbol_error(symbol)
-        return [
-            to_candle(item)
-            for item in provider.get_history(
+        try:
+            candles = provider.get_history(
                 api_symbol,
                 timeframe,
                 limit,
                 start=from_date,
                 end=to_date,
             )
-        ]
+        except ValueError as first_error:
+            fallback = _resolve_api_symbol_from_master(symbol)
+            if not fallback or fallback == api_symbol:
+                raise first_error
+            candles = provider.get_history(
+                fallback,
+                timeframe,
+                limit,
+                start=from_date,
+                end=to_date,
+            )
+
+        return [to_candle(item) for item in candles]
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -750,14 +805,27 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                 if not api_symbol:
                     raise unresolved_symbol_error(original)
 
-                candles = _pipscript_get_history(
-                    api_symbol,
-                    item.timeframe,
-                    item.limit,
-                    start=item.from_date,
-                    end=item.to_date,
-                    pace=pace_history,
-                )
+                try:
+                    candles = _pipscript_get_history(
+                        api_symbol,
+                        item.timeframe,
+                        item.limit,
+                        start=item.from_date,
+                        end=item.to_date,
+                        pace=pace_history,
+                    )
+                except ValueError as first_error:
+                    fallback = _resolve_api_symbol_from_master(original)
+                    if not fallback or fallback == api_symbol:
+                        raise first_error
+                    candles = _pipscript_get_history(
+                        fallback,
+                        item.timeframe,
+                        item.limit,
+                        start=item.from_date,
+                        end=item.to_date,
+                        pace=pace_history,
+                    )
                 history_data[name] = {
                     "symbol": original,
                     "timeframe": item.timeframe,
@@ -773,7 +841,13 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                 if not api_symbol:
                     raise unresolved_symbol_error(original)
 
-                result = provider.get_quote(api_symbol)
+                try:
+                    result = provider.get_quote(api_symbol)
+                except ValueError as first_error:
+                    fallback = _resolve_api_symbol_from_master(original)
+                    if not fallback or fallback == api_symbol:
+                        raise first_error
+                    result = provider.get_quote(fallback)
                 result = replace(result, symbol=original)
                 quotes_data[name] = to_quote(result).model_dump()
 
@@ -817,7 +891,13 @@ def quote(
         api_symbol = resolve_api_symbol(original)
         if not api_symbol:
             raise unresolved_symbol_error(original)
-        result = provider.get_quote(api_symbol)
+        try:
+            result = provider.get_quote(api_symbol)
+        except ValueError as first_error:
+            fallback = _resolve_api_symbol_from_master(original)
+            if not fallback or fallback == api_symbol:
+                raise first_error
+            result = provider.get_quote(fallback)
         result = replace(result, symbol=original)
         return to_quote(result)
     except ValueError as exc:
@@ -892,21 +972,63 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
     if len(requested) > 1000:
         raise HTTPException(status_code=400, detail="A maximum of 1000 symbols can be requested at once.")
 
-    api_symbols, api_to_original = resolve_requested_symbols(requested)
+    pairs: list[tuple[str, str]] = []
+    for original in requested:
+        clean = original.strip().upper()
+        if not clean:
+            continue
+        api_symbol = resolve_api_symbol(clean)
+        if api_symbol:
+            pairs.append((clean, api_symbol))
+
     results: list[Quote] = []
 
-    for start in range(0, len(api_symbols), 50):
-        chunk = api_symbols[start:start + 50]
+    for start in range(0, len(pairs), 50):
+        chunk_pairs = pairs[start:start + 50]
+        chunk = [api for _, api in chunk_pairs]
         if not chunk:
             continue
+
         try:
             results.extend(provider.get_quotes(chunk))
-        except ValueError:
-            for api_symbol in chunk:
-                try:
-                    results.extend(provider.get_quotes([api_symbol]))
-                except ValueError:
-                    continue
+            continue
+        except ValueError as first_error:
+            # Some NSE securities are valid but currently use BE/another
+            # supported series instead of the deterministic -EQ form.
+            # Resolve the failed batch against FYERS' current symbol master
+            # once, then retry the whole batch.
+            fallback_pairs = [
+                (original, _resolve_api_symbol_from_master(original) or api)
+                for original, api in chunk_pairs
+            ]
+            fallback_chunk = [api for _, api in fallback_pairs]
+
+            if fallback_chunk == chunk:
+                # Preserve the existing per-symbol fallback behavior for a
+                # transient/individual provider failure.
+                for api_symbol in chunk:
+                    try:
+                        results.extend(provider.get_quotes([api_symbol]))
+                    except ValueError:
+                        continue
+                continue
+
+            try:
+                results.extend(provider.get_quotes(fallback_chunk))
+            except ValueError:
+                # One bad symbol should not block the rest of the watchlist.
+                for api_symbol in fallback_chunk:
+                    try:
+                        results.extend(provider.get_quotes([api_symbol]))
+                    except ValueError:
+                        continue
+
+    api_to_original: dict[str, str] = {}
+    for original, api_symbol in pairs:
+        api_to_original[api_symbol.upper()] = original
+        fallback = _resolve_api_symbol_from_master(original)
+        if fallback:
+            api_to_original[fallback.upper()] = original
 
     output: list[Quote] = []
     for item in results:
