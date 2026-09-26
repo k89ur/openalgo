@@ -51,13 +51,23 @@ def fyers_status():
     except Exception:
         return {"configured": bool(os.getenv("FYERS_CLIENT_ID") and os.getenv("FYERS_SECRET_KEY")), "connected": False}
 
+def service_http_running(url):
+    try:
+        with urllib.request.urlopen(url, timeout=1.2) as response:
+            return 200 <= response.status < 500
+    except Exception:
+        return False
+
 def current_status():
+    backend_health_state = backend_health()
+    backend_running = bool(backend_health_state.get("running")) or pid_running("backend")
+    frontend_running = service_http_running("http://127.0.0.1:3001/")
     return {
         "control": True, "control_port": CONTROL_PORT,
-        "backend": pid_running("backend"), "frontend": pid_running("frontend"),
+        "backend": backend_running, "frontend": frontend_running,
         "backend_url": forwarded_url(8000), "frontend_url": forwarded_url(3001),
         "control_url": forwarded_url(CONTROL_PORT),
-        "backend_health": backend_health(), "fyers": fyers_status(),
+        "backend_health": backend_health_state, "fyers": fyers_status(),
     }
 
 ACTION_LOG = RUN_DIR / "control-actions.log"
