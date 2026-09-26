@@ -226,6 +226,7 @@ export function Chart({
   symbol,
   timeframe,
   chartTheme,
+  chartColors,
   showGrid,
   showCrosshair,
   showVolume,
