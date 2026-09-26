@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import ReactDOM from "react-dom/client";
-import { Chart, type ChartType, type Timeframe, type PipscriptOutput, type ChartColors } from "./Chart";
+import { Chart, type ChartType, type Timeframe, type ChartRange, type PipscriptOutput, type ChartColors } from "./Chart";
 import "./styles.css";
 import { DevConsole } from "./DevConsole";
 
@@ -550,6 +550,7 @@ function UiIcon({ name }: { name: UiIconName }) {
 function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
+  const [chartRange, setChartRange] = useState<ChartRange>("6M");
   const [watchlists, setWatchlists] = useState<Record<string, WatchItem[]>>(loadWatchlists);
   const [activeWatchlistName, setActiveWatchlistName] = useState(() => Object.keys(loadWatchlists())[0] ?? DEFAULT_WATCHLIST_NAME);
   const watchlist = watchlists[activeWatchlistName] ?? [];
@@ -1623,6 +1624,7 @@ json.dumps(_result)`;
               dark={dark}
               symbol={symbol}
               timeframe={timeframe}
+              range={chartRange}
               chartTheme={chartSettings.theme}
               chartColors={chartSettings.colors}
               showGrid={chartSettings.showGrid}
@@ -1660,7 +1662,15 @@ json.dumps(_result)`;
           </div>
 
           <div className="bottom-bar">
-            <button className="active">1D</button><button>5D</button><button>1M</button><button>3M</button><button>6M</button><button>YTD</button><button>1Y</button><button>5Y</button><button>ALL</button>
+            {(["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "5Y", "ALL"] as ChartRange[]).map((preset) => (
+              <button
+                key={preset}
+                className={chartRange === preset ? "active" : ""}
+                onClick={() => setChartRange(preset)}
+              >
+                {preset}
+              </button>
+            ))}
             <span className="bottom-spacer" />
             <button onClick={() => setPanel("indicators")}>INDICATORS</button>
             <button onClick={() => setPanel("pipscript")}>PIPSCRIPT</button>
