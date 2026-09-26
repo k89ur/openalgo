@@ -417,22 +417,6 @@ def _master_symbol_candidates(symbol: str) -> list[str]:
     candidates.sort(key=lambda item: (item[0], item[1]))
     symbols = [api for _, api in candidates]
 
-    # The search endpoint uses the same live FYERS master but matches the
-    # ticker field directly. Use it as a second authoritative lookup path.
-    # This matters for older/variant master records where the API-key/base
-    # fields above do not line up even though symbol search can find the stock.
-    if not symbols:
-        try:
-            search_matches = search_nse_symbols(clean, limit=25)
-            exact = [
-                item.api_symbol.upper()
-                for item in search_matches
-                if item.symbol.strip().upper() == clean
-            ]
-            symbols = list(dict.fromkeys(exact))
-        except ValueError:
-            symbols = []
-
     if symbols:
         with _symbol_master_lock:
             _symbol_resolution_cache[clean] = list(symbols)
@@ -484,32 +468,14 @@ class FyersWatchlistStream:
         return self._socket is not None
 
     def _api_symbols(self, symbols: set[str]) -> set[str]:
-        """Expand app tickers to every current FYERS series for live quotes.
-
-        Watchlists intentionally store/display only the ticker (e.g. NURECA).
-        A BE-only instrument can have an EQ-looking master candidate that does
-        not produce live updates. Subscribe to every current candidate so the
-        first valid FYERS tick wins, while mapping every API symbol back to the
-        same user-facing ticker.
-        """
-        result: set[str] = set()
+        result = set()
         with self._symbol_lock:
             for symbol in symbols:
-                clean = symbol.strip().upper()
-                if not clean:
+                api_symbol = resolve_api_symbol(symbol)
+                if not api_symbol:
                     continue
-
-                candidates = _master_symbol_candidates(clean)
-                if not candidates:
-                    resolved = resolve_api_symbol(clean)
-                    candidates = [resolved] if resolved else []
-
-                for api_symbol in candidates:
-                    api = api_symbol.strip().upper()
-                    if not api:
-                        continue
-                    result.add(api)
-                    self._api_to_app[api] = clean
+                result.add(api_symbol)
+                self._api_to_app[api_symbol.upper()] = symbol
         return result
 
     def _connect(self) -> None:
@@ -573,15 +539,9 @@ class FyersWatchlistStream:
             def on_connect() -> None:
                 with self._symbol_lock:
                     symbols = set(self._subscribed)
-
-                # _subscribed contains user-facing tickers (e.g. NURECA),
-                # not FYERS API symbols. Resolve them again on every socket
-                # connection before subscribing. This is critical after a
-                # reconnect and on the first connection of a fresh Codespace.
-                api_symbols = self._api_symbols(symbols)
-                if api_symbols:
+                if symbols:
                     self._socket.subscribe(
-                        symbols=sorted(api_symbols),
+                        symbols=sorted(symbols),
                         data_type="SymbolUpdate",
                     )
                 self._socket.keep_running()
@@ -815,70 +775,6 @@ def symbol_search(
         return search_nse_symbols(q, limit)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.get("/api/symbols/resolve")
-def symbol_resolve(
-    symbol: str = Query(..., min_length=1, max_length=40),
-    timeframe: Timeframe = "D",
-    test_history: bool = Query(default=True),
-    test_quote: bool = Query(default=True),
-) -> dict[str, object]:
-    """Diagnose one user-facing ticker through the current FYERS symbol master."""
-    clean = symbol.strip().upper()
-    if not clean:
-        raise HTTPException(status_code=400, detail="Symbol is required.")
-
-    try:
-        master_candidates = _master_symbol_candidates(clean)
-        resolved = resolve_api_symbol(clean)
-    except ValueError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    candidates = list(dict.fromkeys(
-        [*master_candidates, resolved] if resolved else master_candidates
-    ))
-    results: list[dict[str, object]] = []
-    selected: str | None = None
-
-    for candidate in candidates:
-        record: dict[str, object] = {
-            "api_symbol": candidate,
-            "series": candidate.rsplit("-", 1)[-1] if "-" in candidate else None,
-            "history": None,
-            "quote": None,
-        }
-        if test_history:
-            try:
-                bars = provider.get_history(candidate, timeframe, 50)
-                record["history"] = {"ok": True, "bars": len(bars)}
-                if selected is None and bars:
-                    selected = candidate
-            except Exception as exc:
-                record["history"] = {"ok": False, "error": str(exc)}
-        if test_quote:
-            try:
-                quote_result = provider.get_quote(candidate)
-                record["quote"] = {
-                    "ok": True,
-                    "last": quote_result.last,
-                    "change_percent": quote_result.change_percent,
-                }
-                if selected is None:
-                    selected = candidate
-            except Exception as exc:
-                record["quote"] = {"ok": False, "error": str(exc)}
-        results.append(record)
-
-    return {
-        "input": clean,
-        "master_found": bool(master_candidates),
-        "master_candidates": master_candidates,
-        "resolved": resolved,
-        "selected": selected,
-        "timeframe": timeframe,
-        "candidates": results,
-    }
 
 
 @app.get("/api/history", response_model=list[Candle])
@@ -1158,75 +1054,99 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
     if len(requested) > 1000:
         raise HTTPException(status_code=400, detail="A maximum of 1000 symbols can be requested at once.")
 
-    # Keep the watchlist user-facing symbol-only. Internally, expand each ticker
-    # to every current FYERS EQ/BE candidate so a BE-only stock does not depend
-    # on the resolver guessing the correct series.
-    original_candidates: dict[str, list[str]] = {}
-    api_to_original: dict[str, str] = {}
-
-    for original in requested:
-        clean = original.strip().upper()
-        if not clean or clean in original_candidates:
-            continue
-
-        candidates = _master_symbol_candidates(clean)
-        if not candidates:
-            resolved = resolve_api_symbol(clean)
-            candidates = [resolved] if resolved else []
-
-        # For normal NSE equities, FYERS enables EQ and BE. Keep explicit
-        # index/API symbols untouched.
-        if ":" not in clean:
-            supported = [
-                candidate for candidate in candidates
-                if candidate.rsplit("-", 1)[-1] in {"EQ", "BE", "INDEX"}
-            ]
-            candidates = supported or candidates
-
-        candidates = list(dict.fromkeys(candidate.upper() for candidate in candidates))
-        original_candidates[clean] = candidates
-        for candidate in candidates:
-            api_to_original[candidate] = clean
-
-    # Query each exact candidate at most once, in <=50-symbol batches as
-    # required by FYERS Quotes API.
-    all_candidates = list(dict.fromkeys(
-        candidate
-        for candidates in original_candidates.values()
-        for candidate in candidates
-    ))
-    quote_by_api: dict[str, Quote] = {}
-
-    for start_index in range(0, len(all_candidates), 50):
-        chunk = all_candidates[start_index:start_index + 50]
-        if not chunk:
-            continue
-        try:
-            batch_results = provider.get_quotes(chunk)
-        except ValueError:
-            # One problematic instrument must not hide valid symbols in the
-            # same batch. Retry the exact candidates individually.
-            batch_results = []
-            for candidate in chunk:
-                try:
-                    batch_results.extend(provider.get_quotes([candidate]))
-                except ValueError:
-                    continue
-
-        for item in batch_results:
-            quote_by_api[item.symbol.upper()] = item
-
-    # Select the first working FYERS series in the master priority order.
-    output: list[Quote] = []
+    pairs: list[tuple[str, str]] = []
     for original in requested:
         clean = original.strip().upper()
         if not clean:
             continue
-        for candidate in original_candidates.get(clean, []):
-            item = quote_by_api.get(candidate.upper())
-            if item is None:
+        api_symbol = resolve_api_symbol(clean)
+        if api_symbol:
+            pairs.append((clean, api_symbol))
+
+    results: list[Quote] = []
+    api_to_original: dict[str, str] = {
+        api_symbol.upper(): original
+        for original, api_symbol in pairs
+    }
+
+    for start in range(0, len(pairs), 50):
+        chunk_pairs = pairs[start:start + 50]
+        chunk = [api for _, api in chunk_pairs]
+        if not chunk:
+            continue
+
+        try:
+            batch_results = provider.get_quotes(chunk)
+            results.extend(batch_results)
+
+            returned = {item.symbol.upper() for item in batch_results}
+            missing_pairs = [
+                (original, api)
+                for original, api in chunk_pairs
+                if api.upper() not in returned
+            ]
+            if not missing_pairs:
                 continue
-            output.append(to_quote(replace(item, symbol=clean)))
-            break
+
+            # FYERS may return the valid part of a mixed batch without raising
+            # an error. Resolve only the missing tickers against the current
+            # symbol master so BE/other-series stocks are recovered too.
+            fallback_pairs: list[tuple[str, str]] = []
+            for original, api in missing_pairs:
+                candidates = _master_symbol_candidates(original)
+                for candidate in candidates:
+                    if candidate.upper() != api.upper():
+                        fallback_pairs.append((original, candidate))
+                        api_to_original[candidate.upper()] = original
+
+            fallback_chunk = [api for _, api in fallback_pairs]
+            if fallback_chunk:
+                try:
+                    results.extend(provider.get_quotes(fallback_chunk))
+                except ValueError:
+                    for api_symbol in fallback_chunk:
+                        try:
+                            results.extend(provider.get_quotes([api_symbol]))
+                        except ValueError:
+                            continue
+            continue
+        except ValueError:
+            # A whole batch can fail when FYERS rejects one or more symbols.
+            # Resolve the batch against the current symbol master and retry.
+            fallback_pairs: list[tuple[str, str]] = []
+            for original, api in chunk_pairs:
+                candidates = _master_symbol_candidates(original)
+                added = False
+                for candidate in candidates:
+                    if candidate.upper() != api.upper():
+                        fallback_pairs.append((original, candidate))
+                        api_to_original[candidate.upper()] = original
+                        added = True
+                if not added:
+                    fallback_pairs.append((original, api))
+
+            fallback_chunk = [api for _, api in fallback_pairs]
+            if fallback_chunk == chunk:
+                for api_symbol in chunk:
+                    try:
+                        results.extend(provider.get_quotes([api_symbol]))
+                    except ValueError:
+                        continue
+                continue
+
+            try:
+                results.extend(provider.get_quotes(fallback_chunk))
+            except ValueError:
+                for api_symbol in fallback_chunk:
+                    try:
+                        results.extend(provider.get_quotes([api_symbol]))
+                    except ValueError:
+                        continue
+
+    output: list[Quote] = []
+    for item in results:
+        original = api_to_original.get(item.symbol.upper(), item.symbol)
+        item = replace(item, symbol=original)
+        output.append(to_quote(item))
 
     return output
