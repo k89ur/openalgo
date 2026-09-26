@@ -1732,7 +1732,9 @@ json.dumps(_result)`;
                     <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
                       {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
                     </span>
-                    <span className="watch-volume">{formatWatchVolume(liveQuotes[item.symbol]?.volume)}</span>
+                    <span className={`watch-volume ${liveQuotes[item.symbol]?.volume != null && liveQuotes[item.symbol].volume <= 10000 ? "low-volume" : ""}`}>
+                      {formatWatchVolume(liveQuotes[item.symbol]?.volume)}
+                    </span>
                     <span className="watch-bid-ask">
                       <span className="watch-bid-value">{formatWatchQuoteValue(liveQuotes[item.symbol]?.bid)}</span>
                       <span className="watch-bid-ask-separator"> / </span>
