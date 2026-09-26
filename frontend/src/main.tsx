@@ -187,6 +187,7 @@ type ChartSettings = {
   show52WeekHigh: boolean;
   show52WeekLow: boolean;
   showPreviousClose: boolean;
+  lineSize: number;
 };
 
 const DEFAULT_CHART_COLORS: ChartColors = {
@@ -213,6 +214,7 @@ const DEFAULT_CHART_SETTINGS: ChartSettings = {
   show52WeekHigh: false,
   show52WeekLow: false,
   showPreviousClose: false,
+  lineSize: 2,
 };
 
 function loadChartSettings(): ChartSettings {
@@ -1979,6 +1981,20 @@ json.dumps(_result)`;
                     ))}
                   </div>
                 </div>
+                {chartType === "line" && (
+                  <div className="settings-section">
+                    <div className="settings-section-title">LINE STYLE</div>
+                    <label className="settings-field">
+                      <span>Line thickness</span>
+                      <select value={chartSettings.lineSize} onChange={(event) => updateChartSettings({ lineSize: Number(event.target.value) })}>
+                        <option value={1}>1 px</option>
+                        <option value={2}>2 px</option>
+                        <option value={3}>3 px</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+
                 <div className="settings-section">
                   <div className="settings-section-title">CHART ELEMENTS</div>
                   <label className="settings-toggle"><span>Grid</span><input type="checkbox" checked={chartSettings.showGrid} onChange={(event) => updateChartSettings({ showGrid: event.target.checked })} /><i /></label>
