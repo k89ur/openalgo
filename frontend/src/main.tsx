@@ -260,9 +260,8 @@ function formatWatchVolume(value: number | null | undefined): string {
   return Math.round(value).toLocaleString("en-IN");
 }
 
-function formatWatchBidAsk(bid: number | null | undefined, ask: number | null | undefined): string {
-  if (bid == null || ask == null || !Number.isFinite(bid) || !Number.isFinite(ask)) return "—";
-  return `${bid.toFixed(2)} / ${ask.toFixed(2)}`;
+function formatWatchQuoteValue(value: number | null | undefined): string {
+  return value != null && Number.isFinite(value) && value > 0 ? value.toFixed(2) : "—";
 }
 
 function normalizeWatchItems(value: unknown): WatchItem[] {
@@ -1734,7 +1733,11 @@ json.dumps(_result)`;
                       {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
                     </span>
                     <span className="watch-volume">{formatWatchVolume(liveQuotes[item.symbol]?.volume)}</span>
-                    <span className="watch-bid-ask">{formatWatchBidAsk(liveQuotes[item.symbol]?.bid, liveQuotes[item.symbol]?.ask)}</span>
+                    <span className="watch-bid-ask">
+                      <span className="watch-bid-value">{formatWatchQuoteValue(liveQuotes[item.symbol]?.bid)}</span>
+                      <span className="watch-bid-ask-separator"> / </span>
+                      <span className="watch-ask-value">{formatWatchQuoteValue(liveQuotes[item.symbol]?.ask)}</span>
+                    </span>
                   </button>
                   <button className="watch-remove" onClick={() => removeWatchSymbol(item.symbol)} aria-label={`Remove ${item.symbol}`}>×</button>
                 </div>
