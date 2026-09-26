@@ -198,7 +198,7 @@ _symbol_master_date: str | None = None
 _symbol_master_lock = threading.Lock()
 # Exact ticker -> FYERS API symbol mappings discovered from the master are cached
 # so a BE/other-series stock is resolved once and stays fast afterward.
-_symbol_resolution_cache: dict[str, str] = {}
+_symbol_resolution_cache: dict[str, list[str]] = {}
 
 
 def _load_nse_symbol_master() -> dict[str, dict]:
@@ -368,7 +368,7 @@ def _master_symbol_candidates(symbol: str) -> list[str]:
     with _symbol_master_lock:
         cached = _symbol_resolution_cache.get(clean)
     if cached:
-        return [cached]
+        return list(cached)
 
     try:
         master = _load_nse_symbol_master()
@@ -406,7 +406,7 @@ def _master_symbol_candidates(symbol: str) -> list[str]:
 
     if symbols:
         with _symbol_master_lock:
-            _symbol_resolution_cache[clean] = symbols[0]
+            _symbol_resolution_cache[clean] = list(symbols)
 
     return symbols
 
