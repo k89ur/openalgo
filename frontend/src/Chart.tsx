@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { dispose, init, registerIndicator, type Chart as KLineChartInstance, type KLineData } from "klinecharts";
+import { dispose, init, registerIndicator, registerOverlay, type Chart as KLineChartInstance, type KLineData } from "klinecharts";
 
 export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
 export type ChartRange = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "5Y" | "ALL";
+export type DrawingTool =
+  | "horizontalRay"
+  | "trendline"
+  | "rectangle"
+  | "long"
+  | "short"
+  | "arrow"
+  | "brush"
+  | "text";
 
 export type ChartTheme = "pipsgox" | "classic" | "light";
 export type ChartColors = {
@@ -41,6 +50,8 @@ type Props = {
   symbol: string;
   timeframe: Timeframe;
   range: ChartRange;
+  activeDrawingTool: DrawingTool | null;
+  drawingCommand?: { type: "delete" | "clear"; nonce: number };
   chartTheme: ChartTheme;
   chartColors: ChartColors;
   showGrid: boolean;
@@ -73,6 +84,103 @@ const historyInflight = new Map<string, Promise<KLineData[]>>();
 
 const PIPSGOX_VOLUME_BARS = "PIPSGOX_VOLUME_BARS";
 const PIPSGOX_PIPSCRIPT_EMA = "PIPSGOX_PIPSCRIPT_EMA";
+
+const PIPSGOX_DRAWING_GROUP = "pipsgox-drawings";
+
+registerOverlay({
+  name: "pipsgoxRectangle",
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: true,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates }: { coordinates: Array<{ x: number; y: number }> }) => {
+    if (coordinates.length < 2) return [];
+    const [a, b] = coordinates;
+    const left = Math.min(a.x, b.x);
+    const right = Math.max(a.x, b.x);
+    const top = Math.min(a.y, b.y);
+    const bottom = Math.max(a.y, b.y);
+    return [{
+      key: "rectangle",
+      type: "polygon",
+      attrs: { coordinates: [{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }] },
+      styles: { style: "stroke_fill", color: "#38bdf8", size: 1, backgroundColor: "rgba(56,189,248,0.08)" },
+    }];
+  },
+});
+
+registerOverlay({
+  name: "pipsgoxArrow",
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: true,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates }: { coordinates: Array<{ x: number; y: number }> }) => {
+    if (coordinates.length < 2) return [];
+    const [a, b] = coordinates;
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const size = 9;
+    const wing = Math.PI / 6;
+    const p1 = { x: b.x - size * Math.cos(angle - wing), y: b.y - size * Math.sin(angle - wing) };
+    const p2 = { x: b.x - size * Math.cos(angle + wing), y: b.y - size * Math.sin(angle + wing) };
+    return [
+      { key: "arrow-line", type: "line", attrs: { coordinates: [a, b] }, styles: { color: "#f6c85f", size: 2 } },
+      { key: "arrow-head", type: "polygon", attrs: { coordinates: [b, p1, p2] }, styles: { style: "fill", color: "#f6c85f" } },
+    ];
+  },
+});
+
+registerOverlay({
+  name: "pipsgoxLongPosition",
+  totalStep: 4,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: true,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates }: { coordinates: Array<{ x: number; y: number }> }) => {
+    if (coordinates.length < 2) return [];
+    const entry = coordinates[0];
+    const right = coordinates[1];
+    const stop = coordinates[2] ?? right;
+    const leftX = entry.x;
+    const rightX = right.x;
+    const targetY = right.y;
+    const stopY = stop.y;
+    const top = Math.min(targetY, entry.y);
+    const bottom = Math.max(stopY, entry.y);
+    return [
+      { key: "profit", type: "polygon", attrs: { coordinates: [{x:leftX,y:entry.y},{x:rightX,y:entry.y},{x:rightX,y:targetY},{x:leftX,y:targetY}] }, styles: { style: "fill", color: "rgba(18,217,139,0.16)" } },
+      { key: "risk", type: "polygon", attrs: { coordinates: [{x:leftX,y:entry.y},{x:rightX,y:entry.y},{x:rightX,y:stopY},{x:leftX,y:stopY}] }, styles: { style: "fill", color: "rgba(255,77,90,0.16)" } },
+      { key: "entry", type: "line", attrs: { coordinates: [{x:leftX,y:entry.y},{x:rightX,y:entry.y}] }, styles: { color: "#d9d9d9", size: 1, style: "dashed", dashedValue: [4,3] } },
+      { key: "target", type: "line", attrs: { coordinates: [{x:leftX,y:targetY},{x:rightX,y:targetY}] }, styles: { color: "#12d98b", size: 1 } },
+      { key: "stop", type: "line", attrs: { coordinates: [{x:leftX,y:stopY},{x:rightX,y:stopY}] }, styles: { color: "#ff4d5a", size: 1 } },
+    ];
+  },
+});
+
+registerOverlay({
+  name: "pipsgoxShortPosition",
+  totalStep: 4,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: true,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates }: { coordinates: Array<{ x: number; y: number }> }) => {
+    if (coordinates.length < 2) return [];
+    const entry = coordinates[0];
+    const right = coordinates[1];
+    const stop = coordinates[2] ?? right;
+    const leftX = entry.x;
+    const rightX = right.x;
+    const targetY = right.y;
+    const stopY = stop.y;
+    return [
+      { key: "profit", type: "polygon", attrs: { coordinates: [{x:leftX,y:entry.y},{x:rightX,y:entry.y},{x:rightX,y:targetY},{x:leftX,y:targetY}] }, styles: { style: "fill", color: "rgba(18,217,139,0.16)" } },
+      { key: "risk", type: "polygon", attrs: { coordinates: [{x:leftX,y:entry.y},{x:rightX,y:entry.y},{x:rightX,y:stopY},{x:leftX,y:stopY}] }, styles: { style: "fill", color: "rgba(255,77,90,0.16)" } },
+      { key: "entry", type: "line", attrs: { coordinates: [{x:leftX,y:entry.y},{x:rightX,y:entry.y}] }, styles: { color: "#d9d9d9", size: 1, style: "dashed", dashedValue: [4,3] } },
+      { key: "target", type: "line", attrs: { coordinates: [{x:leftX,y:targetY},{x:rightX,y:targetY}] }, styles: { color: "#12d98b", size: 1 } },
+      { key: "stop", type: "line", attrs: { coordinates: [{x:leftX,y:stopY},{x:rightX,y:stopY}] }, styles: { color: "#ff4d5a", size: 1 } },
+    ];
+  },
+});
 
 registerIndicator({
   name: PIPSGOX_PIPSCRIPT_EMA,
@@ -291,6 +399,8 @@ export function Chart({
   symbol,
   timeframe,
   range,
+  activeDrawingTool,
+  drawingCommand,
   chartTheme,
   chartColors,
   showGrid,
@@ -837,6 +947,63 @@ export function Chart({
       chart.scrollToRealTime(0);
     });
   }, [range, timeframe]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !activeDrawingTool) return;
+
+    const overlayNames: Record<Exclude<DrawingTool, "text">, string> = {
+      horizontalRay: "horizontalRayLine",
+      trendline: "segment",
+      rectangle: "pipsgoxRectangle",
+      long: "pipsgoxLongPosition",
+      short: "pipsgoxShortPosition",
+      arrow: "pipsgoxArrow",
+      brush: "brush",
+    };
+
+    if (activeDrawingTool === "text") {
+      chart.createOverlay({
+        name: "simpleAnnotation",
+        groupId: PIPSGOX_DRAWING_GROUP,
+        paneId: "candle_pane",
+        needDefaultPointFigure: true,
+        needDefaultYAxisFigure: true,
+        needDefaultXAxisFigure: true,
+        extendData: "Text",
+      });
+      return;
+    }
+
+    chart.createOverlay({
+      name: overlayNames[activeDrawingTool],
+      groupId: PIPSGOX_DRAWING_GROUP,
+      paneId: "candle_pane",
+      mode: "weak_magnet",
+      modeSensitivity: 8,
+      needDefaultPointFigure: true,
+      needDefaultYAxisFigure: true,
+      needDefaultXAxisFigure: true,
+      styles: {
+        line: { color: "#38bdf8", size: 2 },
+      },
+    });
+  }, [activeDrawingTool]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !drawingCommand) return;
+
+    if (drawingCommand.type === "clear") {
+      chart.removeOverlay({ groupId: PIPSGOX_DRAWING_GROUP });
+      return;
+    }
+
+    const overlays = chart.getOverlays({ groupId: PIPSGOX_DRAWING_GROUP });
+    if (overlays.length) {
+      chart.removeOverlay({ id: overlays[overlays.length - 1].id });
+    }
+  }, [drawingCommand?.nonce]);
 
   useEffect(() => {
     const chart = chartRef.current;
