@@ -316,8 +316,17 @@ function parseWatchlistImport(text: string): string[] {
     const header = cells[0].replace(/\s+/g, "").toLowerCase();
     if (header === "symbol" || header === "ticker" || header === "tradingsymbol") continue;
 
-    const candidate = cells.find((cell) => cell && !/^(SYMBOL|TICKER|TRADINGSYMBOL)$/i.test(cell));
-    if (candidate) symbols.push(candidate);
+    // Broker exports often store the ticker and NSE series in separate
+    // columns, e.g. "LOTUSDEV,BE". Preserve that series so BE-only stocks
+    // reach the backend as LOTUSDEV-BE instead of being forced to -EQ.
+    const tickerIndex = cells.findIndex(
+      (cell) => cell && !/^(SYMBOL|TICKER|TRADINGSYMBOL)$/i.test(cell),
+    );
+    const candidate = tickerIndex >= 0 ? cells[tickerIndex] : "";
+    const series = cells.slice(tickerIndex + 1).find((cell) => /^(EQ|BE)$/i.test(cell));
+    if (candidate) {
+      symbols.push(series ? `${candidate}-${series}` : candidate);
+    }
   }
 
   return [...new Set(symbols)];
