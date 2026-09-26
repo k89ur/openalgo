@@ -58,16 +58,27 @@ def service_http_running(url):
     except Exception:
         return False
 
+def port_listening(port):
+    try:
+        import socket
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+def local_fyers_configured():
+    token_file = RUN_DIR / "fyers_access_token"
+    return bool(os.getenv("FYERS_CLIENT_ID") and os.getenv("FYERS_SECRET_KEY")) or token_file.exists()
+
 def current_status():
-    backend_health_state = backend_health()
-    backend_running = bool(backend_health_state.get("running")) or pid_running("backend")
-    frontend_running = service_http_running("http://127.0.0.1:3001/")
+    backend_running = port_listening(8000) or pid_running("backend")
+    frontend_running = port_listening(3001) or pid_running("frontend")
     return {
         "control": True, "control_port": CONTROL_PORT,
         "backend": backend_running, "frontend": frontend_running,
         "backend_url": forwarded_url(8000), "frontend_url": forwarded_url(3001),
         "control_url": forwarded_url(CONTROL_PORT),
-        "backend_health": backend_health_state, "fyers": fyers_status(),
+        "fyers": {"configured": local_fyers_configured(), "connected": False},
     }
 
 ACTION_LOG = RUN_DIR / "control-actions.log"
@@ -118,7 +129,7 @@ async function refresh(){const s=await fetch('/api/status').then(r=>r.json());do
 document.getElementById('fyers').innerHTML=s.fyers?.connected?'<span class="dot on"></span>CONNECTED':(s.fyers?.configured?'<span class="dot warn"></span>LOGIN REQUIRED':'<span class="dot"></span>NOT CONFIGURED');
 document.getElementById('links').innerHTML='<a href="'+s.frontend_url+'" target="_blank">OPEN PIPSGOX ↗</a><a href="'+s.backend_url+'/docs" target="_blank">API DOCS ↗</a><span class="small">Control: '+esc(s.control_url)+'</span>';
 const logs=await Promise.all(['control','backend','frontend'].map(n=>fetch('/api/logs/'+n).then(r=>r.text())));document.getElementById('controlLog').textContent=logs[0];document.getElementById('backendLog').textContent=logs[1];document.getElementById('frontendLog').textContent=logs[2]}
-async function action(name){const response=await fetch('/api/'+name,{method:'POST'});const data=await response.json();if(!response.ok)alert(data.error||'Action failed');setTimeout(refresh,1000)}refresh();setInterval(refresh,3000);
+async function action(name){const response=await fetch('/api/'+name,{method:'POST'});const data=await response.json();if(!response.ok)alert(data.error||'Action failed');setTimeout(refresh,1000)}refresh();setInterval(refresh,5000);
 </script></main></body></html>"""
 
 class Handler(BaseHTTPRequestHandler):
