@@ -289,11 +289,20 @@ function loadWatchlists(): Record<string, WatchItem[]> {
 }
 
 function normalizeImportedSymbol(value: string): string {
-  return value
+  let symbol = value
     .replace(/^\uFEFF/, "")
     .replace(/^["']|["']$/g, "")
     .trim()
     .toUpperCase();
+
+  // Accept broker/FYERS CSV formats such as NSE:MBECL-EQ and MBECL-BE.
+  // Keep an explicit supported series so the backend can request the exact
+  // instrument instead of incorrectly appending -EQ again.
+  if (symbol.startsWith("NSE:")) {
+    symbol = symbol.slice(4);
+  }
+  const match = symbol.match(/^(.+)-(EQ|BE)$/);
+  return match ? match[1] + "-" + match[2] : symbol;
 }
 
 function parseWatchlistImport(text: string): string[] {
