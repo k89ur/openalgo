@@ -5,6 +5,17 @@ export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
 
 export type ChartTheme = "pipsgox" | "classic" | "light";
+export type ChartColors = {
+  background: string;
+  grid: string;
+  axis: string;
+  candleUp: string;
+  candleDown: string;
+  volumeUp: string;
+  volumeDown: string;
+  ma50: string;
+  ma200: string;
+};
 
 export type PipscriptOutput =
   | {
@@ -29,6 +40,7 @@ type Props = {
   symbol: string;
   timeframe: Timeframe;
   chartTheme: ChartTheme;
+  chartColors: ChartColors;
   showGrid: boolean;
   showCrosshair: boolean;
   showVolume: boolean;
@@ -282,7 +294,7 @@ export function Chart({
       chart.setStyles({
         grid: {
           show: showGrid,
-          horizontal: { show: showGrid, color: palette.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
+          horizontal: { show: showGrid, color: chartColors.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
           vertical: { show: showGrid, color: palette.grid, size: 1, style: "dashed", dashedValue: [2, 2] },
         },
         candle: {
@@ -312,7 +324,7 @@ export function Chart({
         },
       });
 
-      container.style.background = palette.background;
+      container.style.background = chartColors.background;
 
       const crosshairHandler = (event: unknown) => {
         const parsed = parseCrosshairEvent(event);
@@ -476,15 +488,15 @@ export function Chart({
           candle: {
             type: "candle_solid",
             bar: {
-              upColor: palette.up,
-              downColor: palette.down,
-              noChangeColor: "#8d9aaa",
-              upBorderColor: palette.up,
-              downBorderColor: palette.down,
+              upColor: chartColors.candleUp,
+              downColor: chartColors.candleDown,
+              noChangeColor: chartColors.candleUp,
+              upBorderColor: chartColors.candleUp,
+              downBorderColor: chartColors.candleDown,
               noChangeBorderColor: "#8d9aaa",
-              upWickColor: palette.up,
-              downWickColor: palette.down,
-              noChangeWickColor: "#8d9aaa",
+              upWickColor: chartColors.candleUp,
+              downWickColor: chartColors.candleDown,
+              noChangeWickColor: chartColors.candleUp,
             },
           },
         });
@@ -501,8 +513,8 @@ export function Chart({
           visible: true,
           styles: {
             lines: [
-              { style: "solid", color: "#f6c85f", size: 1 },
-              { style: "solid", color: "#b07cff", size: 1 },
+              { style: "solid", color: chartColors.ma50, size: 1 },
+              { style: "solid", color: chartColors.ma200, size: 1 },
             ],
           },
         },
@@ -524,9 +536,9 @@ export function Chart({
                 style: "fill",
                 borderStyle: "solid",
                 borderSize: 0,
-                upColor: "#d9dde3",
-                downColor: "#d9dde3",
-                noChangeColor: "#d9dde3",
+                upColor: chartColors.volumeUp,
+                downColor: chartColors.volumeDown,
+                noChangeColor: chartColors.volumeUp,
               }],
               lines: [],
             },
@@ -681,6 +693,7 @@ export function Chart({
     show52WeekLow,
     showPreviousClose,
     previousClose,
+    chartColors,
   ]);
 
   useEffect(() => {
