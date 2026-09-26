@@ -374,6 +374,36 @@ export function Chart({
 
       chart.subscribeAction("onCrosshairChange", crosshairHandler);
 
+      // Daily charts should open at roughly six months of trading history.
+      // Keep the larger 300-bar dataset so older history is still available
+      // immediately when the user scrolls left.
+      let initialDailyViewportApplied = false;
+      const applyInitialDailyViewport = () => {
+        if (initialDailyViewportApplied || timeframe !== "D" || disposed) return;
+        const dataList = chart.getDataList();
+        if (!dataList.length) return;
+
+        initialDailyViewportApplied = true;
+        requestAnimationFrame(() => {
+          if (disposed) return;
+
+          // Indian equities have roughly 120-130 trading sessions in six
+          // calendar months. Size each bar from the available chart width so
+          // the target remains consistent on desktop and mobile.
+          const targetVisibleBars = 126;
+          const chartWidth = Math.max(container.clientWidth, 1);
+          const barSpace = Math.max(
+            1,
+            Math.min(50, (chartWidth * 0.94) / targetVisibleBars),
+          );
+
+          chart.setBarSpace(barSpace);
+          chart.scrollToRealTime(0);
+        });
+      };
+
+      chart.subscribeAction("onDataReady", applyInitialDailyViewport);
+
       chart.setDataLoader({
         getBars: async ({ type, timestamp, callback }) => {
           try {
@@ -698,6 +728,7 @@ export function Chart({
         disposed = true;
         resizeObserver.disconnect();
         chart.unsubscribeAction("onCrosshairChange", crosshairHandler);
+        chart.unsubscribeAction("onDataReady", applyInitialDailyViewport);
         chartRef.current = null;
         dispose(chart);
       };
