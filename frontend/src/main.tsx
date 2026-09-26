@@ -551,6 +551,7 @@ function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
+  const [drawingToolbarOpen, setDrawingToolbarOpen] = useState(true);
 
   const chartRangeTimeframes: Record<ChartRange, Timeframe> = {
     "1D": "5m",
@@ -1636,6 +1637,27 @@ json.dumps(_result)`;
       <section className="workspace">
         <section className="chart-workspace">
           <div className="chart-container">
+            <div className={"drawing-toolbar" + (drawingToolbarOpen ? "" : " is-hidden")} aria-label="Drawing tools">
+              {drawingToolbarOpen && (
+                <>
+                  <button type="button" title="Horizontal Ray" aria-label="Horizontal Ray">↔</button>
+                  <button type="button" title="Trendline" aria-label="Trendline">／</button>
+                  <button type="button" title="Rectangle" aria-label="Rectangle">▭</button>
+                  <span className="drawing-toolbar-divider" />
+                  <button type="button" title="Long Position" aria-label="Long Position">↗</button>
+                  <button type="button" title="Short Position" aria-label="Short Position">↘</button>
+                  <button type="button" title="Arrow" aria-label="Arrow">→</button>
+                  <button type="button" title="Brush" aria-label="Brush">✎</button>
+                  <button type="button" title="Text" aria-label="Text">T</button>
+                  <span className="drawing-toolbar-divider" />
+                  <button type="button" title="Delete Selected Drawing" aria-label="Delete Selected Drawing">⌫</button>
+                  <button type="button" title="Clear Drawings" aria-label="Clear Drawings">⌧</button>
+                </>
+              )}
+              <button type="button" className="drawing-toolbar-toggle" onClick={() => setDrawingToolbarOpen((value) => !value)} title={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"} aria-label={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"}>
+                {drawingToolbarOpen ? "‹" : "›"}
+              </button>
+            </div>
             <Chart
               chartType={chartType}
               dark={dark}
