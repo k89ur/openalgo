@@ -251,6 +251,20 @@ const DEFAULT_WATCHLIST: WatchItem[] = [
   { symbol: "NIFTY", price: "24,198.85", change: "-0.12%" },
 ];
 
+function formatWatchVolume(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (absolute >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (absolute >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return Math.round(value).toLocaleString("en-IN");
+}
+
+function formatWatchBidAsk(bid: number | null | undefined, ask: number | null | undefined): string {
+  if (bid == null || ask == null || !Number.isFinite(bid) || !Number.isFinite(ask)) return "—";
+  return `${bid.toFixed(2)} / ${ask.toFixed(2)}`;
+}
+
 function normalizeWatchItems(value: unknown): WatchItem[] {
   if (!Array.isArray(value)) return [];
 
@@ -572,7 +586,12 @@ function App() {
     bid?: number; ask?: number;
   } | null>(null);
   const [liveQuotes, setLiveQuotes] = useState<Record<string, {
-    last: number; change: number; change_percent: number;
+    last: number;
+    change: number;
+    change_percent: number;
+    volume?: number;
+    bid?: number;
+    ask?: number;
   }>>({});
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState(false);
@@ -735,17 +754,6 @@ function App() {
       setSearch("");
     }
     setWatchDialog(null);
-  };
-
-  const moveWatchSymbol = (currentIndex: number, direction: -1 | 1) => {
-    setWatchlist((current) => {
-      const nextIndex = currentIndex + direction;
-      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
-
-      const next = [...current];
-      [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
-      return next;
-    });
   };
 
   const removeWatchSymbol = (itemSymbol: string) => {
@@ -1193,7 +1201,13 @@ json.dumps(_result)`;
             change_percent: Number(message.change_percent ?? 0),
           };
 
-          setLiveQuotes((current) => ({ ...current, [item.symbol]: item }));
+          setLiveQuotes((current) => ({
+            ...current,
+            [item.symbol]: {
+              ...current[item.symbol],
+              ...item,
+            },
+          }));
         } catch {
           // Ignore malformed WebSocket messages.
         }
@@ -1239,6 +1253,9 @@ json.dumps(_result)`;
           last: number;
           change: number;
           change_percent: number;
+          volume?: number | null;
+          bid?: number | null;
+          ask?: number | null;
         }>;
 
         if (cancelled) return;
@@ -1248,9 +1265,13 @@ json.dumps(_result)`;
           for (const item of data) {
             if (!item.symbol) continue;
             next[item.symbol] = {
+              ...next[item.symbol],
               last: Number(item.last),
               change: Number(item.change ?? 0),
               change_percent: Number(item.change_percent ?? 0),
+              volume: item.volume == null ? next[item.symbol]?.volume : Number(item.volume),
+              bid: item.bid == null ? next[item.symbol]?.bid : Number(item.bid),
+              ask: item.ask == null ? next[item.symbol]?.ask : Number(item.ask),
             };
           }
           return next;
@@ -1694,7 +1715,7 @@ json.dumps(_result)`;
             <input className="watch-search" placeholder="Search symbols..." value={watchSearch}
               onChange={(event) => setWatchSearch(event.target.value)} />
             {watchImportMessage && <div className="watch-message">{watchImportMessage}</div>}
-            <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span><span></span></div>
+            <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span><span>VOL</span><span>BID / ASK</span><span></span></div>
             <div className="watch-items">
               {filteredWatchlist.map((item) => (
                 <div
@@ -1712,9 +1733,9 @@ json.dumps(_result)`;
                     <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
                       {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
                     </span>
+                    <span className="watch-volume">{formatWatchVolume(liveQuotes[item.symbol]?.volume)}</span>
+                    <span className="watch-bid-ask">{formatWatchBidAsk(liveQuotes[item.symbol]?.bid, liveQuotes[item.symbol]?.ask)}</span>
                   </button>
-                  <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), -1)} aria-label={`Move ${item.symbol} up`}>▲</button>
-                  <button className="watch-move" onClick={() => moveWatchSymbol(watchlist.indexOf(item), 1)} aria-label={`Move ${item.symbol} down`}>▼</button>
                   <button className="watch-remove" onClick={() => removeWatchSymbol(item.symbol)} aria-label={`Remove ${item.symbol}`}>×</button>
                 </div>
               ))}
