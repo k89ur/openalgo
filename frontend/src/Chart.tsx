@@ -375,29 +375,31 @@ export function Chart({
       chart.subscribeAction("onCrosshairChange", crosshairHandler);
 
       // Daily charts should open at roughly six months of trading history.
-      // Keep the larger 300-bar dataset so older history is still available
-      // immediately when the user scrolls left.
+      // Apply the viewport after the data-loader callback so the initial
+      // visible range is set after KLineCharts has loaded its data.
       let initialDailyViewportApplied = false;
       const applyInitialDailyViewport = () => {
         if (initialDailyViewportApplied || timeframe !== "D" || disposed) return;
-        const dataList = chart.getDataList();
-        if (!dataList.length) return;
+        if (!chart.getDataList().length) return;
 
         initialDailyViewportApplied = true;
         requestAnimationFrame(() => {
           if (disposed) return;
 
           // Indian equities have roughly 120-130 trading sessions in six
-          // calendar months. Use KLineChart's visible-bar constraint so the
-          // initial viewport is based on candle count rather than screen size.
-          // This adapts automatically across desktop and mobile widths.
+          // calendar months. Calculate bar width from the actual chart area
+          // so approximately 126 sessions fit on desktop and mobile alike.
           const targetVisibleBars = 126;
-          chart.setLeftMinVisibleBarCount(targetVisibleBars);
+          const chartWidth = Math.max(container.clientWidth, 1);
+          const barSpace = Math.max(
+            1,
+            Math.min(50, (chartWidth * 0.94) / targetVisibleBars),
+          );
+
+          chart.setBarSpace(barSpace);
           chart.scrollToRealTime(0);
         });
       };
-
-      chart.subscribeAction("onDataReady", applyInitialDailyViewport);
 
       chart.setDataLoader({
         getBars: async ({ type, timestamp, callback }) => {
@@ -427,6 +429,7 @@ export function Chart({
                 forward: type === "backward" ? false : cached.bars.length >= pageSize,
                 backward: false,
               });
+              if (type === "init") applyInitialDailyViewport();
             }
             if (cacheFresh) return;
 
@@ -488,6 +491,7 @@ export function Chart({
               forward: type === "backward" ? false : bars.length >= pageSize,
               backward: false,
             });
+            if (type === "init") applyInitialDailyViewport();
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") return;
             console.error("PIPSGOX history error:", error);
