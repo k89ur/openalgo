@@ -636,6 +636,15 @@ function App() {
     }
   };
 
+  const disconnectAllBrokers = async () => {
+    if (!window.confirm("Disconnect every broker account and invalidate all stored broker access tokens?")) return;
+    const response = await apiFetch("/api/security/disconnect-all", { method: "POST" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.detail || "Could not disconnect broker accounts.");
+    setBrokerAccounts((accounts) => accounts.map((account) => ({ ...account, status: "disconnected" })));
+    setSelectedAccountId(null);
+  };
+
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
@@ -2258,7 +2267,7 @@ json.dumps(_result)`;
         </div>
       )}
 
-      {accountOpen && <BrokerConnections onClose={() => setAccountOpen(false)} />}
+      {accountOpen && <BrokerConnections onClose={() => setAccountOpen(false)} onDisconnectAll={disconnectAllBrokers} />}
 
       {positionsOpen && (
         <div className="modal-backdrop" onClick={() => setPositionsOpen(false)}>
