@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "./api";
 
 type DevStatus = {
   backend: boolean;
@@ -22,7 +23,7 @@ export function DevConsole() {
 
   const loadStatus = useCallback(async () => {
     try {
-      const response = await fetch("/api/dev/status", { cache: "no-store" });
+      const response = await apiFetch("/api/dev/status", { cache: "no-store" });
       if (!response.ok) throw new Error("Dev API unavailable");
       setStatus(await response.json() as DevStatus);
     } catch {
@@ -32,7 +33,7 @@ export function DevConsole() {
 
   const loadLogs = useCallback(async () => {
     try {
-      const response = await fetch(`/api/dev/logs/${logName}?lines=100`, { cache: "no-store" });
+      const response = await apiFetch(`/api/dev/logs/${logName}?lines=100`, { cache: "no-store" });
       if (!response.ok) throw new Error("Log request failed");
       const data = await response.json() as { content: string };
       setLogs(data.content || "No log output.");
@@ -57,7 +58,7 @@ export function DevConsole() {
     setBusy(name);
     setMessage(name === "restart" ? "Restart requested..." : `${name[0].toUpperCase() + name.slice(1)} requested...`);
     try {
-      const response = await fetch(`/api/dev/${name}`, { method: "POST" });
+      const response = await apiFetch(`/api/dev/${name}`, { method: "POST" });
       if (!response.ok) throw new Error(await response.text());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Request failed.");
