@@ -740,6 +740,13 @@ function App() {
   const [positions, setPositions] = useState<Array<Record<string, unknown>>>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [positionsError, setPositionsError] = useState("");
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [ordersTab, setOrdersTab] = useState<"orders" | "trades">("orders");
+  const [orders, setOrders] = useState<Array<Record<string, unknown>>>([]);
+  const [trades, setTrades] = useState<Array<Record<string, unknown>>>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [brokerAccounts, setBrokerAccounts] = useState<Array<{
     id: number;
     broker: string;
@@ -846,6 +853,48 @@ function App() {
       setPositionsOpen(true);
     } finally {
       setPositionsLoading(false);
+    }
+  };
+
+  const loadOrdersAndTrades = async (tab: "orders" | "trades" = ordersTab) => {
+    if (!selectedAccountId) {
+      setOrdersError("Select a connected account first.");
+      setOrdersOpen(true);
+      return;
+    }
+    setOrdersLoading(true);
+    setOrdersError("");
+    try {
+      const endpoint = tab === "trades" ? "trades" : "orders";
+      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/" + endpoint, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.detail || "Could not load " + endpoint + "."));
+      const data = Array.isArray(payload.data) ? payload.data : [];
+      if (tab === "trades") setTrades(data as Array<Record<string, unknown>>);
+      else setOrders(data as Array<Record<string, unknown>>);
+      setOrdersTab(tab);
+      setOrdersOpen(true);
+    } catch (error) {
+      setOrdersError(error instanceof Error ? error.message : "Could not load " + tab + ".");
+      setOrdersOpen(true);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const cancelBrokerOrder = async (orderId: string) => {
+    if (!selectedAccountId || !window.confirm("Cancel order " + orderId + "?")) return;
+    setCancellingOrderId(orderId);
+    setOrdersError("");
+    try {
+      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/orders/" + encodeURIComponent(orderId), { method: "DELETE" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.detail || "Could not cancel order."));
+      await loadOrdersAndTrades("orders");
+    } catch (error) {
+      setOrdersError(error instanceof Error ? error.message : "Could not cancel order.");
+    } finally {
+      setCancellingOrderId(null);
     }
   };
 
@@ -1738,6 +1787,7 @@ json.dumps(_result)`;
           <button onClick={() => { setOrderMessage(""); setOrderOpen(true); }}>Trade</button>
           <button onClick={() => void loadAccountFunds()}>{accountFundsLoading ? "Funds..." : "Funds"}</button>
           <button onClick={() => void loadPositions()}>{positionsLoading ? "Positions..." : "Positions"}</button>
+          <button onClick={() => void loadOrdersAndTrades("orders")}>{ordersLoading ? "Orders..." : "Orders"}</button>
           <button>Help</button>
           <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
         </div>
@@ -2135,6 +2185,73 @@ json.dumps(_result)`;
               ) : <div className="positions-empty">No open positions.</div>}
               <button className="funds-refresh" disabled={positionsLoading} onClick={() => void loadPositions()}>
                 {positionsLoading ? "REFRESHING..." : "REFRESH"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {ordersOpen && (
+        <div className="modal-backdrop" onClick={() => setOrdersOpen(false)}>
+          <section className="modal orders-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <strong>{ordersTab === "orders" ? "ORDERS" : "TRADEBOOK"}</strong>
+              <button onClick={() => setOrdersOpen(false)}>CLOSE</button>
+            </div>
+            <div className="orders-panel">
+              <div className="orders-tabs">
+                <button className={ordersTab === "orders" ? "active" : ""} onClick={() => void loadOrdersAndTrades("orders")}>ORDERS</button>
+                <button className={ordersTab === "trades" ? "active" : ""} onClick={() => void loadOrdersAndTrades("trades")}>TRADES</button>
+              </div>
+              {ordersError && <div className="funds-error">{ordersError}</div>}
+              {ordersTab === "orders" ? (
+                orders.length ? (
+                  <div className="orders-table-wrap">
+                    <table className="orders-table">
+                      <thead><tr><th>TIME</th><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>FILLED</th><th>TYPE</th><th>PRICE</th><th>STATUS</th><th></th></tr></thead>
+                      <tbody>
+                        {orders.map((item, index) => {
+                          const orderId = String(item.order_id || index);
+                          const status = String(item.status || "—");
+                          const cancellable = ["PENDING", "TRANSIT", "OPEN", "PART_TRADED", "PARTIALLY_FILLED"].includes(status.toUpperCase());
+                          return <tr key={orderId}>
+                            <td>{String(item.created_at || "—")}</td>
+                            <td><strong>{String(item.symbol || "—")}</strong><small>{String(item.exchange || "")}</small></td>
+                            <td className={String(item.side).toUpperCase() === "BUY" ? "positive" : "negative"}>{String(item.side || "—")}</td>
+                            <td>{Number(item.quantity || 0).toLocaleString("en-IN")}</td>
+                            <td>{Number(item.filled_quantity || 0).toLocaleString("en-IN")}</td>
+                            <td>{String(item.order_type || "—")}</td>
+                            <td>₹{Number(item.average_price || item.price || 0).toFixed(2)}</td>
+                            <td><span className={"order-status " + status.toLowerCase().replaceAll("_", "-")}>{status}</span></td>
+                            <td>{cancellable && <button className="order-cancel" disabled={cancellingOrderId === orderId} onClick={() => void cancelBrokerOrder(orderId)}>{cancellingOrderId === orderId ? "..." : "CANCEL"}</button>}</td>
+                          </tr>;
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <div className="orders-empty">{ordersLoading ? "Loading orders..." : "No orders for today."}</div>
+              ) : (
+                trades.length ? (
+                  <div className="orders-table-wrap">
+                    <table className="orders-table">
+                      <thead><tr><th>TIME</th><th>SYMBOL</th><th>SIDE</th><th>QTY</th><th>PRICE</th><th>PRODUCT</th><th>ORDER ID</th></tr></thead>
+                      <tbody>
+                        {trades.map((item, index) => <tr key={String(item.trade_id || index)}>
+                          <td>{String(item.traded_at || "—")}</td>
+                          <td><strong>{String(item.symbol || "—")}</strong><small>{String(item.exchange || "")}</small></td>
+                          <td className={String(item.side).toUpperCase() === "BUY" ? "positive" : "negative"}>{String(item.side || "—")}</td>
+                          <td>{Number(item.quantity || 0).toLocaleString("en-IN")}</td>
+                          <td>₹{Number(item.price || 0).toFixed(2)}</td>
+                          <td>{String(item.product || "—")}</td>
+                          <td>{String(item.order_id || "—")}</td>
+                        </tr>)}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <div className="orders-empty">{ordersLoading ? "Loading trades..." : "No trades for today."}</div>
+              )}
+              <button className="funds-refresh" disabled={ordersLoading} onClick={() => void loadOrdersAndTrades(ordersTab)}>
+                {ordersLoading ? "REFRESHING..." : "REFRESH"}
               </button>
             </div>
           </section>
