@@ -1105,10 +1105,28 @@ def broker_account_positions(account_id: int) -> dict[str, object]:
 def broker_account_orders(account_id: int) -> dict[str, object]:
     provider = _broker_account_provider(account_id)
     try:
+        from app.providers.accounts import normalize_order, _normalize_broker_items
+        items = _normalize_broker_items(provider.get_orders(), "orderBook", "orders")
         return {
             "account_id": account_id,
             "broker": provider.broker,
-            "data": provider.get_orders(),
+            "data": [normalize_order(provider, item) for item in items],
+        }
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/broker/accounts/{account_id}/trades")
+def broker_account_trades(account_id: int) -> dict[str, object]:
+    provider = _broker_account_provider(account_id)
+    try:
+        from app.providers.accounts import normalize_trade, _normalize_broker_items
+        items = _normalize_broker_items(provider.get_trades(), "tradeBook", "trades")
+        return {
+            "account_id": account_id,
+            "broker": provider.broker,
+            "data": [normalize_trade(provider, item) for item in items],
         }
     except Exception as exc:
         broker_accounts.set_status(account_id, "error")
