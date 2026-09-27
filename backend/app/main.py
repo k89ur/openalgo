@@ -1348,24 +1348,27 @@ async def quotes_websocket(websocket: WebSocket) -> None:
 @app.get("/api/quotes", response_model=list[Quote])
 def quotes(
     symbols: str = Query(..., min_length=1, max_length=30000),
+    account_id: int | None = Query(default=None, ge=1),
 ) -> list[Quote]:
     requested = [item.strip().upper() for item in symbols.split(",") if item.strip()]
-    return get_quotes_for_symbols(requested)
+    selected_provider = _market_data_provider_for_account(account_id)
+    return get_quotes_for_symbols(requested, selected_provider)
 
 
 @app.post("/api/quotes", response_model=list[Quote])
 def quotes_post(request: QuotesRequest) -> list[Quote]:
     requested = [item.strip().upper() for item in request.symbols if item.strip()]
-    return get_quotes_for_symbols(requested)
+    return get_quotes_for_symbols(requested, provider)
 
 
-def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
+def get_quotes_for_symbols(requested: list[str], selected_provider=None) -> list[Quote]:
     """Fetch watchlist quotes across the exact FYERS EQ/BE series.
 
     The PIPSGOX watchlist stores only the ticker, such as LOTUSDEV. Some NSE
     instruments are available to FYERS in BE instead of EQ, so asking only for
     NSE:<ticker>-EQ can silently produce no quote.
     """
+    selected_provider = selected_provider or provider
     if not requested:
         return []
     if len(requested) > 1000:
@@ -1411,7 +1414,7 @@ def get_quotes_for_symbols(requested: list[str]) -> list[Quote]:
             continue
 
         try:
-            batch_results = provider.get_quotes(chunk)
+            batch_results = selected_provider.get_quotes(chunk)
         except ValueError:
             # A single invalid/restricted symbol must not hide valid symbols
             # in the same batch.
