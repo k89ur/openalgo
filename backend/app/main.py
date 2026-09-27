@@ -898,9 +898,12 @@ def broker_account_connect(account_id: int, request: Request, response: Response
 
     try:
         if account.broker == "fyers":
+            # FYERS OAuth identifies the API application with the App ID.
+            # The trading Client ID is not used for this parameter.
+            fyers_app_id = api_key.strip() or client_id.strip()
             result = BrokerManager.start_fyers(
                 account.id,
-                client_id,
+                fyers_app_id,
                 f"{_codespace_forwarded_url(8000)}/auth/broker/fyers/callback",
                 state,
             )
@@ -969,9 +972,10 @@ def broker_fyers_callback(
 
     account_id = context[0]
     try:
-        _, client_id, _, api_secret = broker_accounts.get_account_credentials(account_id)
-        token = BrokerManager.exchange_fyers_code(client_id, api_secret, auth_code)
-        BrokerManager.validate_fyers_token(client_id, token)
+        _, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
+        fyers_app_id = api_key.strip() or client_id.strip()
+        token = BrokerManager.exchange_fyers_code(fyers_app_id, api_secret, auth_code)
+        BrokerManager.validate_fyers_token(fyers_app_id, token)
         broker_accounts.set_access_token(account_id, token, "connected")
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1014,7 +1018,7 @@ def broker_dhan_callback(token_id: str | None = None, request: Request = None) -
 @app.get("/api/broker/accounts/{account_id}/session")
 def broker_account_session(account_id: int) -> dict[str, object]:
     try:
-        account, client_id, _, _ = broker_accounts.get_account_credentials(account_id)
+        account, client_id, api_key, _ = broker_accounts.get_account_credentials(account_id)
         token = broker_accounts.get_access_token(account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1024,7 +1028,7 @@ def broker_account_session(account_id: int) -> dict[str, object]:
     connected = False
     if token and account.broker == "fyers":
         try:
-            BrokerManager.validate_fyers_token(client_id, token)
+            BrokerManager.validate_fyers_token(api_key.strip() or client_id.strip(), token)
             connected = True
             broker_accounts.set_status(account_id, "connected")
         except Exception:
