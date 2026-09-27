@@ -86,6 +86,9 @@ class AccountBrokerProvider(Protocol):
     def get_orders(self) -> dict[str, Any]:
         ...
 
+    def get_trades(self) -> dict[str, Any]:
+        ...
+
     def get_holdings(self) -> dict[str, Any]:
         ...
 
@@ -136,6 +139,9 @@ class FyersAccountProvider:
 
     def get_orders(self) -> dict[str, Any]:
         return self._check(self.client.orderbook(), "orders")
+
+    def get_trades(self) -> dict[str, Any]:
+        return self._check(self.client.tradebook(), "trades")
 
     def get_holdings(self) -> dict[str, Any]:
         return self._check(self.client.holdings(), "holdings")
@@ -260,6 +266,10 @@ class DhanAccountProvider:
 
     def get_orders(self) -> dict[str, Any]:
         payload = self._request("GET", "/orders", "orders")
+        return {"data": payload}
+
+    def get_trades(self) -> dict[str, Any]:
+        payload = self._request("GET", "/trades", "trades")
         return {"data": payload}
 
     def get_holdings(self) -> dict[str, Any]:
