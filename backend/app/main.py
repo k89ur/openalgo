@@ -1569,6 +1569,7 @@ def history(
     try:
         if account_id is None:
             raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
+        account, _, _, _ = broker_accounts.get_account_credentials(account_id)
         access_token = broker_accounts.get_access_token(account_id)
         if not access_token:
             raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
@@ -1745,7 +1746,7 @@ def quote(
         original = symbol.strip().upper()
         if account_id is None:
             raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
-        account, _, _, access_token = broker_accounts.get_account_credentials(account_id)
+        account, _, _, _ = broker_accounts.get_account_credentials(account_id)
         access_token = broker_accounts.get_access_token(account_id)
         if not access_token:
             raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
