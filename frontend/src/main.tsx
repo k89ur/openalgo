@@ -723,6 +723,15 @@ function App() {
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
+  const [orderType, setOrderType] = useState<"MARKET" | "LIMIT" | "STOP_LOSS" | "STOP_LOSS_MARKET">("MARKET");
+  const [orderProduct, setOrderProduct] = useState<"CNC" | "INTRADAY" | "MARGIN" | "MTF">("INTRADAY");
+  const [orderQuantity, setOrderQuantity] = useState("1");
+  const [orderPrice, setOrderPrice] = useState("");
+  const [orderTriggerPrice, setOrderTriggerPrice] = useState("");
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+  const [orderMessage, setOrderMessage] = useState("");
   const [brokerAccounts, setBrokerAccounts] = useState<Array<{
     id: number;
     broker: string;
@@ -776,6 +785,24 @@ function App() {
     if (colors) updateChartSettings({ colors: { ...DEFAULT_CHART_COLORS, ...colors } });
   };
 
+  const submitOrder = async () => {
+    if (!selectedAccountId) { setOrderMessage("Select a connected trading account first."); return; }
+    const quantity = Number(orderQuantity);
+    const price = orderPrice ? Number(orderPrice) : undefined;
+    const triggerPrice = orderTriggerPrice ? Number(orderTriggerPrice) : undefined;
+    if (!Number.isInteger(quantity) || quantity <= 0) { setOrderMessage("Quantity must be a positive whole number."); return; }
+    if (orderType === "LIMIT" && (!price || price <= 0)) { setOrderMessage("Enter a valid limit price."); return; }
+    if ((orderType === "STOP_LOSS" || orderType === "STOP_LOSS_MARKET") && (!triggerPrice || triggerPrice <= 0)) { setOrderMessage("Enter a valid trigger price."); return; }
+    setOrderSubmitting(true); setOrderMessage("");
+    try {
+      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol, side: orderSide, quantity, order_type: orderType, product_type: orderProduct, validity: "DAY", price, trigger_price: triggerPrice }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.detail || "Order request failed."));
+      const orderId = payload?.data?.orderId || payload?.data?.id || payload?.data?.order_id || "submitted";
+      setOrderMessage("Order " + orderId + " submitted.");
+    } catch (error) { setOrderMessage(error instanceof Error ? error.message : "Order request failed."); }
+    finally { setOrderSubmitting(false); }
+  };
   const updateChartSettings = (patch: Partial<ChartSettings>) => {
     setChartSettings((current) => {
       const next = { ...current, ...patch };
@@ -1639,6 +1666,7 @@ json.dumps(_result)`;
         <div className="menu-center">PIPSGOX WEB TERMINAL</div>
         <div className="menu-right">
           <button onClick={() => setAccountOpen(true)}>Account</button>
+          <button onClick={() => { setOrderMessage(""); setOrderOpen(true); }}>Trade</button>
           <button>Help</button>
           <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
         </div>
@@ -2005,6 +2033,30 @@ json.dumps(_result)`;
       )}
 
       {accountOpen && <BrokerConnections onClose={() => setAccountOpen(false)} />}
+
+      {orderOpen && (
+        <div className="modal-backdrop" onClick={() => setOrderOpen(false)}>
+          <section className="modal order-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header"><strong>PLACE ORDER</strong><button onClick={() => setOrderOpen(false)}>CLOSE</button></div>
+            <div className="order-form">
+              <div className="order-account-note">{selectedAccountId ? "Account: " + (brokerAccounts.find((item) => item.id === selectedAccountId)?.account_name || selectedAccountId) : "No trading account selected"}</div>
+              <div className="order-symbol-row"><span>SYMBOL</span><strong>{symbol}</strong></div>
+              <div className="order-side-row">
+                <button className={orderSide === "BUY" ? "order-side active-buy" : "order-side"} onClick={() => setOrderSide("BUY")}>BUY</button>
+                <button className={orderSide === "SELL" ? "order-side active-sell" : "order-side"} onClick={() => setOrderSide("SELL")}>SELL</button>
+              </div>
+              <label>Order Type<select value={orderType} onChange={(event) => setOrderType(event.target.value as typeof orderType)}><option value="MARKET">MARKET</option><option value="LIMIT">LIMIT</option><option value="STOP_LOSS">STOP LOSS</option><option value="STOP_LOSS_MARKET">STOP LOSS MARKET</option></select></label>
+              <label>Product<select value={orderProduct} onChange={(event) => setOrderProduct(event.target.value as typeof orderProduct)}><option value="INTRADAY">INTRADAY</option><option value="CNC">CNC</option><option value="MARGIN">MARGIN</option><option value="MTF">MTF</option></select></label>
+              <label>Quantity<input type="number" min="1" step="1" value={orderQuantity} onChange={(event) => setOrderQuantity(event.target.value)} /></label>
+              {(orderType === "LIMIT" || orderType === "STOP_LOSS") && <label>Limit Price<input type="number" min="0" step="0.05" value={orderPrice} onChange={(event) => setOrderPrice(event.target.value)} /></label>}
+              {(orderType === "STOP_LOSS" || orderType === "STOP_LOSS_MARKET") && <label>Trigger Price<input type="number" min="0" step="0.05" value={orderTriggerPrice} onChange={(event) => setOrderTriggerPrice(event.target.value)} /></label>}
+              <button className={orderSide === "BUY" ? "order-submit buy" : "order-submit sell"} disabled={orderSubmitting || !selectedAccountId} onClick={() => void submitOrder()}>{orderSubmitting ? "SUBMITTING..." : orderSide + " " + symbol}</button>
+              {orderMessage && <div className="order-message">{orderMessage}</div>}
+              <div className="order-warning">Live order: this sends the request to the selected broker account.</div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {panel && (
         <div className="modal-backdrop" onClick={() => setPanel(null)}>
