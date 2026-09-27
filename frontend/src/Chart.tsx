@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "./api";
 import { dispose, init, registerIndicator, registerOverlay, type Chart as KLineChartInstance, type KLineData } from "klinecharts";
 
 export type ChartType = "candles" | "bars" | "line";
@@ -673,8 +674,7 @@ export function Chart({
               // Only failed symbols trigger the diagnostic request, so normal
               // chart loads do not incur an extra network call.
               try {
-                const diagnostic = await fetch(
-                  `/api/symbols/resolve?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&test_history=true&test_quote=true`,
+                const diagnostic = await apiFetch(`/api/symbols/resolve?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&test_history=true&test_quote=true`,
                   { cache: "no-store" },
                 );
                 if (diagnostic.ok) {
@@ -859,8 +859,7 @@ export function Chart({
       if (show52WeekHigh || show52WeekLow) {
         void (async () => {
           try {
-            const response = await fetch(
-              "/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=D&limit=400",
+            const response = await apiFetch("/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=D&limit=400",
               { cache: "no-store" },
             );
             if (!response.ok) return;
