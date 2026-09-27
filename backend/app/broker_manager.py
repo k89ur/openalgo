@@ -27,20 +27,27 @@ class BrokerManager:
         from app import broker_accounts
         from app.providers.accounts import build_account_provider
 
-        account, client_id, _, _ = broker_accounts.get_account_credentials(account_id)
+        account, client_id, api_key, _ = broker_accounts.get_account_credentials(account_id)
         access_token = broker_accounts.get_access_token(account_id)
         if not access_token:
             raise ValueError(f"Broker account {account_id} is not connected.")
 
-        return build_account_provider(account.broker, client_id, access_token)
+        # FYERS calls its API application identifier the App ID/API ID.
+        # Keep the user's trading Client ID separately, but use the App ID
+        # for SDK authentication and websocket access.
+        provider_client_id = (
+            api_key.strip() if account.broker == "fyers" and api_key.strip()
+            else client_id
+        )
+        return build_account_provider(account.broker, provider_client_id, access_token)
 
     @staticmethod
-    def start_fyers(account_id: int, client_id: str, redirect_uri: str, state: str) -> BrokerAuthStart:
-        if not client_id.strip():
-            raise ValueError("FYERS Client ID is required for this account.")
+    def start_fyers(account_id: int, app_id: str, redirect_uri: str, state: str) -> BrokerAuthStart:
+        if not app_id.strip():
+            raise ValueError("FYERS App ID is required for this account.")
 
         params = {
-            "client_id": client_id.strip(),
+            "client_id": app_id.strip(),
             "redirect_uri": redirect_uri,
             "response_type": "code",
             "state": state,
