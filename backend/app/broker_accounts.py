@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import os
 import sqlite3
 import threading
@@ -142,3 +141,100 @@ def generate_encryption_key() -> str:
     if Fernet is None:
         raise RuntimeError("Install the cryptography package first.")
     return Fernet.generate_key().decode("ascii")
+
+
+def get_account_credentials(account_id: int) -> tuple[BrokerAccount, str, str]:
+    cipher = _cipher()
+    with _DB_LOCK:
+        connection = _connect()
+        row = connection.execute(
+            """
+            SELECT id, broker, account_name, client_id, secret_blob, status, created_at, updated_at
+            FROM broker_accounts WHERE id = ?
+            """,
+            (account_id,),
+        ).fetchone()
+        connection.close()
+
+    if row is None:
+        raise ValueError("Broker account not found.")
+
+    try:
+        secret = cipher.decrypt(str(row["secret_blob"]).encode("ascii")).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("Could not decrypt broker account credentials.") from exc
+
+    return (
+        BrokerAccount(
+            id=int(row["id"]),
+            broker=str(row["broker"]),
+            account_name=str(row["account_name"]),
+            client_id=str(row["client_id"]),
+            status=str(row["status"]),
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+        ),
+        str(row["client_id"]),
+        secret,
+    )
+
+
+def set_access_token(account_id: int, access_token: str, status: str = "connected") -> None:
+    token = access_token.strip()
+    if not token:
+        raise ValueError("Access token is required.")
+    cipher = _cipher()
+    token_blob = cipher.encrypt(token.encode("utf-8")).decode("ascii")
+
+    with _DB_LOCK:
+        connection = _connect()
+        cursor = connection.execute(
+            """
+            UPDATE broker_accounts
+            SET access_token_blob = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (token_blob, status, account_id),
+        )
+        connection.commit()
+        connection.close()
+    if cursor.rowcount == 0:
+        raise ValueError("Broker account not found.")
+
+
+def get_access_token(account_id: int) -> str:
+    cipher = _cipher()
+    with _DB_LOCK:
+        connection = _connect()
+        row = connection.execute(
+            "SELECT access_token_blob FROM broker_accounts WHERE id = ?",
+            (account_id,),
+        ).fetchone()
+        connection.close()
+
+    if row is None:
+        raise ValueError("Broker account not found.")
+    blob = str(row["access_token_blob"] or "")
+    if not blob:
+        return ""
+    try:
+        return cipher.decrypt(blob.encode("ascii")).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("Could not decrypt broker access token.") from exc
+
+
+def set_status(account_id: int, status: str) -> None:
+    with _DB_LOCK:
+        connection = _connect()
+        cursor = connection.execute(
+            """
+            UPDATE broker_accounts
+            SET status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (status, account_id),
+        )
+        connection.commit()
+        connection.close()
+    if cursor.rowcount == 0:
+        raise ValueError("Broker account not found.")
