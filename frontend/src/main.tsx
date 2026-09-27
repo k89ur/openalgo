@@ -1282,7 +1282,8 @@ json.dumps(_result)`;
     const loadQuote = async () => {
       try {
         const response = await fetch(
-          "/api/quote?symbol=" + encodeURIComponent(chartApiSymbol || symbol),
+          "/api/quote?symbol=" + encodeURIComponent(chartApiSymbol || symbol) +
+            (selectedAccountId ? "&account_id=" + selectedAccountId : ""),
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("quote request failed");
@@ -1398,7 +1399,8 @@ json.dumps(_result)`;
       try {
         const symbols = watchlist.map((item) => item.symbol).join(",");
         const response = await fetch(
-          "/api/quotes?symbols=" + encodeURIComponent(symbols),
+          "/api/quotes?symbols=" + encodeURIComponent(symbols) +
+            (selectedAccountId ? "&account_id=" + selectedAccountId : ""),
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("watchlist quote request failed");
