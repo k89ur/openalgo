@@ -70,6 +70,9 @@ def _connect() -> sqlite3.Connection:
     columns = {row["name"] for row in connection.execute("PRAGMA table_info(broker_accounts)").fetchall()}
     if "api_key" not in columns:
         connection.execute("ALTER TABLE broker_accounts ADD COLUMN api_key TEXT NOT NULL DEFAULT ''")
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(broker_accounts)").fetchall()}
+    if "api_key" not in columns:
+        connection.execute("ALTER TABLE broker_accounts ADD COLUMN api_key TEXT NOT NULL DEFAULT "")
     connection.commit()
     return connection
 
@@ -98,6 +101,7 @@ def create_account(broker: str, account_name: str, client_id: str, api_secret: s
     account_name = account_name.strip()
     client_id = client_id.strip()
     api_secret = api_secret.strip()
+    api_key = api_key.strip()
     api_key = api_key.strip()
     if not broker or not account_name:
         raise ValueError("Broker and account name are required.")
