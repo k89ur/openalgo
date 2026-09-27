@@ -614,6 +614,34 @@ function App() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    fetch("/api/broker/accounts")
+      .then(async (response) => {
+        const payload = await response.json().catch(() => []);
+        if (!response.ok) throw new Error(payload?.detail || "Could not load broker accounts.");
+        return Array.isArray(payload) ? payload : [];
+      })
+      .then((accounts) => {
+        if (cancelled) return;
+        setBrokerAccounts(accounts);
+        setSelectedAccountId((current) => {
+          if (current && accounts.some((account) => account.id === current)) return current;
+          const connected = accounts.find((account) => account.status === "connected");
+          return connected?.id ?? accounts[0]?.id ?? null;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setBrokerAccounts([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (selectedAccountId) localStorage.setItem("pipsgox-selected-account", String(selectedAccountId));
+    else localStorage.removeItem("pipsgox-selected-account");
+  }, [selectedAccountId]);
+
+  useEffect(() => {
     try {
       localStorage.setItem("pipsgox-drawing-toolbar-position", JSON.stringify(drawingToolbarPosition));
     } catch {
@@ -695,6 +723,18 @@ function App() {
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [brokerAccounts, setBrokerAccounts] = useState<Array<{
+    id: number;
+    broker: string;
+    account_name: string;
+    client_id: string;
+    status: string;
+  }>>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
+    const raw = localStorage.getItem("pipsgox-selected-account");
+    const value = raw ? Number(raw) : NaN;
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
   const [quote, setQuote] = useState<{
     last: number; change: number; change_percent: number;
     open?: number; high?: number; low?: number; volume?: number;
@@ -1605,6 +1645,21 @@ json.dumps(_result)`;
       <header className="topbar">
         <button className="top-command">MARKET</button>
         <button className="top-command">WATCHLIST</button>
+        <div className="account-selector">
+          <span className="account-selector-label">ACCOUNT</span>
+          <select
+            value={selectedAccountId ?? ""}
+            onChange={(event) => setSelectedAccountId(event.target.value ? Number(event.target.value) : null)}
+            aria-label="Trading account"
+          >
+            {!brokerAccounts.length && <option value="">No account</option>}
+            {brokerAccounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.account_name} · {account.broker.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="top-search-wrap">
           <div className="top-search">
