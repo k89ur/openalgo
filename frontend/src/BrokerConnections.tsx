@@ -29,6 +29,7 @@ export function BrokerConnections({ onClose }: Props) {
   const [broker, setBroker] = useState("fyers");
   const [accountName, setAccountName] = useState("");
   const [clientId, setClientId] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
 
   const loadAccounts = async () => {
@@ -73,6 +74,7 @@ export function BrokerConnections({ onClose }: Props) {
           account_name: accountName.trim(),
           client_id: clientId.trim(),
           api_secret: apiSecret,
+          api_key: apiKey,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -81,12 +83,27 @@ export function BrokerConnections({ onClose }: Props) {
       setAccounts((current) => [...current, payload as BrokerAccount]);
       setAccountName("");
       setClientId("");
+      setApiKey("");
       setApiSecret("");
       setMessage("Broker account saved securely.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save broker account.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const connectAccount = async (account: BrokerAccount) => {
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/broker/accounts/" + account.id + "/connect");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || "Could not start broker login.");
+      if (!payload.authorization_url) throw new Error("Broker did not return a login URL.");
+      window.location.assign(payload.authorization_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start broker login.");
     }
   };
 
@@ -176,11 +193,21 @@ export function BrokerConnections({ onClose }: Props) {
             </label>
 
             <label>
-              <span>Client ID / App ID</span>
+              <span>Client ID</span>
               <input
                 value={clientId}
                 onChange={(event) => setClientId(event.target.value)}
                 placeholder="Broker client ID"
+                autoComplete="off"
+              />
+            </label>
+
+            <label>
+              <span>API Key / App ID <small>(Dhan)</small></span>
+              <input
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+                placeholder="Required for Dhan"
                 autoComplete="off"
               />
             </label>
