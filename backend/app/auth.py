@@ -162,3 +162,12 @@ def revoke(token: str | None) -> None:
         connection.execute("DELETE FROM auth_sessions WHERE token_hash = ?", (token_hash,))
         connection.commit()
         connection.close()
+
+
+def revoke_all(user_id: int) -> int:
+    with _DB_LOCK:
+        connection = _connect()
+        cursor = connection.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+        connection.commit()
+        connection.close()
+    return cursor.rowcount
