@@ -1075,3 +1075,35 @@ button { cursor: pointer; }
     display:none;
   }
 }
+
+
+.account-selector {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 8px;
+}
+
+.account-selector-label {
+  font-size: 9px;
+  letter-spacing: .08em;
+  color: #737b86;
+}
+
+.account-selector select {
+  min-width: 145px;
+  max-width: 210px;
+  height: 27px;
+  border: 1px solid #2a2f35;
+  border-radius: 3px;
+  background: #111316;
+  color: #d9dde3;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11px;
+}
+
+.account-selector select:focus {
+  outline: none;
+  border-color: #59636f;
+}
