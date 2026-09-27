@@ -588,9 +588,10 @@ def resolve_requested_symbols(symbols: list[str]) -> tuple[list[str], dict[str, 
     return api_symbols, api_to_original
 
 class FyersWatchlistStream:
-    """One shared FYERS data socket for all PIPSGOX browser clients."""
+    """Account-bound FYERS data socket for one PIPSGOX browser session."""
 
-    def __init__(self) -> None:
+    def __init__(self, market_provider: FyersMarketDataProvider) -> None:
+        self.provider = market_provider
         self._socket = None
         self._connect_lock = threading.Lock()
         self._symbol_lock = threading.Lock()
