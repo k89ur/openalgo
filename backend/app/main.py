@@ -1073,13 +1073,29 @@ def history(
     limit: int = Query(default=800, ge=50, le=2000),
     from_date: date | None = Query(default=None),
     to_date: date | None = Query(default=None),
+    account_id: int | None = Query(default=None, ge=1),
 ) -> list[Candle]:
     try:
+        selected_provider = provider
+        if account_id is not None:
+            try:
+                account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
+                if account.broker != "fyers":
+                    raise HTTPException(
+                        status_code=501,
+                        detail="Dhan chart routing is not enabled yet; complete Stage 4 Dhan market-data adapter first.",
+                    )
+                if not access_token:
+                    raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
+                selected_provider = FyersMarketDataProvider(client_id=client_id, access_token=access_token)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+
         api_symbol = resolve_api_symbol(symbol)
         if not api_symbol:
             raise unresolved_symbol_error(symbol)
         try:
-            candles = provider.get_history(
+            candles = selected_provider.get_history(
                 api_symbol,
                 timeframe,
                 limit,
@@ -1094,7 +1110,7 @@ def history(
                 if candidate == api_symbol:
                     continue
                 try:
-                    candles = provider.get_history(
+                    candles = selected_provider.get_history(
                         candidate,
                         timeframe,
                         limit,
