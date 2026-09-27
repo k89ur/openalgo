@@ -1711,7 +1711,7 @@ def quote(
                 if candidate == api_symbol:
                     continue
                 try:
-                    result = provider.get_quote(candidate)
+                    result = selected_provider.get_quote(candidate)
                     break
                 except ValueError as exc:
                     last_error = exc
@@ -1831,13 +1831,14 @@ def quotes_post(request: QuotesRequest) -> list[Quote]:
 
 
 def get_quotes_for_symbols(requested: list[str], selected_provider=None) -> list[Quote]:
-    """Fetch watchlist quotes across the exact FYERS EQ/BE series.
+    """Fetch watchlist quotes through the selected connected broker account.
 
     The PIPSGOX watchlist stores only the ticker, such as LOTUSDEV. Some NSE
     instruments are available to FYERS in BE instead of EQ, so asking only for
     NSE:<ticker>-EQ can silently produce no quote.
     """
-    selected_provider = selected_provider or provider
+    if selected_provider is None:
+        raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
     if not requested:
         return []
 
