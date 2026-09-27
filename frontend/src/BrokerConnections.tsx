@@ -13,6 +13,7 @@ type BrokerAccount = {
 
 type Props = {
   onClose: () => void;
+  onDisconnectAll?: () => Promise<void>;
 };
 
 const BROKERS = [
@@ -20,7 +21,7 @@ const BROKERS = [
   { value: "dhan", label: "Dhan" },
 ];
 
-export function BrokerConnections({ onClose }: Props) {
+export function BrokerConnections({ onClose, onDisconnectAll }: Props) {
   const [accounts, setAccounts] = useState<BrokerAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -237,6 +238,15 @@ export function BrokerConnections({ onClose }: Props) {
           <div className="broker-security-note">
             API secrets are encrypted in the backend database and are never returned to the browser after saving.
           </div>
+
+          {onDisconnectAll && (
+            <button
+              className="broker-emergency"
+              onClick={() => void onDisconnectAll()}
+            >
+              DISCONNECT ALL BROKERS
+            </button>
+          )}
 
           <div className="broker-actions">
             <button className="broker-cancel" onClick={onClose}>Cancel</button>
