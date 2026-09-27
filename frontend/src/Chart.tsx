@@ -611,7 +611,7 @@ export function Chart({
             let barsPromise = historyInflight.get(cacheKey);
             if (!barsPromise) {
               console.log("PIPSGOX history request:", url);
-              barsPromise = fetch(url, { cache: "no-store" }).then(async (response) => {
+              barsPromise = apiFetch(url, { cache: "no-store" }).then(async (response) => {
                 if (!response.ok) {
             let detail = "";
             try {
