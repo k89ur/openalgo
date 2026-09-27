@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 import hashlib
+import logging
 import hmac
 import os
 import secrets
@@ -29,6 +30,7 @@ from app.broker_manager import BrokerManager
 load_dotenv()
 
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
+logger = logging.getLogger("pipsgox.market_data")
 
 _trusted_hosts = [
     item.strip() for item in os.getenv(
@@ -1607,6 +1609,7 @@ def history(
 
         return [to_candle(item) for item in candles]
     except ValueError as exc:
+        logger.exception("Market-data history failed: account_id=%s symbol=%s timeframe=%s", account_id, symbol.strip().upper(), timeframe)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -1766,6 +1769,7 @@ def quote(
         result = replace(result, symbol=original)
         return to_quote(result)
     except ValueError as exc:
+        logger.exception("Market-data quote failed: account_id=%s symbol=%s", account_id, symbol.strip().upper())
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -1864,7 +1868,11 @@ def quotes(
 ) -> list[Quote]:
     requested = [item.strip().upper() for item in symbols.split(",") if item.strip()]
     selected_provider = _market_data_provider_for_account(account_id)
-    return get_quotes_for_symbols(requested, selected_provider)
+    try:
+        return get_quotes_for_symbols(requested, selected_provider)
+    except Exception:
+        logger.exception("Market-data quotes failed: account_id=%s broker=%s symbols=%s", account_id, getattr(selected_provider, "broker", "unknown"), requested[:20])
+        raise
 
 
 @app.post("/api/quotes", response_model=list[Quote])
