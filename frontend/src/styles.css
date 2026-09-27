@@ -836,3 +836,216 @@ button { cursor: pointer; }
 .drawing-toolbar.is-hidden{padding:2px 3px}
 .drawing-toolbar.is-hidden .drawing-toolbar-toggle{width:24px}
 .drawing-toolbar-toggle{font-weight:600}
+
+
+/* Broker connections */
+.broker-modal-backdrop {
+  z-index: 60;
+}
+.broker-modal {
+  width: min(620px, calc(100vw - 28px));
+}
+.broker-modal .modal-header {
+  height: 48px;
+  align-items: center;
+}
+.broker-modal .modal-header > div {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.broker-modal-subtitle {
+  color:#5f666d;
+  font-size:7px;
+  letter-spacing:.04em;
+}
+.broker-panel {
+  padding:14px;
+  background:#101010;
+}
+.broker-section-title {
+  margin-bottom:8px;
+  color:#666;
+  font-size:8px;
+  letter-spacing:.09em;
+}
+.broker-account-list {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.broker-account-row {
+  min-height:48px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  align-items:center;
+  gap:10px;
+  padding:7px 8px;
+  border:1px solid #252525;
+  background:#151515;
+}
+.broker-account-main {
+  min-width:0;
+}
+.broker-account-name {
+  color:#cfd3d7;
+  font-size:10px;
+  font-weight:500;
+}
+.broker-account-meta {
+  display:flex;
+  gap:8px;
+  margin-top:3px;
+  color:#666d74;
+  font-size:7px;
+}
+.broker-account-status {
+  display:flex;
+  align-items:center;
+  gap:5px;
+  color:#6d747b;
+  font-size:7px;
+  text-transform:uppercase;
+}
+.broker-status-dot {
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#555;
+}
+.broker-status-dot.connected {
+  background:#35c98a;
+  box-shadow:0 0 6px rgba(53,201,138,.3);
+}
+.broker-delete {
+  height:25px;
+  padding:0 8px;
+  border:1px solid #302629;
+  background:#171313;
+  color:#8a6266;
+  font-size:7px;
+  cursor:pointer;
+}
+.broker-delete:hover {
+  border-color:#633b40;
+  background:#241719;
+  color:#d78c92;
+}
+.broker-delete:disabled {
+  opacity:.45;
+  cursor:default;
+}
+.broker-empty {
+  min-height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px dashed #292929;
+  color:#5f666d;
+  font-size:8px;
+}
+.broker-divider {
+  height:1px;
+  margin:15px 0;
+  background:#272727;
+}
+.broker-form {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.broker-form label {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  color:#777e85;
+  font-size:8px;
+}
+.broker-form input,
+.broker-form select {
+  width:100%;
+  box-sizing:border-box;
+  height:31px;
+  border:1px solid #2c3034;
+  outline:0;
+  border-radius:3px;
+  background:#0d0e0f;
+  color:#cdd2d6;
+  padding:0 8px;
+  font-size:9px;
+}
+.broker-form input:focus,
+.broker-form select:focus {
+  border-color:#3d6f92;
+}
+.broker-message {
+  margin-top:9px;
+  padding:7px 8px;
+  border:1px solid #2b3034;
+  font-size:8px;
+}
+.broker-error {
+  color:#e58b92;
+  border-color:#533237;
+  background:#1b1113;
+}
+.broker-success {
+  color:#7ac9a5;
+  border-color:#284638;
+  background:#101b15;
+}
+.broker-security-note {
+  margin-top:11px;
+  color:#565d64;
+  font-size:7px;
+  line-height:1.5;
+}
+.broker-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:6px;
+  margin-top:14px;
+}
+.broker-actions button {
+  height:29px;
+  padding:0 12px;
+  border-radius:3px;
+  font-size:8px;
+  cursor:pointer;
+}
+.broker-cancel {
+  border:1px solid transparent;
+  background:transparent;
+  color:#737b82;
+}
+.broker-cancel:hover {
+  background:#191d20;
+  color:#b7bec3;
+}
+.broker-primary {
+  border:1px solid #315f82;
+  background:#1a3447;
+  color:#d7e6f2;
+}
+.broker-primary:hover {
+  background:#234a63;
+}
+.broker-primary:disabled {
+  opacity:.5;
+  cursor:default;
+}
+@media (max-width:620px) {
+  .broker-form {
+    grid-template-columns:1fr;
+  }
+  .broker-account-row {
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+  .broker-account-status {
+    display:none;
+  }
+  .broker-delete {
+    grid-column:2;
+    grid-row:1;
+  }
+}
