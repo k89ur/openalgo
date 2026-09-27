@@ -13,14 +13,14 @@ from urllib.parse import urlencode
 
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import dev_control, broker_accounts
+from app import auth, dev_control, broker_accounts
 from app.broker_manager import BrokerManager
 
 load_dotenv()
@@ -28,6 +28,7 @@ load_dotenv()
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
 
 broker_accounts.initialize()
+auth.initialize()
 
 def _codespace_forwarded_url(port: int) -> str:
     codespace_name = os.getenv("CODESPACE_NAME", "").strip()
@@ -52,7 +53,7 @@ FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: set[str] = set()
 _broker_auth_states: dict[str, tuple[int, str]] = {}
-_pending_dhan_account_id: int | None = None
+_dhan_auth_states: dict[str, int] = {}
 _fyers_token_lock = threading.Lock()
 FYERS_TOKEN_FILE = os.getenv(
     "PIPSGOX_FYERS_TOKEN_FILE",
@@ -96,6 +97,85 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+SESSION_COOKIE_SECURE = PIPSGOX_WEB_URL.startswith("https://")
+
+def _request_user(request: Request) -> dict[str, object] | None:
+    return auth.get_user(request.cookies.get(auth.SESSION_COOKIE))
+
+
+@app.middleware("http")
+async def require_private_api(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith("/api/auth/"):
+        if _request_user(request) is None:
+            return Response(
+                content='{"detail":"Authentication required."}',
+                status_code=401,
+                media_type="application/json",
+            )
+    return await call_next(request)
+
+
+class AuthCredentials(BaseModel):
+    username: str
+    password: str
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    return {
+        "setup_required": not auth.has_user(),
+        "authenticated": user is not None,
+        "username": user["username"] if user else None,
+    }
+
+
+@app.post("/api/auth/setup")
+def auth_setup(payload: AuthCredentials, response: Response) -> dict[str, object]:
+    if auth.has_user():
+        raise HTTPException(status_code=409, detail="Initial account is already configured.")
+    try:
+        auth.create_initial_user(payload.username, payload.password)
+        token = auth.authenticate(payload.username, payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not token:
+        raise HTTPException(status_code=500, detail="Could not create the initial session.")
+    response.set_cookie(
+        auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
+        samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
+    )
+    return {"authenticated": True, "username": payload.username.strip()}
+
+
+@app.post("/api/auth/login")
+def auth_login(payload: AuthCredentials, request: Request, response: Response) -> dict[str, object]:
+    token = auth.authenticate(payload.username, payload.password)
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    response.set_cookie(
+        auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
+        samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
+    )
+    return {"authenticated": True, "username": payload.username.strip()}
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, response: Response) -> dict[str, bool]:
+    auth.revoke(request.cookies.get(auth.SESSION_COOKIE))
+    response.delete_cookie(auth.SESSION_COOKIE, path="/")
+    return {"authenticated": False}
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return user
+
 
 Timeframe = Literal["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"]
 
@@ -839,7 +919,7 @@ def broker_accounts_create(payload: BrokerAccountCreate) -> BrokerAccountRespons
 
 
 @app.get("/api/broker/accounts/{account_id}/connect")
-def broker_account_connect(account_id: int) -> dict[str, str]:
+def broker_account_connect(account_id: int, response: Response) -> dict[str, str]:
     try:
         account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
     except ValueError as exc:
@@ -859,9 +939,9 @@ def broker_account_connect(account_id: int) -> dict[str, str]:
                 state,
             )
         elif account.broker == "dhan":
-            global _pending_dhan_account_id
+            login_state = secrets.token_urlsafe(32)
+            _dhan_auth_states[login_state] = account.id
             result = BrokerManager.start_dhan(account.id, client_id, api_key, api_secret)
-            _pending_dhan_account_id = account.id
         else:
             raise ValueError(f"Unsupported broker '{account.broker}'.")
     except ValueError as exc:
