@@ -107,8 +107,6 @@ def _save_fyers_token(token: str) -> None:
             pass
 
 
-_fyers_access_token = os.getenv("FYERS_ACCESS_TOKEN", "").strip() or _load_saved_fyers_token()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[PIPSGOX_WEB_URL],
@@ -308,6 +306,7 @@ class PipscriptDataRequest(BaseModel):
 
 
 class PipscriptDataBatchRequest(BaseModel):
+    account_id: int | None = None
     requests: list[PipscriptDataRequest] = []
 
 
@@ -363,9 +362,6 @@ def _pipscript_get_history(
         _pipscript_last_history_request = time.monotonic()
         return result
 
-
-if _fyers_access_token:
-    provider.set_access_token(_fyers_access_token)
 
 
 _symbol_master_cache: dict[str, dict] = {}
@@ -1597,7 +1593,7 @@ def _dhan_history(
 
 def _market_data_provider_for_account(account_id: int | None):
     if account_id is None:
-        return provider
+        raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
     try:
         account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
     except ValueError as exc:
@@ -1622,10 +1618,13 @@ def history(
     account_id: int | None = Query(default=None, ge=1),
 ) -> list[Candle]:
     try:
-        if account_id is not None:
-            account, _, _, _ = broker_accounts.get_account_credentials(account_id)
-            if account.broker == "dhan":
-                return _dhan_history(account_id, symbol, timeframe, limit, from_date, to_date)
+        account, _, _, access_token = broker_accounts.get_account_credentials(account_id) if account_id is not None else (None, "", "", "")
+        if account_id is None:
+            raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
+        if not access_token:
+            raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
+        if account.broker == "dhan":
+            return _dhan_history(account_id, symbol, timeframe, limit, from_date, to_date)
 
         selected_provider = _market_data_provider_for_account(account_id)
 
@@ -1674,6 +1673,13 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
     never receive arbitrary HTTP/network access; they declare market-data requests
     and the server resolves them through the configured provider.
     """
+    if request.account_id is None:
+        raise HTTPException(status_code=409, detail="Select a connected broker account before running Pipscript.")
+    account, _, _, access_token = broker_accounts.get_account_credentials(request.account_id)
+    if not access_token:
+        raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
+    selected_provider = None if account.broker == "dhan" else _market_data_provider_for_account(request.account_id)
+
     if len(request.requests) > 40:
         raise HTTPException(status_code=400, detail="A maximum of 40 Pipscript data requests is supported.")
 
@@ -1703,15 +1709,24 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                 if not api_symbol:
                     raise unresolved_symbol_error(original)
 
-                try:
-                    candles = _pipscript_get_history(
-                        api_symbol,
+                if account.broker == "dhan":
+                    candles = _dhan_history(
+                        request.account_id,
+                        original,
                         item.timeframe,
                         item.limit,
-                        start=item.from_date,
-                        end=item.to_date,
-                        pace=pace_history,
+                        item.from_date,
+                        item.to_date,
                     )
+                else:
+                    try:
+                        candles = selected_provider.get_history(
+                            api_symbol,
+                            item.timeframe,
+                            item.limit,
+                            start=item.from_date,
+                            end=item.to_date,
+                        )
                 except ValueError as first_error:
                     candidates = _master_symbol_candidates(original)
                     last_error = first_error
@@ -1758,7 +1773,7 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                         if candidate == api_symbol:
                             continue
                         try:
-                            result = provider.get_quote(candidate)
+                            result = selected_provider.get_quote(candidate)
                             break
                         except ValueError as exc:
                             last_error = exc
@@ -1833,10 +1848,13 @@ def quote(
 ) -> Quote:
     try:
         original = symbol.strip().upper()
-        if account_id is not None:
-            account, _, _, _ = broker_accounts.get_account_credentials(account_id)
-            if account.broker == "dhan":
-                return _dhan_quote(account_id, original)
+        if account_id is None:
+            raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
+        account, _, _, access_token = broker_accounts.get_account_credentials(account_id)
+        if not access_token:
+            raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
+        if account.broker == "dhan":
+            return _dhan_quote(account_id, original)
         selected_provider = _market_data_provider_for_account(account_id)
         api_symbol = resolve_api_symbol(original)
         if not api_symbol:
