@@ -152,12 +152,22 @@ class FyersAccountProvider:
         except KeyError as exc:
             raise ValueError(f"Unsupported FYERS order type: {order['order_type']}") from exc
 
+        fyers_products = {
+            "CNC": "CNC",
+            "INTRADAY": "INTRADAY",
+            "MARGIN": "MARGIN",
+            "MTF": "MARGIN",
+        }
+        fyers_product = fyers_products.get(order["product_type"])
+        if not fyers_product:
+            raise ValueError(f"Unsupported FYERS product type: {order['product_type']}")
+
         payload = {
             "symbol": order["symbol"],
             "qty": int(order["quantity"]),
             "type": fyers_type,
             "side": 1 if order["side"] == "BUY" else -1,
-            "productType": order["product_type"],
+            "productType": fyers_product,
             "limitPrice": float(order.get("price") or 0),
             "stopPrice": float(order.get("trigger_price") or 0),
             "validity": order.get("validity", "DAY"),
