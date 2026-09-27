@@ -156,6 +156,12 @@ export function BrokerConnections({ onClose }: Props) {
                     <span>{account.status}</span>
                   </div>
                   <button
+                    className="broker-connect"
+                    onClick={() => void connectAccount(account)}
+                  >
+                    CONNECT
+                  </button>
+                  <button
                     className="broker-delete"
                     disabled={deletingId === account.id}
                     onClick={() => void removeAccount(account.id)}
