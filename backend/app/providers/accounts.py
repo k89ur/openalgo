@@ -89,6 +89,15 @@ class AccountBrokerProvider(Protocol):
     def get_holdings(self) -> dict[str, Any]:
         ...
 
+    def place_order(self, order: dict[str, Any]) -> dict[str, Any]:
+        ...
+
+    def modify_order(self, order_id: str, order: dict[str, Any]) -> dict[str, Any]:
+        ...
+
+    def cancel_order(self, order_id: str) -> dict[str, Any]:
+        ...
+
 
 @dataclass
 class FyersAccountProvider:
@@ -130,6 +139,36 @@ class FyersAccountProvider:
 
     def get_holdings(self) -> dict[str, Any]:
         return self._check(self.client.holdings(), "holdings")
+
+    def place_order(self, order: dict[str, Any]) -> dict[str, Any]:
+        payload = {
+            "symbol": order["symbol"],
+            "qty": int(order["quantity"]),
+            "type": int(order["order_type"]),
+            "side": 1 if order["side"] == "BUY" else -1,
+            "productType": order["product_type"],
+            "limitPrice": float(order.get("price") or 0),
+            "stopPrice": float(order.get("trigger_price") or 0),
+            "validity": order.get("validity", "DAY"),
+            "disclosedQty": int(order.get("disclosed_quantity") or 0),
+            "offlineOrder": bool(order.get("after_market_order", False)),
+        }
+        return self._check(self.client.place_order(payload), "place order")
+
+    def modify_order(self, order_id: str, order: dict[str, Any]) -> dict[str, Any]:
+        payload = {
+            "id": order_id,
+            "qty": int(order["quantity"]),
+            "type": int(order["order_type"]),
+            "limitPrice": float(order.get("price") or 0),
+            "stopPrice": float(order.get("trigger_price") or 0),
+            "validity": order.get("validity", "DAY"),
+            "disclosedQty": int(order.get("disclosed_quantity") or 0),
+        }
+        return self._check(self.client.modify_order(payload), "modify order")
+
+    def cancel_order(self, order_id: str) -> dict[str, Any]:
+        return self._check(self.client.cancel_order({"id": order_id}), "cancel order")
 
 
 @dataclass
@@ -194,6 +233,42 @@ class DhanAccountProvider:
     def get_holdings(self) -> dict[str, Any]:
         payload = self._request("GET", "/holdings", "holdings")
         return {"data": payload}
+
+    def place_order(self, order: dict[str, Any]) -> dict[str, Any]:
+        resolved = self.resolve_instrument(order["symbol"])
+        if not resolved or not resolved.get("security_id"):
+            raise ValueError(f"Dhan instrument not found for {order['symbol']}.")
+        payload = {
+            "dhanClientId": self.client_id.strip(),
+            "correlationId": str(order.get("correlation_id") or "")[:30],
+            "transactionType": order["side"],
+            "exchangeSegment": resolved["exchange_segment"],
+            "productType": order["product_type"],
+            "orderType": order["order_type"],
+            "validity": order.get("validity", "DAY"),
+            "securityId": resolved["security_id"],
+            "quantity": int(order["quantity"]),
+            "disclosedQuantity": int(order.get("disclosed_quantity") or 0),
+            "price": float(order.get("price") or 0),
+            "triggerPrice": float(order.get("trigger_price") or 0),
+            "afterMarketOrder": bool(order.get("after_market_order", False)),
+        }
+        return self._request("POST", "/orders", "place order", json=payload)
+
+    def modify_order(self, order_id: str, order: dict[str, Any]) -> dict[str, Any]:
+        payload = {
+            "dhanClientId": self.client_id.strip(),
+            "orderId": order_id,
+            "orderType": order["order_type"],
+            "quantity": int(order["quantity"]),
+            "price": float(order.get("price") or 0),
+            "triggerPrice": float(order.get("trigger_price") or 0),
+            "validity": order.get("validity", "DAY"),
+        }
+        return self._request("PUT", f"/orders/{order_id}", "modify order", json=payload)
+
+    def cancel_order(self, order_id: str) -> dict[str, Any]:
+        return self._request("DELETE", f"/orders/{order_id}", "cancel order")
 
 
 def build_account_provider(
