@@ -1745,6 +1745,9 @@ def quote(
 
 @app.websocket("/api/ws/quotes")
 async def quotes_websocket(websocket: WebSocket) -> None:
+    if auth.get_user(websocket.cookies.get(auth.SESSION_COOKIE)) is None:
+        await websocket.close(code=1008, reason="Authentication required.")
+        return
     await websocket.accept()
     queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
     watchlist_stream._client_symbols[queue] = set()
