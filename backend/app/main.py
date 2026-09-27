@@ -1215,7 +1215,7 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                     raise unresolved_symbol_error(original)
 
                 try:
-                    result = provider.get_quote(api_symbol)
+                    result = selected_provider.get_quote(api_symbol)
                 except ValueError as first_error:
                     candidates = _master_symbol_candidates(original)
                     last_error = first_error
@@ -1224,7 +1224,7 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                         if candidate == api_symbol:
                             continue
                         try:
-                            result = provider.get_quote(candidate)
+                            result = selected_provider.get_quote(candidate)
                             break
                         except ValueError as exc:
                             last_error = exc
@@ -1267,8 +1267,10 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
 @app.get("/api/quote", response_model=Quote)
 def quote(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
+    account_id: int | None = Query(default=None, ge=1),
 ) -> Quote:
     try:
+        selected_provider = _market_data_provider_for_account(account_id)
         original = symbol.strip().upper()
         api_symbol = resolve_api_symbol(original)
         if not api_symbol:
