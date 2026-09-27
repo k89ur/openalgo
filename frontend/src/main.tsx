@@ -777,7 +777,7 @@ function App() {
         setSelectedAccountId((current) => {
           if (current && accounts.some((account) => account.id === current)) return current;
           const connected = accounts.find((account) => account.status === "connected");
-          return connected?.id ?? accounts[0]?.id ?? null;
+          return connected?.id ?? null;
         });
       })
       .catch(() => {
@@ -1108,34 +1108,6 @@ function App() {
     localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlists));
   }, [watchlists]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const ensureFyersConnection = async () => {
-      try {
-        const response = await apiFetch("/api/fyers/status", { cache: "no-store" });
-        if (!response.ok) return;
-        const data = await response.json() as { configured?: boolean; connected?: boolean };
-
-        if (cancelled) return;
-        if (data.configured && !data.connected) {
-          window.location.replace("/auth/fyers/login");
-          return;
-        }
-      } catch {
-        // Keep the terminal usable when the backend is temporarily unavailable.
-      } finally {
-        if (!cancelled) setFyersChecking(false);
-      }
-    };
-
-    void ensureFyersConnection();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-
   const exportWatchlist = () => {
     const csv = ["symbol", ...watchlist.map((item) => item.symbol)].join("\n") + "\n";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1350,7 +1322,7 @@ function App() {
       };
 
       const loadCurrentChartData = async (): Promise<ChartBar[]> => {
-        const response = await apiFetch("/api/history?symbol=" + encodeURIComponent(executionSymbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
+        const response = await apiFetch("/api/history?symbol=" + encodeURIComponent(executionSymbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800&account_id=" + encodeURIComponent(String(selectedAccountId ?? "")),
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("Could not load chart data.");
@@ -1378,7 +1350,7 @@ function App() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
-          body: JSON.stringify({ requests }),
+          body: JSON.stringify({ account_id: selectedAccountId, requests }),
         });
         const payload = await response.json().catch(() => null) as {
           history?: Record<string, unknown>;
@@ -1601,7 +1573,7 @@ json.dumps(_result)`;
     const loadQuote = async () => {
       try {
         const response = await apiFetch("/api/quote?symbol=" + encodeURIComponent(chartApiSymbol || symbol) +
-            (selectedAccountId ? "&account_id=" + selectedAccountId : ""),
+            "&account_id=" + encodeURIComponent(String(selectedAccountId ?? "")),
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("quote request failed");
@@ -1633,7 +1605,7 @@ json.dumps(_result)`;
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [symbol, chartApiSymbol]);
+  }, [symbol, chartApiSymbol, selectedAccountId]);
 
   useEffect(() => {
     setLiveQuotes({});
@@ -1644,7 +1616,7 @@ json.dumps(_result)`;
     let reconnectTimer: number | null = null;
 
     const connect = () => {
-      if (stopped) return;
+      if (stopped || !selectedAccountId) return;
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       socket = new WebSocket(`${protocol}//${window.location.host}/api/ws/quotes`);
@@ -1652,6 +1624,7 @@ json.dumps(_result)`;
       socket.onopen = () => {
         socket?.send(JSON.stringify({
           action: "subscribe",
+          account_id: selectedAccountId,
           symbols: watchlist.map((item) => item.apiSymbol || item.symbol),
         }));
       };
@@ -1703,7 +1676,7 @@ json.dumps(_result)`;
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       socket?.close();
     };
-  }, [watchlist]);
+  }, [watchlist, selectedAccountId]);
 
   useEffect(() => {
     if (!watchlist.length) {
@@ -2034,7 +2007,7 @@ json.dumps(_result)`;
           <button onClick={() => void loadHoldings()}>{holdingsLoading ? "Holdings..." : "Holdings"}</button>
           <button>Help</button>
           <button onClick={() => void logout()}>Logout</button>
-          <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
+          <span className="status-dot" /> {selectedAccountId ? "Broker data: " + ((brokerAccounts.find((item) => item.id === selectedAccountId)?.broker || "broker").toUpperCase()) : "Select broker account"}
         </div>
       </div>
 
