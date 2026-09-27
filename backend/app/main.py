@@ -282,7 +282,7 @@ class SymbolSearchResult(BaseModel):
     api_symbol: str
 
 
-provider = FyersMarketDataProvider()
+provider = FyersMarketDataProvider(client_id="", access_token="")
 
 # Pace Pipscript historical-data calls so a multi-index script does not
 # burst past FYERS historical-data rate limits.
