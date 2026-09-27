@@ -865,6 +865,25 @@ def broker_fyers_callback(auth_code: str | None = None, state: str | None = None
     return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
 
 
+@app.get("/auth/broker/dhan/callback")
+def broker_dhan_callback(token_id: str | None = None, account_id: int | None = None) -> RedirectResponse:
+    if not token_id or account_id is None:
+        raise HTTPException(status_code=400, detail="Dhan did not return tokenId/account_id.")
+    try:
+        account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
+        if account.broker != "dhan":
+            raise ValueError("Selected account is not a Dhan account.")
+        token = BrokerManager.exchange_dhan_token(api_key, api_secret, token_id)
+        BrokerManager.validate_dhan_token(client_id, token)
+        broker_accounts.set_access_token(account_id, token, "connected")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+
+
 @app.get("/api/broker/accounts/{account_id}/session")
 def broker_account_session(account_id: int) -> dict[str, object]:
     try:
