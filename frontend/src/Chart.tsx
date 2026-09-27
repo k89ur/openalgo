@@ -240,6 +240,7 @@ registerIndicator({
     }
 
     return result;
+    }) as any,
   },
 });
 
@@ -1125,7 +1126,7 @@ export function Chart({
           }
 
           return result;
-        }) as any,
+        },
       } as any);
 
       if (indicatorId) indicatorIds.push(indicatorId);
