@@ -756,6 +756,12 @@ function App() {
     setTimeframe(chartRangeTimeframes[preset]);
   };
 
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
+    const raw = localStorage.getItem("pipsgox-selected-account");
+    const value = raw ? Number(raw) : NaN;
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
+
   useEffect(() => {
     if (!authenticated) return;
     let cancelled = false;
@@ -876,11 +882,7 @@ function App() {
   const [orderTriggerPrice, setOrderTriggerPrice] = useState("");
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderMessage, setOrderMessage] = useState("");
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
-    const raw = localStorage.getItem("pipsgox-selected-account");
-    const value = raw ? Number(raw) : NaN;
-    return Number.isInteger(value) && value > 0 ? value : null;
-  });
+
   const [accountFundsOpen, setAccountFundsOpen] = useState(false);
   const [accountFunds, setAccountFunds] = useState<Record<string, number | string> | null>(null);
   const [accountFundsLoading, setAccountFundsLoading] = useState(false);
