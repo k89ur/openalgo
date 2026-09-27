@@ -91,7 +91,7 @@ _fyers_access_token = os.getenv("FYERS_ACCESS_TOKEN", "").strip() or _load_saved
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[PIPSGOX_WEB_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
