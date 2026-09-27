@@ -53,7 +53,7 @@ FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: set[str] = set()
 _broker_auth_states: dict[str, tuple[int, str]] = {}
-_dhan_auth_states: dict[str, int] = {}
+_dhan_auth_states: dict[str, tuple[int, str]] = {}
 _fyers_token_lock = threading.Lock()
 FYERS_TOKEN_FILE = os.getenv(
     "PIPSGOX_FYERS_TOKEN_FILE",
@@ -919,7 +919,7 @@ def broker_accounts_create(payload: BrokerAccountCreate) -> BrokerAccountRespons
 
 
 @app.get("/api/broker/accounts/{account_id}/connect")
-def broker_account_connect(account_id: int, response: Response) -> dict[str, str]:
+def broker_account_connect(account_id: int, request: Request, response: Response) -> dict[str, str]:
     try:
         account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
     except ValueError as exc:
@@ -940,7 +940,13 @@ def broker_account_connect(account_id: int, response: Response) -> dict[str, str
             )
         elif account.broker == "dhan":
             login_state = secrets.token_urlsafe(32)
-            _dhan_auth_states[login_state] = account.id
+            app_session = request.cookies.get(auth.SESSION_COOKIE)
+            if not app_session:
+                raise HTTPException(status_code=401, detail="Authentication required.")
+            _dhan_auth_states[login_state] = (
+                account.id,
+                hashlib.sha256(app_session.encode("utf-8")).hexdigest(),
+            )
             result = BrokerManager.start_dhan(account.id, client_id, api_key, api_secret)
         else:
             raise ValueError(f"Unsupported broker '{account.broker}'.")
@@ -980,8 +986,14 @@ def broker_fyers_callback(auth_code: str | None = None, state: str | None = None
 @app.get("/auth/broker/dhan/callback")
 def broker_dhan_callback(token_id: str | None = None, request: Request = None) -> RedirectResponse:
     state = request.cookies.get("pipsgox_dhan_state") if request else None
-    account_id = _dhan_auth_states.pop(state, None) if state else None
-    if not token_id or account_id is None:
+    context = _dhan_auth_states.pop(state, None) if state else None
+    current_session = request.cookies.get(auth.SESSION_COOKIE) if request else None
+    account_id = context[0] if context else None
+    valid_session = bool(context and current_session and hmac.compare_digest(
+        context[1],
+        hashlib.sha256(current_session.encode("utf-8")).hexdigest(),
+    ))
+    if not token_id or account_id is None or not valid_session:
         raise HTTPException(status_code=400, detail="Dhan login state is missing, invalid, or expired.")
     try:
         account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
