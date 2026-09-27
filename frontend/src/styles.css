@@ -1107,3 +1107,98 @@ button { cursor: pointer; }
   outline: none;
   border-color: #59636f;
 }
+
+
+.order-modal {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.order-form {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.order-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted, #8f98a3);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.order-form input,
+.order-form select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  border: 1px solid var(--border, #30343a);
+  border-radius: 6px;
+  background: var(--panel, #111318);
+  color: inherit;
+  padding: 8px 10px;
+}
+
+.order-account-note,
+.order-symbol-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #30343a);
+  border-radius: 6px;
+}
+
+.order-side-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.order-side,
+.order-submit {
+  min-height: 40px;
+  border: 1px solid var(--border, #30343a);
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.order-side {
+  background: transparent;
+  color: inherit;
+}
+
+.order-side.active-buy,
+.order-submit.buy {
+  background: #0d9f68;
+  color: #fff;
+  border-color: #0d9f68;
+}
+
+.order-side.active-sell,
+.order-submit.sell {
+  background: #c63d4d;
+  color: #fff;
+  border-color: #c63d4d;
+}
+
+.order-submit:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.order-message {
+  padding: 9px 10px;
+  border-radius: 5px;
+  background: rgba(45, 130, 90, .12);
+  font-size: 12px;
+}
+
+.order-warning {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted, #8f98a3);
+}
