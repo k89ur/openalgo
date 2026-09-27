@@ -1577,3 +1577,19 @@ button { cursor: pointer; }
 .auth-submit { width: 100%; margin-top: 8px; padding: 12px; border: 0; border-radius: 8px; background: #e8edf2; color: #080a0d; font-weight: 700; cursor: pointer; }
 .auth-submit:disabled { opacity: .55; cursor: wait; }
 .auth-error { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #2a1418; color: #ff9da7; font-size: 12px; }
+
+
+.broker-emergency {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #6b3038;
+  border-radius: 8px;
+  background: #211013;
+  color: #ff9da7;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+.broker-emergency:hover { background: #2d1418; }
