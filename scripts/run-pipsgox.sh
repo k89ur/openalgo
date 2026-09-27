@@ -73,8 +73,8 @@ run_preflight() {
     return 1
   fi
 
-  if ! python -c "import uvicorn" >/dev/null 2>&1; then
-    status_warn "Backend dependency 'uvicorn' is missing. Installing backend requirements..."
+  if ! python -c "import uvicorn, cryptography, fastapi, pydantic" >/dev/null 2>&1; then
+    status_warn "One or more backend dependencies are missing. Installing backend requirements..."
     if python -m pip install -r "$ROOT/backend/requirements.txt"; then
       status_pass "Backend Python dependencies installed"
     else
