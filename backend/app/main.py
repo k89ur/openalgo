@@ -1030,11 +1030,24 @@ def broker_account_connect(account_id: int, request: Request, response: Response
 
 
 @app.get("/auth/broker/fyers/callback")
-def broker_fyers_callback(auth_code: str | None = None, state: str | None = None) -> RedirectResponse:
+def broker_fyers_callback(
+    auth_code: str | None = None,
+    state: str | None = None,
+    request: Request = None,
+) -> RedirectResponse:
     if not auth_code or not state:
         raise HTTPException(status_code=400, detail="FYERS did not return a valid authorization response.")
     context = _broker_auth_states.pop(state, None)
-    if not context or context[1] != "fyers":
+    current_session = request.cookies.get(auth.SESSION_COOKIE) if request else None
+    valid_session = bool(
+        context
+        and current_session
+        and hmac.compare_digest(
+            context[2],
+            hashlib.sha256(current_session.encode("utf-8")).hexdigest(),
+        )
+    )
+    if not context or context[1] != "fyers" or not valid_session:
         raise HTTPException(status_code=400, detail="Invalid or expired broker login state.")
 
     account_id = context[0]
