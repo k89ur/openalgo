@@ -21,6 +21,7 @@ from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
 from app import dev_control, broker_accounts
+from app.broker_manager import BrokerManager
 
 load_dotenv()
 
@@ -50,6 +51,7 @@ FYERS_REDIRECT_URI = os.getenv(
 FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: set[str] = set()
+_broker_auth_states: dict[str, tuple[int, str]] = {}
 _fyers_token_lock = threading.Lock()
 FYERS_TOKEN_FILE = os.getenv(
     "PIPSGOX_FYERS_TOKEN_FILE",
@@ -762,6 +764,7 @@ class BrokerAccountCreate(BaseModel):
     account_name: str
     client_id: str = ""
     api_secret: str
+    api_key: str = ""
 
 
 class BrokerAccountResponse(BaseModel):
@@ -795,13 +798,100 @@ def broker_accounts_list() -> list[BrokerAccountResponse]:
 def broker_accounts_create(payload: BrokerAccountCreate) -> BrokerAccountResponse:
     try:
         account = broker_accounts.create_account(
-            payload.broker, payload.account_name, payload.client_id, payload.api_secret
+            payload.broker, payload.account_name, payload.client_id, payload.api_secret, payload.api_key
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return _broker_account_response(account)
+
+
+
+@app.get("/api/broker/accounts/{account_id}/connect")
+def broker_account_connect(account_id: int) -> dict[str, str]:
+    try:
+        account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    state = secrets.token_urlsafe(24)
+    _broker_auth_states[state] = (account.id, account.broker)
+
+    try:
+        if account.broker == "fyers":
+            result = BrokerManager.start_fyers(
+                account.id,
+                client_id,
+                f"{_codespace_forwarded_url(8000)}/auth/broker/fyers/callback",
+                state,
+            )
+        elif account.broker == "dhan":
+            result = BrokerManager.start_dhan(account.id, client_id, api_key, api_secret)
+        else:
+            raise ValueError(f"Unsupported broker '{account.broker}'.")
+    except ValueError as exc:
+        _broker_auth_states.pop(state, None)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        _broker_auth_states.pop(state, None)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {"broker": result.broker, "authorization_url": result.authorization_url}
+
+
+@app.get("/auth/broker/fyers/callback")
+def broker_fyers_callback(auth_code: str | None = None, state: str | None = None) -> RedirectResponse:
+    if not auth_code or not state:
+        raise HTTPException(status_code=400, detail="FYERS did not return a valid authorization response.")
+    context = _broker_auth_states.pop(state, None)
+    if not context or context[1] != "fyers":
+        raise HTTPException(status_code=400, detail="Invalid or expired broker login state.")
+
+    account_id = context[0]
+    try:
+        _, client_id, _, api_secret = broker_accounts.get_account_credentials(account_id)
+        token = BrokerManager.exchange_fyers_code(client_id, api_secret, auth_code)
+        BrokerManager.validate_fyers_token(client_id, token)
+        broker_accounts.set_access_token(account_id, token, "connected")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+
+
+@app.get("/api/broker/accounts/{account_id}/session")
+def broker_account_session(account_id: int) -> dict[str, object]:
+    try:
+        account, client_id, _, _ = broker_accounts.get_account_credentials(account_id)
+        token = broker_accounts.get_access_token(account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    connected = False
+    if token and account.broker == "fyers":
+        try:
+            BrokerManager.validate_fyers_token(client_id, token)
+            connected = True
+            broker_accounts.set_status(account_id, "connected")
+        except Exception:
+            broker_accounts.set_status(account_id, "expired")
+    elif token and account.broker == "dhan":
+        try:
+            BrokerManager.validate_dhan_token(client_id, token)
+            connected = True
+            broker_accounts.set_status(account_id, "connected")
+        except Exception:
+            broker_accounts.set_status(account_id, "expired")
+
+    return {"id": account.id, "broker": account.broker, "status": "connected" if connected else account.status}
 
 
 @app.delete("/api/broker/accounts/{account_id}")
