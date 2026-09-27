@@ -661,13 +661,13 @@ class FyersWatchlistStream:
         return result
 
     def _connect(self) -> None:
-        if not provider.configured:
+        if not self.provider.configured:
             return
         with self._connect_lock:
             if self._socket is not None:
                 return
 
-            token = f"{provider.client_id}:{provider.access_token}"
+            token = f"{self.provider.client_id}:{self.provider.access_token}"
 
             def on_message(message) -> None:
                 if not isinstance(message, dict):
@@ -807,8 +807,6 @@ class FyersWatchlistStream:
                     pass
             queue.put_nowait(payload)
 
-
-watchlist_stream = FyersWatchlistStream()
 
 
 def to_candle(item) -> Candle:
@@ -1829,50 +1827,87 @@ async def quotes_websocket(websocket: WebSocket) -> None:
     if auth.get_user(websocket.cookies.get(auth.SESSION_COOKIE)) is None:
         await websocket.close(code=1008, reason="Authentication required.")
         return
+
     await websocket.accept()
     queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
-    watchlist_stream._client_symbols[queue] = set()
-    watchlist_stream._loop = asyncio.get_running_loop()
-
-    async def sender() -> None:
-        while True:
-            payload = await queue.get()
-            await websocket.send_json(payload)
-
-    sender_task = asyncio.create_task(sender())
+    stream: FyersWatchlistStream | None = None
+    selected_account_id: int | None = None
+    sender_task = asyncio.create_task(_quote_ws_sender(websocket, queue))
 
     try:
         while True:
             message = await websocket.receive_json()
-            if not isinstance(message, dict):
+            if not isinstance(message, dict) or message.get("action") != "subscribe":
                 continue
 
-            if message.get("action") != "subscribe":
-                continue
-
-            symbols = message.get("symbols") or []
-            if not isinstance(symbols, list):
+            raw_account_id = message.get("account_id")
+            try:
+                account_id = int(raw_account_id)
+            except (TypeError, ValueError):
                 await websocket.send_json({
                     "type": "status",
                     "status": "error",
-                    "message": "symbols must be an array",
+                    "message": "A connected broker account is required.",
+                })
+                continue
+
+            if selected_account_id is not None and account_id != selected_account_id:
+                await websocket.send_json({
+                    "type": "status",
+                    "status": "error",
+                    "message": "Open a new quote session when changing broker accounts.",
                 })
                 continue
 
             try:
-                await watchlist_stream.update_client(queue, [str(item) for item in symbols])
-            except ValueError as exc:
+                account, _, _, access_token = broker_accounts.get_account_credentials(account_id)
+                if not access_token:
+                    raise ValueError("Selected broker account is not connected.")
+
+                if account.broker != "fyers":
+                    await websocket.send_json({
+                        "type": "status",
+                        "status": "polling",
+                        "message": "Live socket is unavailable for this broker; HTTP quote polling remains active.",
+                    })
+                    selected_account_id = account_id
+                    if stream is not None:
+                        stream.remove_client(queue)
+                        stream = None
+                    continue
+
+                selected_provider = _market_data_provider_for_account(account_id)
+                if not isinstance(selected_provider, FyersMarketDataProvider):
+                    raise ValueError("Selected account does not provide FYERS market data.")
+
+                if stream is None:
+                    stream = FyersWatchlistStream(selected_provider)
+                selected_account_id = account_id
+
+                symbols = message.get("symbols") or []
+                if not isinstance(symbols, list):
+                    raise ValueError("symbols must be an array.")
+                await stream.update_client(queue, [str(item) for item in symbols])
+            except (ValueError, HTTPException) as exc:
+                detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
                 await websocket.send_json({
                     "type": "status",
                     "status": "error",
-                    "message": str(exc),
+                    "message": str(detail),
                 })
 
     except WebSocketDisconnect:
         pass
     finally:
+        if stream is not None:
+            stream.remove_client(queue)
         sender_task.cancel()
-        watchlist_stream.remove_client(queue)
+
+
+async def _quote_ws_sender(websocket: WebSocket, queue: asyncio.Queue) -> None:
+    while True:
+        payload = await queue.get()
+        await websocket.send_json(payload)
 
 
 @app.get("/api/quotes", response_model=list[Quote])
