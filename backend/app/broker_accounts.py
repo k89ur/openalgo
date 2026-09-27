@@ -247,3 +247,19 @@ def set_status(account_id: int, status: str) -> None:
         connection.close()
     if cursor.rowcount == 0:
         raise ValueError("Broker account not found.")
+
+
+def disconnect_all() -> int:
+    """Invalidate every stored broker access token and mark accounts disconnected."""
+    with _DB_LOCK:
+        connection = _connect()
+        cursor = connection.execute(
+            """
+            UPDATE broker_accounts
+            SET access_token_blob = '', status = 'disconnected', updated_at = CURRENT_TIMESTAMP
+            WHERE access_token_blob <> ''
+            """
+        )
+        connection.commit()
+        connection.close()
+    return cursor.rowcount
