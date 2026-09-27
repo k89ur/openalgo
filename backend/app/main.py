@@ -16,16 +16,30 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, dev_control, broker_accounts
+from app import auth, dev_control, broker_accounts, security_audit
 from app.broker_manager import BrokerManager
 
 load_dotenv()
 
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
+
+_trusted_hosts = [
+    item.strip() for item in os.getenv(
+        "PIPSGOX_TRUSTED_HOSTS",
+        "localhost,127.0.0.1,*.app.github.dev",
+    ).split(",") if item.strip()
+]
+if _trusted_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts)
+
+if os.getenv("PIPSGOX_FORCE_HTTPS", "0").strip().lower() in {"1", "true", "yes"}:
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 broker_accounts.initialize()
 auth.initialize()
@@ -153,6 +167,7 @@ def auth_setup(payload: AuthCredentials, response: Response) -> dict[str, object
         auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
         samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
     )
+    security_audit.record("initial_setup", username=payload.username.strip(), success=True)
     return {"authenticated": True, "username": payload.username.strip()}
 
 
@@ -168,8 +183,10 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
     token = auth.authenticate(payload.username, payload.password)
     if not token:
         _LOGIN_ATTEMPTS[ip] = (attempts + 1, started)
+        security_audit.record("login", username=payload.username.strip(), success=False)
         raise HTTPException(status_code=401, detail="Invalid username or password.")
     _LOGIN_ATTEMPTS.pop(ip, None)
+    security_audit.record("login", username=payload.username.strip(), success=True)
     response.set_cookie(
         auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
         samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
@@ -179,7 +196,9 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
 
 @app.post("/api/auth/logout")
 def auth_logout(request: Request, response: Response) -> dict[str, bool]:
+    user = _request_user(request)
     auth.revoke(request.cookies.get(auth.SESSION_COOKIE))
+    security_audit.record("logout", username=str(user["username"]) if user else "", success=True)
     response.delete_cookie(auth.SESSION_COOKIE, path="/")
     return {"authenticated": False}
 
@@ -190,6 +209,16 @@ def auth_me(request: Request) -> dict[str, object]:
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     return user
+
+
+@app.post("/api/security/disconnect-all")
+def security_disconnect_all(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    count = broker_accounts.disconnect_all()
+    security_audit.record("broker_disconnect_all", username=str(user["username"]), success=True)
+    return {"disconnected_accounts": count}
 
 
 Timeframe = Literal["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"]
