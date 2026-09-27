@@ -1530,16 +1530,21 @@ def _market_data_provider_for_account(account_id: int | None):
     if account_id is None:
         raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
     try:
-        account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
+        account, client_id, api_key, access_token = broker_accounts.get_account_credentials(account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if not access_token:
         raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
 
-    # Every broker must expose the same market-data contract to the terminal.
-    # Add a broker adapter here rather than branching throughout the API.
+    # Every broker exposes the same market-data contract to the terminal.
+    # Broker-specific credential/instrument details stay inside this factory.
+    # FYERS API calls use the App ID (stored as api_key), not the trading
+    # Client ID. The access token is bound to that App ID.
     market_adapters = {
-        "fyers": lambda: FyersMarketDataProvider(client_id=client_id, access_token=access_token),
+        "fyers": lambda: FyersMarketDataProvider(
+            client_id=api_key.strip() or client_id.strip(),
+            access_token=access_token,
+        ),
         "dhan": lambda: _DhanMarketDataAdapter(account_id),
     }
     factory = market_adapters.get(account.broker.lower())
