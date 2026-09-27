@@ -1451,7 +1451,8 @@ def _dhan_history(
     from_date: date | None,
     to_date: date | None,
 ) -> list[Candle]:
-    account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
+    account, client_id, _, _ = broker_accounts.get_account_credentials(account_id)
+    access_token = broker_accounts.get_access_token(account_id)
     if account.broker != "dhan":
         raise ValueError("Selected account is not a Dhan account.")
     if not access_token:
@@ -1532,7 +1533,8 @@ def _market_data_provider_for_account(account_id: int | None):
     if account_id is None:
         raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
     try:
-        account, client_id, api_key, access_token = broker_accounts.get_account_credentials(account_id)
+        account, client_id, api_key, _ = broker_accounts.get_account_credentials(account_id)
+        access_token = broker_accounts.get_access_token(account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if not access_token:
@@ -1565,9 +1567,9 @@ def history(
     account_id: int | None = Query(default=None, ge=1),
 ) -> list[Candle]:
     try:
-        account, _, _, access_token = broker_accounts.get_account_credentials(account_id) if account_id is not None else (None, "", "", "")
         if account_id is None:
             raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
+        access_token = broker_accounts.get_access_token(account_id)
         if not access_token:
             raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
         if account.broker == "dhan":
@@ -1618,7 +1620,8 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
     """Controlled market-data gateway for browser Pipscripts."""
     if request.account_id is None:
         raise HTTPException(status_code=409, detail="Select a connected broker account before running Pipscript.")
-    account, client_id, _, access_token = broker_accounts.get_account_credentials(request.account_id)
+    account, client_id, _, _ = broker_accounts.get_account_credentials(request.account_id)
+    access_token = broker_accounts.get_access_token(request.account_id)
     if not access_token:
         raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
     if account.broker == "dhan":
@@ -1705,7 +1708,8 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
     return {"history": history_data, "quotes": quotes_data, "errors": errors}
 
 def _dhan_quote(account_id: int, symbol: str) -> Quote:
-    account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
+    account, client_id, _, _ = broker_accounts.get_account_credentials(account_id)
+    access_token = broker_accounts.get_access_token(account_id)
     if account.broker != "dhan":
         raise ValueError("Selected account is not a Dhan account.")
     if not access_token:
@@ -1742,6 +1746,7 @@ def quote(
         if account_id is None:
             raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
         account, _, _, access_token = broker_accounts.get_account_credentials(account_id)
+        access_token = broker_accounts.get_access_token(account_id)
         if not access_token:
             raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
         if account.broker == "dhan":
@@ -1811,7 +1816,8 @@ async def quotes_websocket(websocket: WebSocket) -> None:
                 continue
 
             try:
-                account, _, _, access_token = broker_accounts.get_account_credentials(account_id)
+                account, _, _, _ = broker_accounts.get_account_credentials(account_id)
+                access_token = broker_accounts.get_access_token(account_id)
                 if not access_token:
                     raise ValueError("Selected broker account is not connected.")
 
