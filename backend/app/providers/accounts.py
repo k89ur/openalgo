@@ -147,6 +147,7 @@ class DhanAccountProvider:
     def headers(self) -> dict[str, str]:
         return {
             "access-token": self.access_token.strip(),
+            "client-id": self.client_id.strip(),
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
