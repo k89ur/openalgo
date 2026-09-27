@@ -1279,3 +1279,57 @@ button { cursor: pointer; }
     grid-column: auto;
   }
 }
+
+
+.positions-modal {
+  width: min(900px, calc(100vw - 32px));
+}
+
+.positions-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.positions-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border, #30343a);
+  border-radius: 7px;
+}
+
+.positions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.positions-table th,
+.positions-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #30343a);
+  text-align: right;
+}
+
+.positions-table th:first-child,
+.positions-table td:first-child {
+  text-align: left;
+}
+
+.positions-table th {
+  font-size: 10px;
+  color: var(--muted, #8f98a3);
+  letter-spacing: .05em;
+}
+
+.positions-table td small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted, #8f98a3);
+}
+
+.positions-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--muted, #8f98a3);
+}
