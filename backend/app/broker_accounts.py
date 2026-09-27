@@ -110,8 +110,74 @@ def _connect() -> sqlite3.Connection:
     columns = {row["name"] for row in connection.execute("PRAGMA table_info(broker_accounts)").fetchall()}
     if "api_key" not in columns:
         connection.execute("ALTER TABLE broker_accounts ADD COLUMN api_key TEXT NOT NULL DEFAULT ''")
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS broker_oauth_states (
+            state TEXT PRIMARY KEY,
+            account_id INTEGER NOT NULL,
+            broker TEXT NOT NULL,
+            session_hash TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (account_id) REFERENCES broker_accounts(id) ON DELETE CASCADE
+        )
+        """
+    )
     connection.commit()
     return connection
+
+
+def create_oauth_state(
+    state: str,
+    account_id: int,
+    broker: str,
+    session_hash: str,
+    expires_at: int,
+) -> None:
+    if not state or not session_hash:
+        raise ValueError("OAuth state is required.")
+    with _DB_LOCK:
+        connection = _connect()
+        connection.execute(
+            "DELETE FROM broker_oauth_states WHERE expires_at <= ?",
+            (__import__("time").time(),),
+        )
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO broker_oauth_states
+                (state, account_id, broker, session_hash, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (state, account_id, broker, session_hash, int(expires_at)),
+        )
+        connection.commit()
+        connection.close()
+
+
+def consume_oauth_state(state: str) -> tuple[int, str, str] | None:
+    if not state:
+        return None
+    with _DB_LOCK:
+        connection = _connect()
+        row = connection.execute(
+            """
+            SELECT account_id, broker, session_hash, expires_at
+            FROM broker_oauth_states
+            WHERE state = ?
+            """,
+            (state,),
+        ).fetchone()
+        if row is None:
+            connection.close()
+            return None
+
+        connection.execute("DELETE FROM broker_oauth_states WHERE state = ?", (state,))
+        connection.commit()
+        connection.close()
+
+    if int(row["expires_at"]) <= int(__import__("time").time()):
+        return None
+    return int(row["account_id"]), str(row["broker"]), str(row["session_hash"])
 
 
 def claim_order_correlation(account_id: int, correlation_id: str) -> bool:
