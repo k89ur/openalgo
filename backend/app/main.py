@@ -1507,21 +1507,45 @@ def _dhan_history(
     return candles[-limit:]
 
 
+
+class _DhanMarketDataAdapter:
+    """Broker-neutral market-data adapter for Dhan."""
+    broker = "dhan"
+
+    def __init__(self, account_id: int) -> None:
+        self.account_id = account_id
+
+    def get_history(self, symbol: str, timeframe: str, limit: int, *, start=None, end=None):
+        return _dhan_history(self.account_id, symbol, timeframe, limit, start, end)
+
+    def get_quote(self, symbol: str):
+        return _dhan_quote(self.account_id, symbol)
+
+    def get_quotes(self, symbols: list[str]):
+        return [self.get_quote(symbol) for symbol in symbols]
+
+
 def _market_data_provider_for_account(account_id: int | None):
+
     if account_id is None:
         raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
     try:
         account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if account.broker != "fyers":
-        raise HTTPException(
-            status_code=501,
-            detail="Dhan market-data routing is not enabled yet.",
-        )
     if not access_token:
         raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
-    return FyersMarketDataProvider(client_id=client_id, access_token=access_token)
+
+    # Every broker must expose the same market-data contract to the terminal.
+    # Add a broker adapter here rather than branching throughout the API.
+    market_adapters = {
+        "fyers": lambda: FyersMarketDataProvider(client_id=client_id, access_token=access_token),
+        "dhan": lambda: _DhanMarketDataAdapter(account_id),
+    }
+    factory = market_adapters.get(account.broker.lower())
+    if not factory:
+        raise HTTPException(status_code=501, detail=f"Market data is not supported for broker '{account.broker}'.")
+    return factory()
 
 
 @app.get("/api/history", response_model=list[Candle])
