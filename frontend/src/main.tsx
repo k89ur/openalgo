@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe, type ChartRange, type DrawingTool, type PipscriptOutput, type ChartColors } from "./Chart";
 import "./styles.css";
 import { DevConsole } from "./DevConsole";
+import { BrokerConnections } from "./BrokerConnections";
 
 type WatchItem = { symbol: string; price: string; change: string; apiSymbol?: string };
 export type ChartTheme = "pipsgox" | "classic" | "light";
@@ -693,6 +694,7 @@ function App() {
   const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [quote, setQuote] = useState<{
     last: number; change: number; change_percent: number;
     open?: number; high?: number; low?: number; volume?: number;
@@ -1594,7 +1596,7 @@ json.dumps(_result)`;
         </div>
         <div className="menu-center">PIPSGOX WEB TERMINAL</div>
         <div className="menu-right">
-          <button>Account</button>
+          <button onClick={() => setAccountOpen(true)}>Account</button>
           <button>Help</button>
           <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
         </div>
@@ -1943,6 +1945,8 @@ json.dumps(_result)`;
           </section>
         </div>
       )}
+
+      {accountOpen && <BrokerConnections onClose={() => setAccountOpen(false)} />}
 
       {panel && (
         <div className="modal-backdrop" onClick={() => setPanel(null)}>
