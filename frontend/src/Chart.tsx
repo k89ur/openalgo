@@ -212,7 +212,7 @@ registerIndicator({
     for (let i = 0; i < dataList.length; i += 1) {
       const row: Record<string, number | null> = {};
 
-      params.forEach((period, index) => {
+      params.forEach((period: number, index: number) => {
         if (i < period - 1) {
           row["ema" + (index + 1)] = null;
           return;
