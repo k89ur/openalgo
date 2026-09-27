@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
+import { apiFetch } from "./api";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe, type ChartRange, type DrawingTool, type PipscriptOutput, type ChartColors } from "./Chart";
 import "./styles.css";
@@ -615,7 +616,7 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/broker/accounts")
+    apiFetch("/api/broker/accounts")
       .then(async (response) => {
         const payload = await response.json().catch(() => []);
         if (!response.ok) throw new Error(payload?.detail || "Could not load broker accounts.");
@@ -812,7 +813,7 @@ function App() {
     setAccountFundsLoading(true);
     setAccountFundsError("");
     try {
-      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/funds", { cache: "no-store" });
+      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/funds", { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail || "Could not load funds."));
       const raw = payload.data?.data ?? payload.data ?? {};
@@ -845,7 +846,7 @@ function App() {
     setPositionsLoading(true);
     setPositionsError("");
     try {
-      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/positions", { cache: "no-store" });
+      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/positions", { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail || "Could not load positions."));
       const data = Array.isArray(payload.data) ? payload.data : [];
@@ -869,7 +870,7 @@ function App() {
     setHoldingsLoading(true);
     setHoldingsError("");
     try {
-      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/holdings", { cache: "no-store" });
+      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/holdings", { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail || "Could not load holdings."));
       const data = Array.isArray(payload.data) ? payload.data : [];
@@ -894,7 +895,7 @@ function App() {
     setOrdersError("");
     try {
       const endpoint = tab === "trades" ? "trades" : "orders";
-      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/" + endpoint, { cache: "no-store" });
+      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/" + endpoint, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail || "Could not load " + endpoint + "."));
       const data = Array.isArray(payload.data) ? payload.data : [];
@@ -915,7 +916,7 @@ function App() {
     setCancellingOrderId(orderId);
     setOrdersError("");
     try {
-      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/orders/" + encodeURIComponent(orderId), { method: "DELETE" });
+      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/orders/" + encodeURIComponent(orderId), { method: "DELETE" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail || "Could not cancel order."));
       await loadOrdersAndTrades("orders");
@@ -941,7 +942,7 @@ function App() {
     if ((orderType === "STOP_LOSS" || orderType === "STOP_LOSS_MARKET") && (!triggerPrice || triggerPrice <= 0)) { setOrderMessage("Enter a valid trigger price."); return; }
     setOrderSubmitting(true); setOrderMessage("");
     try {
-      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol, side: orderSide, quantity, order_type: orderType, product_type: orderProduct, validity: "DAY", price, trigger_price: triggerPrice }) });
+      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol, side: orderSide, quantity, order_type: orderType, product_type: orderProduct, validity: "DAY", price, trigger_price: triggerPrice }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail || "Order request failed."));
       const orderId = payload?.data?.orderId || payload?.data?.id || payload?.data?.order_id || "submitted";
@@ -966,7 +967,7 @@ function App() {
 
     const ensureFyersConnection = async () => {
       try {
-        const response = await fetch("/api/fyers/status", { cache: "no-store" });
+        const response = await apiFetch("/api/fyers/status", { cache: "no-store" });
         if (!response.ok) return;
         const data = await response.json() as { configured?: boolean; connected?: boolean };
 
@@ -1203,8 +1204,7 @@ function App() {
       };
 
       const loadCurrentChartData = async (): Promise<ChartBar[]> => {
-        const response = await fetch(
-          "/api/history?symbol=" + encodeURIComponent(executionSymbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
+        const response = await apiFetch("/api/history?symbol=" + encodeURIComponent(executionSymbol) + "&timeframe=" + encodeURIComponent(timeframe) + "&limit=800",
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("Could not load chart data.");
@@ -1228,7 +1228,7 @@ function App() {
         }
 
         setPipscriptStatus("Loading requested market data...");
-        const response = await fetch("/api/pipscript/data", {
+        const response = await apiFetch("/api/pipscript/data", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
@@ -1454,8 +1454,7 @@ json.dumps(_result)`;
 
     const loadQuote = async () => {
       try {
-        const response = await fetch(
-          "/api/quote?symbol=" + encodeURIComponent(chartApiSymbol || symbol) +
+        const response = await apiFetch("/api/quote?symbol=" + encodeURIComponent(chartApiSymbol || symbol) +
             (selectedAccountId ? "&account_id=" + selectedAccountId : ""),
           { cache: "no-store" },
         );
@@ -1571,8 +1570,7 @@ json.dumps(_result)`;
     const loadWatchlistQuotes = async () => {
       try {
         const symbols = watchlist.map((item) => item.symbol).join(",");
-        const response = await fetch(
-          "/api/quotes?symbols=" + encodeURIComponent(symbols) +
+        const response = await apiFetch("/api/quotes?symbols=" + encodeURIComponent(symbols) +
             (selectedAccountId ? "&account_id=" + selectedAccountId : ""),
           { cache: "no-store" },
         );
@@ -1642,8 +1640,7 @@ json.dumps(_result)`;
 
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch(
-          "/api/symbols/search?q=" + encodeURIComponent(query) + "&limit=12",
+        const response = await apiFetch("/api/symbols/search?q=" + encodeURIComponent(query) + "&limit=12",
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("symbol search failed");
@@ -1768,8 +1765,7 @@ json.dumps(_result)`;
 
     selectSymbol(item.symbol);
     try {
-      const response = await fetch(
-        `/api/symbols/resolve?symbol=${encodeURIComponent(item.symbol)}&timeframe=${encodeURIComponent(timeframe)}&test_history=true&test_quote=false`,
+      const response = await apiFetch(`/api/symbols/resolve?symbol=${encodeURIComponent(item.symbol)}&timeframe=${encodeURIComponent(timeframe)}&test_history=true&test_quote=false`,
         { cache: "no-store" },
       );
       if (!response.ok) return;
