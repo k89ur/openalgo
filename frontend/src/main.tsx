@@ -740,6 +740,10 @@ function App() {
   const [positions, setPositions] = useState<Array<Record<string, unknown>>>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [positionsError, setPositionsError] = useState("");
+  const [holdingsOpen, setHoldingsOpen] = useState(false);
+  const [holdings, setHoldings] = useState<Array<Record<string, unknown>>>([]);
+  const [holdingsLoading, setHoldingsLoading] = useState(false);
+  const [holdingsError, setHoldingsError] = useState("");
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [ordersTab, setOrdersTab] = useState<"orders" | "trades">("orders");
   const [orders, setOrders] = useState<Array<Record<string, unknown>>>([]);
@@ -853,6 +857,30 @@ function App() {
       setPositionsOpen(true);
     } finally {
       setPositionsLoading(false);
+    }
+  };
+
+  const loadHoldings = async () => {
+    if (!selectedAccountId) {
+      setHoldingsError("Select a connected account first.");
+      setHoldingsOpen(true);
+      return;
+    }
+    setHoldingsLoading(true);
+    setHoldingsError("");
+    try {
+      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/holdings", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.detail || "Could not load holdings."));
+      const data = Array.isArray(payload.data) ? payload.data : [];
+      setHoldings(data as Array<Record<string, unknown>>);
+      setHoldingsOpen(true);
+    } catch (error) {
+      setHoldings([]);
+      setHoldingsError(error instanceof Error ? error.message : "Could not load holdings.");
+      setHoldingsOpen(true);
+    } finally {
+      setHoldingsLoading(false);
     }
   };
 
@@ -1788,6 +1816,7 @@ json.dumps(_result)`;
           <button onClick={() => void loadAccountFunds()}>{accountFundsLoading ? "Funds..." : "Funds"}</button>
           <button onClick={() => void loadPositions()}>{positionsLoading ? "Positions..." : "Positions"}</button>
           <button onClick={() => void loadOrdersAndTrades("orders")}>{ordersLoading ? "Orders..." : "Orders"}</button>
+          <button onClick={() => void loadHoldings()}>{holdingsLoading ? "Holdings..." : "Holdings"}</button>
           <button>Help</button>
           <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
         </div>
@@ -2185,6 +2214,43 @@ json.dumps(_result)`;
               ) : <div className="positions-empty">No open positions.</div>}
               <button className="funds-refresh" disabled={positionsLoading} onClick={() => void loadPositions()}>
                 {positionsLoading ? "REFRESHING..." : "REFRESH"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {holdingsOpen && (
+        <div className="modal-backdrop" onClick={() => setHoldingsOpen(false)}>
+          <section className="modal holdings-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <strong>HOLDINGS</strong>
+              <button onClick={() => setHoldingsOpen(false)}>CLOSE</button>
+            </div>
+            <div className="holdings-panel">
+              {holdingsError ? <div className="funds-error">{holdingsError}</div> : holdings.length ? (
+                <div className="holdings-table-wrap">
+                  <table className="holdings-table">
+                    <thead><tr><th>SYMBOL</th><th>QTY</th><th>AVAILABLE</th><th>AVG PRICE</th><th>INVESTED</th><th>CURRENT</th><th>P&L</th></tr></thead>
+                    <tbody>
+                      {holdings.map((item, index) => {
+                        const pnl = item.pnl == null ? null : Number(item.pnl);
+                        return <tr key={String(item.security_id || item.symbol || index)}>
+                          <td><strong>{String(item.symbol || "—")}</strong><small>{String(item.exchange || "")}{item.isin ? " · " + String(item.isin) : ""}</small></td>
+                          <td>{Number(item.quantity || 0).toLocaleString("en-IN")}</td>
+                          <td>{Number(item.available_quantity || 0).toLocaleString("en-IN")}</td>
+                          <td>₹{Number(item.average_price || 0).toFixed(2)}</td>
+                          <td>₹{Number(item.invested_value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td>{item.current_value == null ? "—" : "₹" + Number(item.current_value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className={pnl != null && pnl < 0 ? "negative" : pnl != null && pnl > 0 ? "positive" : ""}>{pnl == null ? "—" : "₹" + pnl.toFixed(2)}</td>
+                        </tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <div className="holdings-empty">{holdingsLoading ? "Loading holdings..." : "No holdings found."}</div>}
+              <button className="funds-refresh" disabled={holdingsLoading} onClick={() => void loadHoldings()}>
+                {holdingsLoading ? "REFRESHING..." : "REFRESH"}
               </button>
             </div>
           </section>
