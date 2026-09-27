@@ -127,6 +127,35 @@ class QuotesRequest(BaseModel):
     symbols: list[str]
 
 
+OrderSide = Literal["BUY", "SELL"]
+OrderType = Literal["MARKET", "LIMIT", "STOP_LOSS", "STOP_LOSS_MARKET"]
+OrderProduct = Literal["CNC", "INTRADAY", "MARGIN", "MTF"]
+OrderValidity = Literal["DAY", "IOC"]
+
+
+class OrderRequest(BaseModel):
+    symbol: str
+    side: OrderSide
+    quantity: int
+    order_type: OrderType = "MARKET"
+    product_type: OrderProduct = "INTRADAY"
+    validity: OrderValidity = "DAY"
+    price: float | None = None
+    trigger_price: float | None = None
+    disclosed_quantity: int = 0
+    after_market_order: bool = False
+    correlation_id: str | None = None
+
+
+class OrderModifyRequest(BaseModel):
+    quantity: int
+    order_type: OrderType = "MARKET"
+    validity: OrderValidity = "DAY"
+    price: float | None = None
+    trigger_price: float | None = None
+    disclosed_quantity: int = 0
+
+
 class PipscriptDataRequest(BaseModel):
     type: Literal["history", "quote", "quotes"]
     name: str | None = None
@@ -926,6 +955,61 @@ def _broker_account_provider(account_id: int):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/broker/accounts/{account_id}/orders")
+def broker_account_place_order(account_id: int, request: OrderRequest) -> dict[str, object]:
+    if request.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than zero.")
+    if request.order_type == "LIMIT" and (request.price is None or request.price <= 0):
+        raise HTTPException(status_code=400, detail="A positive price is required for LIMIT orders.")
+    if request.order_type in {"STOP_LOSS", "STOP_LOSS_MARKET"} and (request.trigger_price is None or request.trigger_price <= 0):
+        raise HTTPException(status_code=400, detail="A positive trigger price is required for stop orders.")
+
+    provider = _broker_account_provider(account_id)
+    try:
+        data = provider.place_order(request.model_dump())
+        return {"account_id": account_id, "broker": provider.broker, "data": data}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.put("/api/broker/accounts/{account_id}/orders/{order_id}")
+def broker_account_modify_order(
+    account_id: int,
+    order_id: str,
+    request: OrderModifyRequest,
+) -> dict[str, object]:
+    if request.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than zero.")
+    if request.order_type == "LIMIT" and (request.price is None or request.price <= 0):
+        raise HTTPException(status_code=400, detail="A positive price is required for LIMIT orders.")
+    if request.order_type in {"STOP_LOSS", "STOP_LOSS_MARKET"} and (request.trigger_price is None or request.trigger_price <= 0):
+        raise HTTPException(status_code=400, detail="A positive trigger price is required for stop orders.")
+
+    provider = _broker_account_provider(account_id)
+    try:
+        data = provider.modify_order(order_id, request.model_dump())
+        return {"account_id": account_id, "broker": provider.broker, "data": data}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.delete("/api/broker/accounts/{account_id}/orders/{order_id}")
+def broker_account_cancel_order(account_id: int, order_id: str) -> dict[str, object]:
+    provider = _broker_account_provider(account_id)
+    try:
+        data = provider.cancel_order(order_id)
+        return {"account_id": account_id, "broker": provider.broker, "data": data}
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/api/broker/accounts/{account_id}/funds")
