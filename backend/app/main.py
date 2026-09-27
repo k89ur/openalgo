@@ -53,7 +53,7 @@ FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: set[str] = set()
 _broker_auth_states: dict[str, tuple[int, str]] = {}
-_dhan_auth_states: dict[str, tuple[int, str]] = {}
+_dhan_auth_states: dict[str, tuple[int, str]] = {}\n_LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}\n_LOGIN_MAX_ATTEMPTS = 5\n_LOGIN_WINDOW_SECONDS = 300
 _fyers_token_lock = threading.Lock()
 FYERS_TOKEN_FILE = os.getenv(
     "PIPSGOX_FYERS_TOKEN_FILE",
@@ -152,9 +152,18 @@ def auth_setup(payload: AuthCredentials, response: Response) -> dict[str, object
 
 @app.post("/api/auth/login")
 def auth_login(payload: AuthCredentials, request: Request, response: Response) -> dict[str, object]:
+    now = time.monotonic()
+    ip = request.client.host if request.client else "unknown"
+    attempts, started = _LOGIN_ATTEMPTS.get(ip, (0, now))
+    if now - started >= _LOGIN_WINDOW_SECONDS:
+        attempts, started = 0, now
+    if attempts >= _LOGIN_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
     token = auth.authenticate(payload.username, payload.password)
     if not token:
+        _LOGIN_ATTEMPTS[ip] = (attempts + 1, started)
         raise HTTPException(status_code=401, detail="Invalid username or password.")
+    _LOGIN_ATTEMPTS.pop(ip, None)
     response.set_cookie(
         auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
         samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
