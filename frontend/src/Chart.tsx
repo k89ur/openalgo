@@ -405,6 +405,7 @@ export function Chart({
   drawingCommand,
   chartTheme,
   chartColors,
+  accountId,
   showGrid,
   showCrosshair,
   showVolume,
