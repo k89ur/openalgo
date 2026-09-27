@@ -51,7 +51,7 @@ FYERS_REDIRECT_URI = os.getenv(
 ).strip()
 FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
-_fyers_states: set[str] = set()
+_fyers_states: dict[str, str] = {}
 _broker_auth_states: dict[str, tuple[int, str]] = {}
 _dhan_auth_states: dict[str, tuple[int, str]] = {}\n_LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}\n_LOGIN_MAX_ATTEMPTS = 5\n_LOGIN_WINDOW_SECONDS = 300
 _fyers_token_lock = threading.Lock()
@@ -793,12 +793,17 @@ def to_quote(item) -> Quote:
 
 
 @app.get("/auth/fyers/login")
-def fyers_login() -> RedirectResponse:
+def fyers_login(request: Request) -> RedirectResponse:
+    if _request_user(request) is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
     if not FYERS_CLIENT_ID:
         raise HTTPException(status_code=503, detail="FYERS_CLIENT_ID is not configured.")
 
     state = secrets.token_urlsafe(24)
-    _fyers_states.add(state)
+    app_session = request.cookies.get(auth.SESSION_COOKIE)
+    if not app_session:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    _fyers_states[state] = hashlib.sha256(app_session.encode("utf-8")).hexdigest()
 
     params = {
         "client_id": FYERS_CLIENT_ID,
