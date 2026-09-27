@@ -933,7 +933,6 @@ function App() {
   const [watchImportMessage, setWatchImportMessage] = useState("");
   const [watchDialog, setWatchDialog] = useState<{ type: "add" | "new" | "delete" | "export" | "import"; value: string } | null>(null);
   const [draggedSymbol, setDraggedSymbol] = useState<string | null>(null);
-  const [fyersChecking, setFyersChecking] = useState(true);
   const watchImportRef = useRef<HTMLInputElement>(null);
   const applyChartPreset = (theme: ChartTheme) => updateChartSettings({ theme, colors: { ...CHART_COLOR_PRESETS[theme] } });
   const updateChartColor = (key: keyof ChartColors, value: string) => updateChartSettings({ colors: { ...chartSettings.colors, [key]: value } });
