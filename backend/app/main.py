@@ -1215,7 +1215,7 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                     raise unresolved_symbol_error(original)
 
                 try:
-                    result = selected_provider.get_quote(api_symbol)
+                    result = provider.get_quote(api_symbol)
                 except ValueError as first_error:
                     candidates = _master_symbol_candidates(original)
                     last_error = first_error
@@ -1276,7 +1276,7 @@ def quote(
         if not api_symbol:
             raise unresolved_symbol_error(original)
         try:
-            result = provider.get_quote(api_symbol)
+            result = selected_provider.get_quote(api_symbol)
         except ValueError as first_error:
             candidates = _master_symbol_candidates(original)
             last_error = first_error
