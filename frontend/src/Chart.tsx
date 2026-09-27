@@ -204,7 +204,7 @@ registerIndicator({
       title: "EMA" + period + ": ",
       type: "line",
     })),
-  calc: (dataList: KLineData[], indicator: any) => {
+  calc: ((dataList: KLineData[], indicator: any) => {
     const params = (indicator.calcParams || [9, 20, 50, 100, 200]).map(Number);
     const states = params.map(() => ({ value: 0, initialized: false }));
     const result: Record<number, Record<string, number | null>> = {};
@@ -900,7 +900,6 @@ export function Chart({
         disposed = true;
         resizeObserver.disconnect();
         chart.unsubscribeAction("onCrosshairChange", crosshairHandler);
-        chart.unsubscribeAction("onDataReady", applyInitialRange);
         chartRef.current = null;
         dispose(chart);
       };
@@ -1126,7 +1125,7 @@ export function Chart({
           }
 
           return result;
-        },
+        }) as any,
       } as any);
 
       if (indicatorId) indicatorIds.push(indicatorId);
@@ -1135,7 +1134,7 @@ export function Chart({
     return () => {
       for (const indicatorId of indicatorIds) {
         try {
-          chart.removeIndicator(indicatorId);
+          chart.removeIndicator({ id: indicatorId } as any);
         } catch {
           // Chart may already be disposed/recreated.
         }
