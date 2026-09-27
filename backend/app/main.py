@@ -1307,10 +1307,9 @@ def broker_accounts_delete(account_id: int) -> dict[str, bool]:
 
 @app.get("/api/fyers/status")
 def fyers_status() -> dict[str, object]:
-    configured = bool(FYERS_CLIENT_ID and FYERS_SECRET_KEY)
-    connected = _fyers_session_valid() if configured else False
+    connected = _fyers_session_valid()
     return {
-        "configured": configured,
+        "configured": connected,
         "connected": connected,
         "status": "connected" if connected else "not_connected",
         "redirect_uri": FYERS_REDIRECT_URI,
@@ -1358,13 +1357,12 @@ def dev_restart() -> dict[str, str]:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    configured = bool(FYERS_CLIENT_ID and FYERS_SECRET_KEY)
-    connected = _fyers_session_valid() if configured else False
+    connected = _fyers_session_valid()
     return {
         "status": "ok",
         "app": "pipsgox",
-        "data_provider": "fyers_v3",
-        "configured": "true" if configured else "false",
+        "data_provider": "broker_account",
+        "configured": "true" if connected else "false",
         "fyers_connected": "true" if connected else "false",
     }
 
