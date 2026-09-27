@@ -819,15 +819,20 @@ def fyers_login(request: Request) -> RedirectResponse:
 def fyers_callback(
     auth_code: str | None = None,
     state: str | None = None,
+    request: Request = None,
 ) -> RedirectResponse:
     global _fyers_access_token
 
     if not auth_code:
         raise HTTPException(status_code=400, detail="FYERS did not return an auth_code.")
-    if not state or state not in _fyers_states:
+    expected_session = _fyers_states.pop(state, None) if state else None
+    current_session = request.cookies.get(auth.SESSION_COOKIE) if request else None
+    valid_session = bool(expected_session and current_session and hmac.compare_digest(
+        expected_session,
+        hashlib.sha256(current_session.encode("utf-8")).hexdigest(),
+    ))
+    if not valid_session:
         raise HTTPException(status_code=400, detail="Invalid or expired FYERS login state.")
-
-    _fyers_states.discard(state)
 
     if not FYERS_CLIENT_ID or not FYERS_SECRET_KEY:
         raise HTTPException(status_code=503, detail="FYERS app credentials are not configured.")
