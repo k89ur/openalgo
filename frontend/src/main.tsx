@@ -876,6 +876,11 @@ function App() {
   const [orderTriggerPrice, setOrderTriggerPrice] = useState("");
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderMessage, setOrderMessage] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
+    const raw = localStorage.getItem("pipsgox-selected-account");
+    const value = raw ? Number(raw) : NaN;
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
   const [accountFundsOpen, setAccountFundsOpen] = useState(false);
   const [accountFunds, setAccountFunds] = useState<Record<string, number | string> | null>(null);
   const [accountFundsLoading, setAccountFundsLoading] = useState(false);
@@ -902,11 +907,7 @@ function App() {
     client_id: string;
     status: string;
   }>>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
-    const raw = localStorage.getItem("pipsgox-selected-account");
-    const value = raw ? Number(raw) : NaN;
-    return Number.isInteger(value) && value > 0 ? value : null;
-  });
+
   const [quote, setQuote] = useState<{
     last: number; change: number; change_percent: number;
     open?: number; high?: number; low?: number; volume?: number;
@@ -2317,7 +2318,9 @@ json.dumps(_result)`;
             {watchImportMessage && <div className="watch-message">{watchImportMessage}</div>}
             <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span><span>VOL</span><span>BID / ASK</span><span></span></div>
             <div className="watch-items">
-              {filteredWatchlist.map((item) => (
+              {filteredWatchlist.map((item) => {
+                const liveQuote = liveQuotes[item.symbol];
+                return (
                 <div
                   key={item.symbol}
                   className={`watch-row ${item.symbol === symbol ? "selected" : ""}`}
@@ -2329,22 +2332,23 @@ json.dumps(_result)`;
                 >
                   <button className="watch-row-main" onClick={() => void selectWatchItem(item)}>
                     <span className="watch-symbol">{item.symbol}</span>
-                    <span className="watch-price">{liveQuotes[item.symbol] ? liveQuotes[item.symbol].last.toFixed(2) : "—"}</span>
-                    <span className={`watch-change ${(liveQuotes[item.symbol]?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
-                      {liveQuotes[item.symbol] ? `${liveQuotes[item.symbol].change_percent >= 0 ? "+" : ""}${liveQuotes[item.symbol].change_percent.toFixed(2)}%` : "—"}
+                    <span className="watch-price">{liveQuote ? liveQuote.last.toFixed(2) : "—"}</span>
+                    <span className={`watch-change ${(liveQuote?.change_percent ?? Number(item.change.replace("%", ""))) < 0 ? "negative" : "positive"}`}>
+                      {liveQuote ? `${liveQuote.change_percent >= 0 ? "+" : ""}${liveQuote.change_percent.toFixed(2)}%` : "—"}
                     </span>
-                    <span className={`watch-volume ${liveQuotes[item.symbol]?.volume != null && liveQuotes[item.symbol].volume <= 10000 ? "low-volume" : ""}`}>
-                      {formatWatchVolume(liveQuotes[item.symbol]?.volume)}
+                    <span className={`watch-volume ${liveQuote?.volume != null && liveQuote.volume <= 10000 ? "low-volume" : ""}`}>
+                      {formatWatchVolume(liveQuote?.volume)}
                     </span>
                     <span className="watch-bid-ask">
-                      <span className="watch-bid-value">{formatWatchQuoteValue(liveQuotes[item.symbol]?.bid)}</span>
+                      <span className="watch-bid-value">{formatWatchQuoteValue(liveQuote?.bid)}</span>
                       <span className="watch-bid-ask-separator"> / </span>
-                      <span className="watch-ask-value">{formatWatchQuoteValue(liveQuotes[item.symbol]?.ask)}</span>
+                      <span className="watch-ask-value">{formatWatchQuoteValue(liveQuote?.ask)}</span>
                     </span>
                   </button>
                   <button className="watch-remove" onClick={() => removeWatchSymbol(item.symbol)} aria-label={`Remove ${item.symbol}`}>×</button>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <div className="watch-footer">
               {watchlist.length ? "Click a symbol to load chart" : "Watchlist empty — use symbol search or ADD"}
