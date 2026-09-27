@@ -1066,6 +1066,103 @@ def symbol_search(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _dhan_history_to_candles(payload: dict[str, object]) -> list[Candle]:
+    timestamps = payload.get("timestamp") or payload.get("timestamps") or []
+    opens = payload.get("open") or []
+    highs = payload.get("high") or []
+    lows = payload.get("low") or []
+    closes = payload.get("close") or []
+    volumes = payload.get("volume") or []
+
+    if not all(isinstance(value, list) for value in (timestamps, opens, highs, lows, closes, volumes)):
+        raise ValueError("Dhan historical response has an invalid candle structure.")
+
+    count = min(len(timestamps), len(opens), len(highs), len(lows), len(closes))
+    candles: list[Candle] = []
+    for index in range(count):
+        try:
+            timestamp = int(float(timestamps[index]))
+            if timestamp > 10_000_000_000:
+                timestamp //= 1000
+            candles.append(Candle(
+                time=timestamp,
+                open=float(opens[index]),
+                high=float(highs[index]),
+                low=float(lows[index]),
+                close=float(closes[index]),
+                volume=float(volumes[index]) if index < len(volumes) else 0.0,
+            ))
+        except (TypeError, ValueError):
+            continue
+    return candles
+
+
+def _dhan_history(
+    account_id: int,
+    symbol: str,
+    timeframe: Timeframe,
+    limit: int,
+    from_date: date | None,
+    to_date: date | None,
+) -> list[Candle]:
+    account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
+    if account.broker != "dhan":
+        raise ValueError("Selected account is not a Dhan account.")
+    if not access_token:
+        raise HTTPException(status_code=409, detail="Selected Dhan account is not connected.")
+
+    from app.providers.accounts import DhanAccountProvider
+    dhan = DhanAccountProvider(client_id, access_token)
+    instrument = dhan.resolve_instrument(symbol)
+    if not instrument or not instrument.get("security_id"):
+        raise ValueError(f"Dhan instrument not found for {symbol}.")
+
+    import datetime as _dt
+    end = to_date or _dt.date.today()
+    if from_date:
+        start = from_date
+    elif timeframe == "D":
+        start = end - _dt.timedelta(days=max(limit * 2, 30))
+    else:
+        start = end - _dt.timedelta(days=min(max(limit * 2, 10), 90))
+
+    if timeframe in {"D", "W", "M"}:
+        payload = dhan.get_history(
+            instrument["security_id"],
+            instrument["exchange_segment"],
+            instrument["instrument"],
+            "D",
+            start.isoformat(),
+            end.isoformat(),
+        )
+        candles = _dhan_history_to_candles(payload)
+        if timeframe == "W":
+            return _aggregate_daily_candles(candles, "W")[-limit:]
+        if timeframe == "M":
+            return _aggregate_daily_candles(candles, "M")[-limit:]
+        return candles[-limit:]
+
+    if timeframe == "30m":
+        base_timeframe = "15m"
+    elif timeframe == "3m":
+        base_timeframe = "1m"
+    else:
+        base_timeframe = timeframe
+
+    payload = dhan.get_history(
+        instrument["security_id"],
+        instrument["exchange_segment"],
+        instrument["instrument"],
+        base_timeframe,
+        start.isoformat() + " 09:15:00",
+        end.isoformat() + " 15:30:00",
+    )
+    candles = _dhan_history_to_candles(payload)
+    if timeframe in {"30m", "3m"}:
+        candles = _aggregate_intraday_candles(candles, int(timeframe[:-1]))
+    return candles[-limit:]
+
+
 def _market_data_provider_for_account(account_id: int | None):
     if account_id is None:
         return provider
