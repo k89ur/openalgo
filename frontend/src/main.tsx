@@ -2086,12 +2086,12 @@ json.dumps(_result)`;
                 <div className="funds-error">{accountFundsError}</div>
               ) : accountFunds ? (
                 <div className="funds-grid">
-                  <div className="fund-card primary"><span>AVAILABLE</span><strong>₹{(fundNumber(["availabelBalance","availableBalance","available_balance"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-                  <div className="fund-card"><span>SOD LIMIT</span><strong>₹{(fundNumber(["sodLimit","sod_limit"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-                  <div className="fund-card"><span>UTILIZED</span><strong>₹{(fundNumber(["utilizedAmount","utilized_amount","marginUtilized"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-                  <div className="fund-card"><span>COLLATERAL</span><strong>₹{(fundNumber(["collateralAmount","collateral_amount","collateral"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-                  <div className="fund-card"><span>RECEIVABLE</span><strong>₹{(fundNumber(["receiveableAmount","receivableAmount","receivable_amount"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-                  <div className="fund-card"><span>WITHDRAWABLE</span><strong>₹{(fundNumber(["withdrawableBalance","withdrawable_balance"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                  <div className="fund-card primary"><span>AVAILABLE</span><strong>₹{(fundNumber(["available"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                  <div className="fund-card"><span>SOD LIMIT</span><strong>₹{(fundNumber(["sod_limit"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                  <div className="fund-card"><span>UTILIZED</span><strong>₹{(fundNumber(["utilized"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                  <div className="fund-card"><span>COLLATERAL</span><strong>₹{(fundNumber(["collateral"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                  <div className="fund-card"><span>RECEIVABLE</span><strong>₹{(fundNumber(["receivable"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                  <div className="fund-card"><span>WITHDRAWABLE</span><strong>₹{(fundNumber(["withdrawable"]) ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
                 </div>
               ) : (
                 <div className="funds-error">No funds data returned.</div>
