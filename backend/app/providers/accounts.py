@@ -470,6 +470,47 @@ def normalize_trade(provider: object, item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def normalize_holding(provider: object, item: dict[str, Any]) -> dict[str, Any]:
+    broker = str(getattr(provider, "broker", "")).lower()
+    if broker == "dhan":
+        quantity = int(float(item.get("totalQty") or 0))
+        avg_cost = float(item.get("avgCostPrice") or 0)
+        return {
+            "symbol": str(item.get("tradingSymbol") or ""),
+            "security_id": str(item.get("securityId") or ""),
+            "exchange": str(item.get("exchange") or ""),
+            "isin": str(item.get("isin") or ""),
+            "quantity": quantity,
+            "available_quantity": int(float(item.get("availableQty") or 0)),
+            "demat_quantity": int(float(item.get("dpQty") or 0)),
+            "t1_quantity": int(float(item.get("t1Qty") or 0)),
+            "collateral_quantity": int(float(item.get("collateralQty") or 0)),
+            "average_price": avg_cost,
+            "invested_value": avg_cost * quantity,
+            "current_value": None,
+            "pnl": None,
+        }
+
+    quantity = int(float(item.get("quantity") or item.get("qty") or item.get("holdQty") or 0))
+    avg_cost = float(item.get("costPrice") or item.get("avgPrice") or item.get("avgCostPrice") or 0)
+    return {
+        "symbol": str(item.get("symbol") or item.get("tradingSymbol") or ""),
+        "security_id": str(item.get("symbol") or item.get("securityId") or ""),
+        "exchange": str(item.get("exchange") or item.get("exchangeSegment") or ""),
+        "isin": str(item.get("isin") or ""),
+        "quantity": quantity,
+        "available_quantity": int(float(item.get("availableQty") or item.get("quantity") or item.get("qty") or 0)),
+        "demat_quantity": int(float(item.get("dpQty") or item.get("dematQty") or 0)),
+        "t1_quantity": int(float(item.get("t1Qty") or item.get("t1") or 0)),
+        "collateral_quantity": int(float(item.get("collateralQty") or item.get("collateral") or 0)),
+        "average_price": avg_cost,
+        "invested_value": float(item.get("investedValue") or item.get("invested_value") or avg_cost * quantity),
+        "current_value": float(item.get("currentValue") or item.get("current_value") or 0) if (item.get("currentValue") is not None or item.get("current_value") is not None) else None,
+        "pnl": float(item.get("pnl") or item.get("profitLoss") or item.get("unrealizedProfit") or 0) if any(item.get(k) is not None for k in ("pnl", "profitLoss", "unrealizedProfit")) else None,
+    }
+
+
 def build_account_provider(
     broker: str,
     client_id: str,
