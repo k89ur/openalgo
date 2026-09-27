@@ -900,16 +900,18 @@ def broker_account_connect(account_id: int, request: Request, response: Response
         raise HTTPException(status_code=401, detail="Authentication required.")
     session_hash = hashlib.sha256(app_session.encode("utf-8")).hexdigest()
     state = secrets.token_urlsafe(24)
-    broker_accounts.create_oauth_state(
-        state,
-        account.id,
-        account.broker,
-        session_hash,
-        int(time.time()) + 600,
-    )
 
     try:
         if account.broker == "fyers":
+            # Persist FYERS OAuth state so a backend restart during the
+            # external login cannot invalidate the callback.
+            broker_accounts.create_oauth_state(
+                state,
+                account.id,
+                account.broker,
+                session_hash,
+                int(time.time()) + 600,
+            )
             # FYERS OAuth identifies the API application with the App ID.
             # The trading Client ID is not used for this parameter.
             fyers_app_id = api_key.strip() or client_id.strip()
@@ -935,7 +937,6 @@ def broker_account_connect(account_id: int, request: Request, response: Response
         # OAuth state is persisted and will expire naturally.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        _broker_auth_states.pop(state, None)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if account.broker == "fyers":
