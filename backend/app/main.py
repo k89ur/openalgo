@@ -262,6 +262,7 @@ class Quote(BaseModel):
     source: str = "FYERS API V3"
 
 class QuotesRequest(BaseModel):
+    account_id: int | None = None
     symbols: list[str]
 
 
@@ -1922,8 +1923,11 @@ def quotes(
 
 @app.post("/api/quotes", response_model=list[Quote])
 def quotes_post(request: QuotesRequest) -> list[Quote]:
+    if request.account_id is None:
+        raise HTTPException(status_code=409, detail="Select a connected broker account before loading market data.")
+    selected_provider = _market_data_provider_for_account(request.account_id)
     requested = [item.strip().upper() for item in request.symbols if item.strip()]
-    return get_quotes_for_symbols(requested, provider)
+    return get_quotes_for_symbols(requested, selected_provider)
 
 
 def get_quotes_for_symbols(requested: list[str], selected_provider=None) -> list[Quote]:
