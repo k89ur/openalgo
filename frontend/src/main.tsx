@@ -2379,7 +2379,26 @@ json.dumps(_result)`;
         </div>
       )}
 
-      {accountOpen && <BrokerConnections onClose={() => setAccountOpen(false)} onDisconnectAll={disconnectAllBrokers} />}
+      {accountOpen && (
+        <BrokerConnections
+          onClose={() => {
+            setAccountOpen(false);
+            void apiFetch("/api/broker/accounts")
+              .then(async (response) => {
+                const payload = await response.json().catch(() => []);
+                if (!response.ok || !Array.isArray(payload)) return;
+                setBrokerAccounts(payload);
+                setSelectedAccountId((current) => {
+                  if (current && payload.some((account) => account.id === current)) return current;
+                  const connected = payload.find((account) => account.status === "connected");
+                  return connected?.id ?? null;
+                });
+              })
+              .catch(() => {});
+          }}
+          onDisconnectAll={disconnectAllBrokers}
+        />
+      )}
 
       {positionsOpen && (
         <div className="modal-backdrop" onClick={() => setPositionsOpen(false)}>
