@@ -736,6 +736,10 @@ function App() {
   const [accountFunds, setAccountFunds] = useState<Record<string, number | string> | null>(null);
   const [accountFundsLoading, setAccountFundsLoading] = useState(false);
   const [accountFundsError, setAccountFundsError] = useState("");
+  const [positionsOpen, setPositionsOpen] = useState(false);
+  const [positions, setPositions] = useState<Array<Record<string, unknown>>>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionsError, setPositionsError] = useState("");
   const [brokerAccounts, setBrokerAccounts] = useState<Array<{
     id: number;
     broker: string;
@@ -819,6 +823,35 @@ function App() {
       if (Number.isFinite(value)) return value;
     }
     return null;
+  };
+
+  const loadPositions = async () => {
+    if (!selectedAccountId) {
+      setPositionsError("Select a connected account first.");
+      setPositionsOpen(true);
+      return;
+    }
+    setPositionsLoading(true);
+    setPositionsError("");
+    try {
+      const response = await fetch("/api/broker/accounts/" + selectedAccountId + "/positions", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload.detail || "Could not load positions."));
+      const data = Array.isArray(payload.data) ? payload.data : [];
+      setPositions(data as Array<Record<string, unknown>>);
+      setPositionsOpen(true);
+    } catch (error) {
+      setPositions([]);
+      setPositionsError(error instanceof Error ? error.message : "Could not load positions.");
+      setPositionsOpen(true);
+    } finally {
+      setPositionsLoading(false);
+    }
+  };
+
+  const positionNumber = (value: unknown) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
   };
 
   const submitOrder = async () => {
@@ -1704,6 +1737,7 @@ json.dumps(_result)`;
           <button onClick={() => setAccountOpen(true)}>Account</button>
           <button onClick={() => { setOrderMessage(""); setOrderOpen(true); }}>Trade</button>
           <button onClick={() => void loadAccountFunds()}>{accountFundsLoading ? "Funds..." : "Funds"}</button>
+          <button onClick={() => void loadPositions()}>{positionsLoading ? "Positions..." : "Positions"}</button>
           <button>Help</button>
           <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
         </div>
@@ -2070,6 +2104,42 @@ json.dumps(_result)`;
       )}
 
       {accountOpen && <BrokerConnections onClose={() => setAccountOpen(false)} />}
+
+      {positionsOpen && (
+        <div className="modal-backdrop" onClick={() => setPositionsOpen(false)}>
+          <section className="modal positions-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <strong>OPEN POSITIONS</strong>
+              <button onClick={() => setPositionsOpen(false)}>CLOSE</button>
+            </div>
+            <div className="positions-panel">
+              {positionsError ? <div className="funds-error">{positionsError}</div> : positions.length ? (
+                <div className="positions-table-wrap">
+                  <table className="positions-table">
+                    <thead><tr><th>SYMBOL</th><th>QTY</th><th>AVG</th><th>PRODUCT</th><th>SIDE</th><th>P&L</th></tr></thead>
+                    <tbody>
+                      {positions.map((item, index) => {
+                        const pnl = positionNumber(item.pnl);
+                        return <tr key={String(item.security_id || item.symbol || index)}>
+                          <td><strong>{String(item.symbol || "—")}</strong><small>{String(item.exchange || "")}</small></td>
+                          <td>{positionNumber(item.quantity).toLocaleString("en-IN")}</td>
+                          <td>₹{positionNumber(item.cost_price || item.buy_avg).toFixed(2)}</td>
+                          <td>{String(item.product || "—")}</td>
+                          <td>{String(item.side || "—")}</td>
+                          <td className={pnl < 0 ? "negative" : pnl > 0 ? "positive" : ""}>₹{pnl.toFixed(2)}</td>
+                        </tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <div className="positions-empty">No open positions.</div>}
+              <button className="funds-refresh" disabled={positionsLoading} onClick={() => void loadPositions()}>
+                {positionsLoading ? "REFRESHING..." : "REFRESH"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {accountFundsOpen && (
         <div className="modal-backdrop" onClick={() => setAccountFundsOpen(false)}>
