@@ -64,7 +64,8 @@ FYERS_REDIRECT_URI = os.getenv(
     "FYERS_REDIRECT_URI",
     f"{_codespace_forwarded_url(8000)}/auth/broker/fyers/callback",
 ).strip()
-_broker_auth_states: dict[str, tuple[int, str, str]] = {}
+
+
 _dhan_auth_states: dict[str, tuple[int, str]] = {}
 _LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
 _LOGIN_MAX_ATTEMPTS = 5
@@ -899,7 +900,13 @@ def broker_account_connect(account_id: int, request: Request, response: Response
         raise HTTPException(status_code=401, detail="Authentication required.")
     session_hash = hashlib.sha256(app_session.encode("utf-8")).hexdigest()
     state = secrets.token_urlsafe(24)
-    _broker_auth_states[state] = (account.id, account.broker, session_hash)
+    broker_accounts.create_oauth_state(
+        state,
+        account.id,
+        account.broker,
+        session_hash,
+        int(time.time()) + 600,
+    )
 
     try:
         if account.broker == "fyers":
@@ -925,7 +932,7 @@ def broker_account_connect(account_id: int, request: Request, response: Response
         else:
             raise ValueError(f"Unsupported broker '{account.broker}'.")
     except ValueError as exc:
-        _broker_auth_states.pop(state, None)
+        # OAuth state is persisted and will expire naturally.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         _broker_auth_states.pop(state, None)
@@ -966,13 +973,8 @@ def broker_fyers_callback(
 ) -> RedirectResponse:
     if not auth_code or not state:
         raise HTTPException(status_code=400, detail="FYERS did not return a valid authorization response.")
-    callback_state = request.cookies.get("pipsgox_fyers_state") if request else None
-    context = _broker_auth_states.pop(state, None)
-    valid_state_cookie = bool(
-        callback_state
-        and hmac.compare_digest(callback_state, state)
-    )
-    if not context or context[1] != "fyers" or not valid_state_cookie:
+    context = broker_accounts.consume_oauth_state(state)
+    if not context or context[1] != "fyers":
         raise HTTPException(status_code=400, detail="Invalid or expired broker login state.")
 
     account_id = context[0]
