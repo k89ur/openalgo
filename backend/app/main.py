@@ -1667,151 +1667,94 @@ def history(
 
 @app.post("/api/pipscript/data")
 def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
-    """Resolve and fetch only the market datasets explicitly requested by Pipscript.
-
-    This is the controlled Data Gateway for the browser Pipscript runtime. Scripts
-    never receive arbitrary HTTP/network access; they declare market-data requests
-    and the server resolves them through the configured provider.
-    """
+    """Controlled market-data gateway for browser Pipscripts."""
     if request.account_id is None:
         raise HTTPException(status_code=409, detail="Select a connected broker account before running Pipscript.")
-    account, _, _, access_token = broker_accounts.get_account_credentials(request.account_id)
+    account, client_id, _, access_token = broker_accounts.get_account_credentials(request.account_id)
     if not access_token:
         raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
-    selected_provider = None if account.broker == "dhan" else _market_data_provider_for_account(request.account_id)
-
+    if account.broker == "dhan":
+        from app.providers.accounts import DhanAccountProvider
+        selected_provider = DhanAccountProvider(client_id, access_token)
+    else:
+        selected_provider = _market_data_provider_for_account(request.account_id)
     if len(request.requests) > 40:
         raise HTTPException(status_code=400, detail="A maximum of 40 Pipscript data requests is supported.")
-
     history_data: dict[str, dict[str, object]] = {}
     quotes_data: dict[str, object] = {}
     errors: list[dict[str, str]] = []
-    # Multi-index scripts need pacing to stay below FYERS historical-data
-    # request limits. A single-symbol Pipscript request should not inherit
-    # that one-second delay, because it is a common interactive use case.
-    history_request_count = sum(1 for item in request.requests if item.type == "history")
-    pace_history = history_request_count > 1
-
     for index, item in enumerate(request.requests):
-        name = (item.name or item.symbol or f"request_{index + 1}").strip().upper()
-        if not name:
-            name = f"REQUEST_{index + 1}"
-
+        name = (item.name or item.symbol or f"request_{index + 1}").strip().upper() or f"REQUEST_{index + 1}"
         try:
             if item.type == "history":
                 if not item.symbol:
                     raise ValueError("history request requires symbol.")
                 if not 50 <= item.limit <= 2000:
                     raise ValueError("history limit must be between 50 and 2000.")
-
                 original = item.symbol.strip().upper()
-                api_symbol = resolve_api_symbol(original)
-                if not api_symbol:
-                    raise unresolved_symbol_error(original)
-
                 if account.broker == "dhan":
-                    candles = _dhan_history(
-                        request.account_id,
-                        original,
-                        item.timeframe,
-                        item.limit,
-                        item.from_date,
-                        item.to_date,
-                    )
+                    candles = _dhan_history(request.account_id, original, item.timeframe, item.limit, item.from_date, item.to_date)
                 else:
+                    api_symbol = resolve_api_symbol(original)
+                    if not api_symbol:
+                        raise unresolved_symbol_error(original)
                     try:
-                        candles = selected_provider.get_history(
-                            api_symbol,
-                            item.timeframe,
-                            item.limit,
-                            start=item.from_date,
-                            end=item.to_date,
-                        )
-                except ValueError as first_error:
-                    candidates = _master_symbol_candidates(original)
-                    last_error = first_error
-                    candles = None
-                    for candidate in candidates:
-                        if candidate == api_symbol:
-                            continue
-                        try:
-                            candles = _pipscript_get_history(
-                                candidate,
-                                item.timeframe,
-                                item.limit,
-                                start=item.from_date,
-                                end=item.to_date,
-                                pace=pace_history,
-                            )
-                            break
-                        except ValueError as exc:
-                            last_error = exc
-                    if candles is None:
-                        raise last_error
-                history_data[name] = {
-                    "symbol": original,
-                    "timeframe": item.timeframe,
-                    "bars": [to_candle(candle).model_dump() for candle in candles],
-                }
-
+                        candles = selected_provider.get_history(api_symbol, item.timeframe, item.limit, start=item.from_date, end=item.to_date)
+                    except ValueError as first_error:
+                        candidates = _master_symbol_candidates(original)
+                        last_error = first_error
+                        candles = None
+                        for candidate in candidates:
+                            if candidate == api_symbol:
+                                continue
+                            try:
+                                candles = selected_provider.get_history(candidate, item.timeframe, item.limit, start=item.from_date, end=item.to_date)
+                                break
+                            except ValueError as exc:
+                                last_error = exc
+                        if candles is None:
+                            raise last_error
+                history_data[name] = {"symbol": original, "timeframe": item.timeframe, "bars": [to_candle(candle).model_dump() for candle in candles]}
             elif item.type == "quote":
                 if not item.symbol:
                     raise ValueError("quote request requires symbol.")
-
                 original = item.symbol.strip().upper()
-                api_symbol = resolve_api_symbol(original)
-                if not api_symbol:
-                    raise unresolved_symbol_error(original)
-
-                try:
-                    result = provider.get_quote(api_symbol)
-                except ValueError as first_error:
-                    candidates = _master_symbol_candidates(original)
-                    last_error = first_error
-                    result = None
-                    for candidate in candidates:
-                        if candidate == api_symbol:
-                            continue
-                        try:
-                            result = selected_provider.get_quote(candidate)
-                            break
-                        except ValueError as exc:
-                            last_error = exc
-                    if result is None:
-                        raise last_error
-                result = replace(result, symbol=original)
+                if account.broker == "dhan":
+                    result = _dhan_quote(request.account_id, original)
+                else:
+                    api_symbol = resolve_api_symbol(original)
+                    if not api_symbol:
+                        raise unresolved_symbol_error(original)
+                    try:
+                        result = selected_provider.get_quote(api_symbol)
+                    except ValueError as first_error:
+                        candidates = _master_symbol_candidates(original)
+                        last_error = first_error
+                        result = None
+                        for candidate in candidates:
+                            if candidate == api_symbol:
+                                continue
+                            try:
+                                result = selected_provider.get_quote(candidate)
+                                break
+                            except ValueError as exc:
+                                last_error = exc
+                        if result is None:
+                            raise last_error
+                    result = replace(result, symbol=original)
                 quotes_data[name] = to_quote(result).model_dump()
-
             elif item.type == "quotes":
-                requested = [
-                    value.strip().upper()
-                    for value in item.symbols
-                    if value and value.strip()
-                ]
+                requested = [value.strip().upper() for value in item.symbols if value and value.strip()]
                 if not requested:
                     raise ValueError("quotes request requires a non-empty symbols array.")
                 if len(requested) > 1000:
                     raise ValueError("A maximum of 1000 symbols can be requested in one quotes request.")
-
-                results = get_quotes_for_symbols(requested)
-                quotes_data[name] = {
-                    "items": [quote.model_dump() for quote in results],
-                }
-
+                results = get_quotes_for_symbols(requested, selected_provider)
+                quotes_data[name] = {"items": [quote.model_dump() for quote in results]}
         except (ValueError, HTTPException) as exc:
             message = exc.detail if isinstance(exc, HTTPException) else str(exc)
-            errors.append({
-                "name": name,
-                "type": item.type,
-                "message": str(message),
-            })
-
-    return {
-        "history": history_data,
-        "quotes": quotes_data,
-        "errors": errors,
-    }
-
+            errors.append({"name": name, "type": item.type, "message": str(message)})
+    return {"history": history_data, "quotes": quotes_data, "errors": errors}
 
 def _dhan_quote(account_id: int, symbol: str) -> Quote:
     account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
