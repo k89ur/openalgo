@@ -62,7 +62,7 @@ PIPSGOX_WEB_URL = os.getenv(
 ).strip()
 FYERS_REDIRECT_URI = os.getenv(
     "FYERS_REDIRECT_URI",
-    f"{_codespace_forwarded_url(8000)}/auth/fyers/callback",
+    f"{_codespace_forwarded_url(8000)}/auth/broker/fyers/callback",
 ).strip()
 _broker_auth_states: dict[str, tuple[int, str, str]] = {}
 _dhan_auth_states: dict[str, tuple[int, str]] = {}
@@ -70,12 +70,6 @@ _LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
 _LOGIN_MAX_ATTEMPTS = 5
 _LOGIN_WINDOW_SECONDS = 300
 _order_idempotency_lock = threading.Lock()
-_fyers_token_lock = threading.Lock()
-FYERS_TOKEN_FILE = os.getenv(
-    "PIPSGOX_FYERS_TOKEN_FILE",
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".pipsgox", "fyers_access_token"),
-).strip()
-
 
 app.add_middleware(
     CORSMiddleware,
