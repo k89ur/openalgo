@@ -1224,7 +1224,7 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
                         if candidate == api_symbol:
                             continue
                         try:
-                            result = selected_provider.get_quote(candidate)
+                            result = provider.get_quote(candidate)
                             break
                         except ValueError as exc:
                             last_error = exc
