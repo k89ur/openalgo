@@ -1550,6 +1550,38 @@ def get_quotes_for_symbols(requested: list[str], selected_provider=None) -> list
     selected_provider = selected_provider or provider
     if not requested:
         return []
+
+    if hasattr(selected_provider, "resolve_instrument") and hasattr(selected_provider, "get_ltp"):
+        instruments: list[tuple[str, str, int]] = []
+        for clean in requested:
+            try:
+                resolved = selected_provider.resolve_instrument(clean)
+                if resolved and resolved.get("security_id"):
+                    instruments.append((clean, str(resolved["exchange_segment"]), int(resolved["security_id"])))
+            except (TypeError, ValueError):
+                continue
+
+        grouped: dict[str, list[int]] = {}
+        for _, segment, security_id in instruments:
+            grouped.setdefault(segment, []).append(security_id)
+
+        payload = selected_provider.get_ltp(grouped)
+        data = payload.get("data", {}) if isinstance(payload, dict) else {}
+        output: list[Quote] = []
+        for clean, segment, security_id in instruments:
+            segment_data = data.get(segment, {}) if isinstance(data, dict) else {}
+            item = segment_data.get(str(security_id), {}) if isinstance(segment_data, dict) else {}
+            if not isinstance(item, dict) or item.get("last_price") is None:
+                continue
+            output.append(Quote(
+                symbol=clean,
+                exchange="NSE",
+                last=float(item["last_price"]),
+                change=0.0,
+                change_percent=0.0,
+                source="DhanHQ API V2",
+            ))
+        return output
     if len(requested) > 1000:
         raise HTTPException(
             status_code=400,
