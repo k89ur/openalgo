@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from urllib.parse import urlencode
+from typing import Any
 
 import requests
 
@@ -14,12 +15,24 @@ class BrokerAuthStart:
 
 
 class BrokerManager:
-    """Broker authentication facade.
+    """Broker authentication and account-provider facade.
 
-    Each stored account owns its own broker credentials and resulting access token.
-    Market-data/order adapters can be layered on top of this manager without
-    changing the account storage model.
+    Each stored account owns its own credentials and access token. Provider
+    instances are created only after the account token is loaded from encrypted
+    storage, so broker credentials never need to reach the browser.
     """
+
+    @staticmethod
+    def account_provider(account_id: int) -> Any:
+        from app import broker_accounts
+        from app.providers.accounts import build_account_provider
+
+        account, client_id, _, _ = broker_accounts.get_account_credentials(account_id)
+        access_token = broker_accounts.get_access_token(account_id)
+        if not access_token:
+            raise ValueError(f"Broker account {account_id} is not connected.")
+
+        return build_account_provider(account.broker, client_id, access_token)
 
     @staticmethod
     def start_fyers(account_id: int, client_id: str, redirect_uri: str, state: str) -> BrokerAuthStart:
