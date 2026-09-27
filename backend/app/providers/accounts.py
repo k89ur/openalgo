@@ -13,6 +13,36 @@ class AccountBrokerProvider(Protocol):
     def validate(self) -> None:
         ...
 
+    def resolve_instrument(self, symbol: str) -> dict[str, str] | None:
+        """Resolve a user ticker using Dhan's official instrument master."""
+        import csv
+        import io
+
+        response = requests.get(
+            "https://images.dhan.co/api-data/api-scrip-master.csv",
+            timeout=30,
+        )
+        response.raise_for_status()
+        reader = csv.DictReader(io.StringIO(response.text))
+        clean = symbol.strip().upper()
+        for row in reader:
+            ticker = str(
+                row.get("SEM_TRADING_SYMBOL")
+                or row.get("SM_SYMBOL_NAME")
+                or row.get("SYMBOL_NAME")
+                or ""
+            ).strip().upper()
+            if ticker != clean:
+                continue
+            segment = str(row.get("SEM_SEGMENT") or row.get("SEGMENT") or "").strip().upper()
+            if segment in {"E", "EQUITY", "NSE_EQ"}:
+                return {
+                    "security_id": str(row.get("SEM_SMST_SECURITY_ID") or row.get("SECURITY_ID") or "").strip(),
+                    "exchange_segment": "NSE_EQ",
+                    "instrument": "EQUITY",
+                }
+        return None
+
     def get_history(self, security_id: str, exchange_segment: str, instrument: str, timeframe: str, from_date: str, to_date: str) -> dict[str, Any]:
         if timeframe == "D":
             path = "/charts/historical"
