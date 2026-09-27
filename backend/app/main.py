@@ -1031,6 +1031,16 @@ def broker_account_connect(account_id: int, request: Request, response: Response
         _broker_auth_states.pop(state, None)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    if account.broker == "dhan":
+        response.set_cookie(
+            "pipsgox_dhan_state",
+            login_state,
+            httponly=True,
+            secure=SESSION_COOKIE_SECURE,
+            samesite="lax",
+            max_age=600,
+            path="/",
+        )
     return {"broker": result.broker, "authorization_url": result.authorization_url}
 
 
