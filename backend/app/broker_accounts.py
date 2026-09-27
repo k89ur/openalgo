@@ -58,6 +58,7 @@ def _connect() -> sqlite3.Connection:
             broker TEXT NOT NULL,
             account_name TEXT NOT NULL,
             client_id TEXT NOT NULL DEFAULT '',
+            api_key TEXT NOT NULL DEFAULT '',
             secret_blob TEXT NOT NULL DEFAULT '',
             access_token_blob TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL DEFAULT 'disconnected',
@@ -66,6 +67,9 @@ def _connect() -> sqlite3.Connection:
         )
         """
     )
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(broker_accounts)").fetchall()}
+    if "api_key" not in columns:
+        connection.execute("ALTER TABLE broker_accounts ADD COLUMN api_key TEXT NOT NULL DEFAULT ''")
     connection.commit()
     return connection
 
@@ -89,11 +93,12 @@ def list_accounts() -> list[BrokerAccount]:
     return [BrokerAccount(**dict(row)) for row in rows]
 
 
-def create_account(broker: str, account_name: str, client_id: str, api_secret: str) -> BrokerAccount:
+def create_account(broker: str, account_name: str, client_id: str, api_secret: str, api_key: str = "") -> BrokerAccount:
     broker = broker.strip().lower()
     account_name = account_name.strip()
     client_id = client_id.strip()
     api_secret = api_secret.strip()
+    api_key = api_key.strip()
     if not broker or not account_name:
         raise ValueError("Broker and account name are required.")
     if not api_secret:
@@ -107,9 +112,9 @@ def create_account(broker: str, account_name: str, client_id: str, api_secret: s
         cursor = connection.execute(
             """
             INSERT INTO broker_accounts (broker, account_name, client_id, secret_blob)
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (broker, account_name, client_id, secret_blob),
+            (broker, account_name, client_id, api_key, secret_blob),
         )
         connection.commit()
         row = connection.execute(
@@ -143,13 +148,13 @@ def generate_encryption_key() -> str:
     return Fernet.generate_key().decode("ascii")
 
 
-def get_account_credentials(account_id: int) -> tuple[BrokerAccount, str, str]:
+def get_account_credentials(account_id: int) -> tuple[BrokerAccount, str, str, str]:
     cipher = _cipher()
     with _DB_LOCK:
         connection = _connect()
         row = connection.execute(
             """
-            SELECT id, broker, account_name, client_id, secret_blob, status, created_at, updated_at
+            SELECT id, broker, account_name, client_id, api_key, secret_blob, status, created_at, updated_at
             FROM broker_accounts WHERE id = ?
             """,
             (account_id,),
@@ -175,6 +180,7 @@ def get_account_credentials(account_id: int) -> tuple[BrokerAccount, str, str]:
             updated_at=str(row["updated_at"]),
         ),
         str(row["client_id"]),
+        str(row["api_key"] or ""),
         secret,
     )
 
