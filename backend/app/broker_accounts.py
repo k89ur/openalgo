@@ -72,7 +72,7 @@ def _connect() -> sqlite3.Connection:
         connection.execute("ALTER TABLE broker_accounts ADD COLUMN api_key TEXT NOT NULL DEFAULT ''")
     columns = {row["name"] for row in connection.execute("PRAGMA table_info(broker_accounts)").fetchall()}
     if "api_key" not in columns:
-        connection.execute("ALTER TABLE broker_accounts ADD COLUMN api_key TEXT NOT NULL DEFAULT "")
+        # Existing databases are migrated by the first ALTER TABLE above.
     connection.commit()
     return connection
 
