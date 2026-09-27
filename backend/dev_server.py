@@ -46,10 +46,12 @@ def backend_health():
 
 def fyers_status():
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8000/api/fyers/status", timeout=1.5) as response:
-            return json.loads(response.read().decode("utf-8"))
+        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=1.5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            connected = payload.get("fyers_connected") == "true"
+            return {"configured": connected, "connected": connected}
     except Exception:
-        return {"configured": bool(os.getenv("FYERS_CLIENT_ID") and os.getenv("FYERS_SECRET_KEY")), "connected": False}
+        return {"configured": False, "connected": False}
 
 def service_http_running(url):
     try:
