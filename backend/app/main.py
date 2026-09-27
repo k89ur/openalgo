@@ -52,6 +52,7 @@ FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: set[str] = set()
 _broker_auth_states: dict[str, tuple[int, str]] = {}
+_pending_dhan_account_id: int | None = None
 _fyers_token_lock = threading.Lock()
 FYERS_TOKEN_FILE = os.getenv(
     "PIPSGOX_FYERS_TOKEN_FILE",
@@ -829,7 +830,9 @@ def broker_account_connect(account_id: int) -> dict[str, str]:
                 state,
             )
         elif account.broker == "dhan":
+            global _pending_dhan_account_id
             result = BrokerManager.start_dhan(account.id, client_id, api_key, api_secret)
+            _pending_dhan_account_id = account.id
         else:
             raise ValueError(f"Unsupported broker '{account.broker}'.")
     except ValueError as exc:
@@ -866,9 +869,12 @@ def broker_fyers_callback(auth_code: str | None = None, state: str | None = None
 
 
 @app.get("/auth/broker/dhan/callback")
-def broker_dhan_callback(token_id: str | None = None, account_id: int | None = None) -> RedirectResponse:
+def broker_dhan_callback(token_id: str | None = None) -> RedirectResponse:
+    global _pending_dhan_account_id
+    account_id = _pending_dhan_account_id
+    _pending_dhan_account_id = None
     if not token_id or account_id is None:
-        raise HTTPException(status_code=400, detail="Dhan did not return tokenId/account_id.")
+        raise HTTPException(status_code=400, detail="Dhan did not return a valid tokenId or no Dhan login is pending.")
     try:
         account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
         if account.broker != "dhan":
