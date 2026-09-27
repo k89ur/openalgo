@@ -46,9 +46,9 @@ class FyersMarketDataProvider:
     _quote_last_upstream_request = 0.0
     _quote_min_interval_seconds = 0.15
 
-    def __init__(self) -> None:
-        self.client_id = os.getenv("FYERS_CLIENT_ID", "").strip()
-        self.access_token = os.getenv("FYERS_ACCESS_TOKEN", "").strip()
+    def __init__(self, client_id: str | None = None, access_token: str | None = None) -> None:
+        self.client_id = (client_id if client_id is not None else os.getenv("FYERS_CLIENT_ID", "")).strip()
+        self.access_token = (access_token if access_token is not None else os.getenv("FYERS_ACCESS_TOKEN", "")).strip()
         self._client = None
         self._build_client()
 
