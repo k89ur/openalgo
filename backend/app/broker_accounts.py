@@ -102,7 +102,6 @@ def create_account(broker: str, account_name: str, client_id: str, api_secret: s
     client_id = client_id.strip()
     api_secret = api_secret.strip()
     api_key = api_key.strip()
-    api_key = api_key.strip()
     if not broker or not account_name:
         raise ValueError("Broker and account name are required.")
     if not api_secret:
@@ -115,7 +114,7 @@ def create_account(broker: str, account_name: str, client_id: str, api_secret: s
         connection = _connect()
         cursor = connection.execute(
             """
-            INSERT INTO broker_accounts (broker, account_name, client_id, secret_blob)
+            INSERT INTO broker_accounts (broker, account_name, client_id, api_key, secret_blob)
             VALUES (?, ?, ?, ?, ?)
             """,
             (broker, account_name, client_id, api_key, secret_blob),
