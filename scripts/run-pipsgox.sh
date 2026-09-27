@@ -13,7 +13,7 @@ else
   WEB_URL="http://127.0.0.1:3001"
   API_URL="http://127.0.0.1:8000"
 fi
-FYERS_CALLBACK="${API_URL}/auth/fyers/callback"
+FYERS_CALLBACK="${API_URL}/auth/broker/fyers/callback"
 
 log_tail() {
   local file="$1"
@@ -279,16 +279,9 @@ else
   echo "STATUS: FAIL — Backend health unavailable"
 fi
 
-FYERS_STATUS="$(curl -fsS --max-time 3 http://127.0.0.1:8000/api/fyers/status || true)"
-if grep -q '"configured":true' <<<"$FYERS_STATUS"; then
-  if grep -q '"connected":true' <<<"$FYERS_STATUS"; then
-    echo "STATUS: PASS — FYERS connected"
-  else
-    echo "STATUS: WARN — FYERS login required"
-  fi
-else
-  echo "STATUS: WARN — FYERS credentials not configured"
-fi
+# FYERS status is account/session protected now, so the dev startup script
+# must not treat an unauthenticated 401 as "credentials not configured".
+echo "STATUS: INFO — FYERS connection is checked from the PIPSGOX web UI after login."
 
 echo
 echo "STATUS: PASS — PIPSGOX is running and health checks completed"
