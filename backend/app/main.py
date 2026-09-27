@@ -64,9 +64,6 @@ FYERS_REDIRECT_URI = os.getenv(
     "FYERS_REDIRECT_URI",
     f"{_codespace_forwarded_url(8000)}/auth/fyers/callback",
 ).strip()
-FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
-FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
-_fyers_states: dict[str, str] = {}
 _broker_auth_states: dict[str, tuple[int, str, str]] = {}
 _dhan_auth_states: dict[str, tuple[int, str]] = {}
 _LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
@@ -78,33 +75,6 @@ FYERS_TOKEN_FILE = os.getenv(
     "PIPSGOX_FYERS_TOKEN_FILE",
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".pipsgox", "fyers_access_token"),
 ).strip()
-
-
-def _load_saved_fyers_token() -> str:
-    try:
-        with open(FYERS_TOKEN_FILE, "r", encoding="utf-8") as handle:
-            return handle.read().strip()
-    except (FileNotFoundError, OSError):
-        return ""
-
-
-def _save_fyers_token(token: str) -> None:
-    token = token.strip()
-    if not token:
-        return
-
-    directory = os.path.dirname(FYERS_TOKEN_FILE)
-    os.makedirs(directory, exist_ok=True)
-    temporary = f"{FYERS_TOKEN_FILE}.tmp"
-
-    with _fyers_token_lock:
-        with open(temporary, "w", encoding="utf-8") as handle:
-            handle.write(token)
-        os.replace(temporary, FYERS_TOKEN_FILE)
-        try:
-            os.chmod(FYERS_TOKEN_FILE, 0o600)
-        except OSError:
-            pass
 
 
 app.add_middleware(
@@ -1319,8 +1289,8 @@ def fyers_status() -> dict[str, object]:
 @app.get("/api/dev/status")
 def dev_status() -> dict[str, object]:
     process = dev_control.status()
-    configured = bool(FYERS_CLIENT_ID and FYERS_SECRET_KEY)
-    connected = _fyers_session_valid() if configured else False
+    configured = _fyers_session_valid()
+    connected = configured
     return {
         **process,
         "fyers_configured": configured,
