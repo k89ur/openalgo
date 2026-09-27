@@ -628,6 +628,14 @@ function App() {
     }
   };
 
+  const logout = async () => {
+    try { await apiFetch("/api/auth/logout", { method: "POST" }); } finally {
+      setAuthenticated(false);
+      setAuthPassword("");
+      setAuthError("");
+    }
+  };
+
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
@@ -1885,6 +1893,7 @@ json.dumps(_result)`;
           <button onClick={() => void loadOrdersAndTrades("orders")}>{ordersLoading ? "Orders..." : "Orders"}</button>
           <button onClick={() => void loadHoldings()}>{holdingsLoading ? "Holdings..." : "Holdings"}</button>
           <button>Help</button>
+          <button onClick={() => void logout()}>Logout</button>
           <span className="status-dot" /> {fyersChecking ? "Connecting FYERS..." : "Data: FYERS API V3"}
         </div>
       </div>
