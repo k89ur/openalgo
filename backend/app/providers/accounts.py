@@ -141,10 +141,21 @@ class FyersAccountProvider:
         return self._check(self.client.holdings(), "holdings")
 
     def place_order(self, order: dict[str, Any]) -> dict[str, Any]:
+        fyers_order_types = {
+            "LIMIT": 1,
+            "MARKET": 2,
+            "STOP_LOSS_MARKET": 3,
+            "STOP_LOSS": 4,
+        }
+        try:
+            fyers_type = fyers_order_types[order["order_type"]]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported FYERS order type: {order['order_type']}") from exc
+
         payload = {
             "symbol": order["symbol"],
             "qty": int(order["quantity"]),
-            "type": int(order["order_type"]),
+            "type": fyers_type,
             "side": 1 if order["side"] == "BUY" else -1,
             "productType": order["product_type"],
             "limitPrice": float(order.get("price") or 0),
@@ -156,10 +167,21 @@ class FyersAccountProvider:
         return self._check(self.client.place_order(payload), "place order")
 
     def modify_order(self, order_id: str, order: dict[str, Any]) -> dict[str, Any]:
+        fyers_order_types = {
+            "LIMIT": 1,
+            "MARKET": 2,
+            "STOP_LOSS_MARKET": 3,
+            "STOP_LOSS": 4,
+        }
+        try:
+            fyers_type = fyers_order_types[order["order_type"]]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported FYERS order type: {order['order_type']}") from exc
+
         payload = {
             "id": order_id,
             "qty": int(order["quantity"]),
-            "type": int(order["order_type"]),
+            "type": fyers_type,
             "limitPrice": float(order.get("price") or 0),
             "stopPrice": float(order.get("trigger_price") or 0),
             "validity": order.get("validity", "DAY"),
