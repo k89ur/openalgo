@@ -364,6 +364,112 @@ def normalize_position(provider: object, item: dict[str, Any]) -> dict[str, Any]
     }
 
 
+
+def _normalize_broker_items(raw: object, *keys: str) -> list[dict[str, Any]]:
+    if isinstance(raw, dict):
+        for key in keys:
+            value = raw.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+        data = raw.get("data")
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+    return []
+
+
+def normalize_order(provider: object, item: dict[str, Any]) -> dict[str, Any]:
+    broker = str(getattr(provider, "broker", "")).lower()
+    if broker == "dhan":
+        return {
+            "order_id": str(item.get("orderId") or ""),
+            "symbol": str(item.get("tradingSymbol") or ""),
+            "security_id": str(item.get("securityId") or ""),
+            "exchange": str(item.get("exchangeSegment") or ""),
+            "side": str(item.get("transactionType") or ""),
+            "product": str(item.get("productType") or ""),
+            "order_type": str(item.get("orderType") or ""),
+            "validity": str(item.get("validity") or ""),
+            "quantity": int(float(item.get("quantity") or 0)),
+            "filled_quantity": int(float(item.get("filledQty") or 0)),
+            "remaining_quantity": int(float(item.get("remainingQuantity") or 0)),
+            "price": float(item.get("price") or 0),
+            "average_price": float(item.get("averageTradedPrice") or 0),
+            "trigger_price": float(item.get("triggerPrice") or 0),
+            "status": str(item.get("orderStatus") or ""),
+            "created_at": str(item.get("createTime") or ""),
+            "updated_at": str(item.get("updateTime") or ""),
+            "exchange_time": str(item.get("exchangeTime") or ""),
+            "rejection_reason": str(item.get("omsErrorDescription") or ""),
+            "expiry": item.get("drvExpiryDate"),
+            "option_type": item.get("drvOptionType"),
+            "strike": float(item.get("drvStrikePrice") or 0),
+        }
+
+    order_type = str(item.get("orderType") or item.get("type") or "")
+    order_type = {"1": "LIMIT", "2": "MARKET", "3": "STOP_LOSS_MARKET", "4": "STOP_LOSS"}.get(order_type, order_type)
+    raw_side = str(item.get("side") or "")
+    side = {"1": "BUY", "-1": "SELL", "BUY": "BUY", "SELL": "SELL"}.get(raw_side, raw_side)
+    return {
+        "order_id": str(item.get("id") or item.get("orderId") or ""),
+        "symbol": str(item.get("symbol") or item.get("tradingSymbol") or ""),
+        "security_id": str(item.get("id") or ""),
+        "exchange": str(item.get("exchange") or item.get("exchangeSegment") or ""),
+        "side": side,
+        "product": str(item.get("productType") or ""),
+        "order_type": order_type,
+        "validity": str(item.get("validity") or ""),
+        "quantity": int(float(item.get("qty") or item.get("quantity") or 0)),
+        "filled_quantity": int(float(item.get("filledQty") or item.get("executedQty") or 0)),
+        "remaining_quantity": int(float(item.get("remainingQty") or 0)),
+        "price": float(item.get("limitPrice") or item.get("price") or 0),
+        "average_price": float(item.get("avgPrice") or item.get("averageTradedPrice") or 0),
+        "trigger_price": float(item.get("stopPrice") or item.get("triggerPrice") or 0),
+        "status": str(item.get("status") or item.get("orderStatus") or ""),
+        "created_at": str(item.get("orderDateTime") or item.get("createTime") or ""),
+        "updated_at": str(item.get("updateDateTime") or item.get("updateTime") or ""),
+        "exchange_time": str(item.get("exchangeTime") or ""),
+        "rejection_reason": str(item.get("message") or item.get("reason") or item.get("rejectReason") or ""),
+        "expiry": item.get("expiryDate") or item.get("drvExpiryDate"),
+        "option_type": item.get("optionType") or item.get("drvOptionType"),
+        "strike": float(item.get("strikePrice") or item.get("drvStrikePrice") or 0),
+    }
+
+
+def normalize_trade(provider: object, item: dict[str, Any]) -> dict[str, Any]:
+    broker = str(getattr(provider, "broker", "")).lower()
+    if broker == "dhan":
+        return {
+            "trade_id": str(item.get("exchangeTradeId") or ""),
+            "order_id": str(item.get("orderId") or ""),
+            "symbol": str(item.get("tradingSymbol") or ""),
+            "security_id": str(item.get("securityId") or ""),
+            "exchange": str(item.get("exchangeSegment") or ""),
+            "side": str(item.get("transactionType") or ""),
+            "product": str(item.get("productType") or ""),
+            "order_type": str(item.get("orderType") or ""),
+            "quantity": int(float(item.get("tradedQuantity") or 0)),
+            "price": float(item.get("tradedPrice") or 0),
+            "traded_at": str(item.get("exchangeTime") or item.get("updateTime") or item.get("createTime") or ""),
+        }
+
+    raw_side = str(item.get("side") or "")
+    return {
+        "trade_id": str(item.get("tradeId") or item.get("id") or ""),
+        "order_id": str(item.get("orderId") or ""),
+        "symbol": str(item.get("symbol") or item.get("tradingSymbol") or ""),
+        "security_id": str(item.get("id") or ""),
+        "exchange": str(item.get("exchange") or item.get("exchangeSegment") or ""),
+        "side": {"1": "BUY", "-1": "SELL", "BUY": "BUY", "SELL": "SELL"}.get(raw_side, raw_side),
+        "product": str(item.get("productType") or ""),
+        "order_type": {"1": "LIMIT", "2": "MARKET", "3": "STOP_LOSS_MARKET", "4": "STOP_LOSS"}.get(str(item.get("orderType") or item.get("type") or ""), str(item.get("orderType") or item.get("type") or "")),
+        "quantity": int(float(item.get("tradedQty") or item.get("qty") or item.get("quantity") or 0)),
+        "price": float(item.get("tradedPrice") or item.get("price") or 0),
+        "traded_at": str(item.get("tradeDateTime") or item.get("orderDateTime") or item.get("updateTime") or ""),
+    }
+
+
 def build_account_provider(
     broker: str,
     client_id: str,
