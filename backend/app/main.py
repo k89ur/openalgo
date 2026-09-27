@@ -221,6 +221,17 @@ def security_disconnect_all(request: Request) -> dict[str, object]:
     return {"disconnected_accounts": count}
 
 
+@app.post("/api/security/logout-all")
+def security_logout_all(request: Request, response: Response) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    count = auth.revoke_all(int(user["id"]))
+    response.delete_cookie(auth.SESSION_COOKIE, path="/")
+    security_audit.record("logout_all_sessions", username=str(user["username"]), success=True)
+    return {"revoked_sessions": count}
+
+
 Timeframe = Literal["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"]
 
 
