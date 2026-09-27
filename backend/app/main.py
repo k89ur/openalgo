@@ -20,11 +20,13 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import dev_control
+from app import dev_control, broker_accounts
 
 load_dotenv()
 
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
+
+broker_accounts.initialize()
 
 def _codespace_forwarded_url(port: int) -> str:
     codespace_name = os.getenv("CODESPACE_NAME", "").strip()
@@ -751,6 +753,62 @@ def _fyers_session_valid() -> bool:
         return True
     except Exception:
         return False
+
+
+
+
+class BrokerAccountCreate(BaseModel):
+    broker: str
+    account_name: str
+    client_id: str = ""
+    api_secret: str
+
+
+class BrokerAccountResponse(BaseModel):
+    id: int
+    broker: str
+    account_name: str
+    client_id: str
+    status: str
+    created_at: str
+    updated_at: str
+
+
+def _broker_account_response(account) -> BrokerAccountResponse:
+    return BrokerAccountResponse(
+        id=account.id,
+        broker=account.broker,
+        account_name=account.account_name,
+        client_id=broker_accounts.mask_client_id(account.client_id),
+        status=account.status,
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+    )
+
+
+@app.get("/api/broker/accounts", response_model=list[BrokerAccountResponse])
+def broker_accounts_list() -> list[BrokerAccountResponse]:
+    return [_broker_account_response(account) for account in broker_accounts.list_accounts()]
+
+
+@app.post("/api/broker/accounts", response_model=BrokerAccountResponse, status_code=201)
+def broker_accounts_create(payload: BrokerAccountCreate) -> BrokerAccountResponse:
+    try:
+        account = broker_accounts.create_account(
+            payload.broker, payload.account_name, payload.client_id, payload.api_secret
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return _broker_account_response(account)
+
+
+@app.delete("/api/broker/accounts/{account_id}")
+def broker_accounts_delete(account_id: int) -> dict[str, bool]:
+    if not broker_accounts.delete_account(account_id):
+        raise HTTPException(status_code=404, detail="Broker account not found.")
+    return {"deleted": True}
 
 
 @app.get("/api/fyers/status")
