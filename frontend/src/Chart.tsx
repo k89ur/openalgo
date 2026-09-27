@@ -860,7 +860,7 @@ export function Chart({
       if (show52WeekHigh || show52WeekLow) {
         void (async () => {
           try {
-            const response = await apiFetch("/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=D&limit=400",
+            const response = await apiFetch("/api/history?symbol=" + encodeURIComponent(symbol) + "&timeframe=D&limit=400&account_id=" + encodeURIComponent(String(accountId ?? "")),
               { cache: "no-store" },
             );
             if (!response.ok) return;
@@ -925,6 +925,7 @@ export function Chart({
     showPreviousClose,
     previousClose,
     chartColors,
+    accountId,
   ]);
 
   useEffect(() => {
