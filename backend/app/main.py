@@ -1081,10 +1081,20 @@ def broker_account_funds(account_id: int) -> dict[str, object]:
 def broker_account_positions(account_id: int) -> dict[str, object]:
     provider = _broker_account_provider(account_id)
     try:
+        from app.providers.accounts import normalize_position
+        raw = provider.get_positions()
+        items = raw.get("data") if isinstance(raw, dict) else raw
+        if not isinstance(items, list):
+            items = []
+        positions = [
+            normalize_position(provider, item)
+            for item in items
+            if isinstance(item, dict)
+        ]
         return {
             "account_id": account_id,
             "broker": provider.broker,
-            "data": provider.get_positions(),
+            "data": positions,
         }
     except Exception as exc:
         broker_accounts.set_status(account_id, "error")
