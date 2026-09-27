@@ -1922,7 +1922,7 @@ def get_quotes_for_symbols(requested: list[str], selected_provider=None) -> list
             batch_results = []
             for candidate in chunk:
                 try:
-                    batch_results.extend(provider.get_quotes([candidate]))
+                    batch_results.extend(selected_provider.get_quotes([candidate]))
                 except ValueError:
                     continue
 
