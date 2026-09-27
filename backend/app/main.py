@@ -1235,6 +1235,11 @@ def history(
     account_id: int | None = Query(default=None, ge=1),
 ) -> list[Candle]:
     try:
+        if account_id is not None:
+            account, _, _, _ = broker_accounts.get_account_credentials(account_id)
+            if account.broker == "dhan":
+                return _dhan_history(account_id, symbol, timeframe, limit, from_date, to_date)
+
         selected_provider = _market_data_provider_for_account(account_id)
 
         api_symbol = resolve_api_symbol(symbol)
