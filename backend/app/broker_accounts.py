@@ -117,7 +117,7 @@ def create_account(broker: str, account_name: str, client_id: str, api_secret: s
             INSERT INTO broker_accounts (broker, account_name, client_id, api_key, secret_blob)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (broker, account_name, client_id, api_key, secret_blob),
+            (broker, account_name, client_id, api_key_blob, secret_blob),
         )
         connection.commit()
         row = connection.execute(
@@ -183,7 +183,7 @@ def get_account_credentials(account_id: int) -> tuple[BrokerAccount, str, str, s
             updated_at=str(row["updated_at"]),
         ),
         str(row["client_id"]),
-        str(row["api_key"] or ""),
+        api_key,
         secret,
     )
 
