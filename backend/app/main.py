@@ -839,95 +839,27 @@ def to_quote(item) -> Quote:
 
 
 @app.get("/auth/fyers/login")
-def fyers_login(request: Request) -> RedirectResponse:
-    if _request_user(request) is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    if not FYERS_CLIENT_ID:
-        raise HTTPException(status_code=503, detail="FYERS_CLIENT_ID is not configured.")
-
-    state = secrets.token_urlsafe(24)
-    app_session = request.cookies.get(auth.SESSION_COOKIE)
-    if not app_session:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    _fyers_states[state] = hashlib.sha256(app_session.encode("utf-8")).hexdigest()
-
-    params = {
-        "client_id": FYERS_CLIENT_ID,
-        "redirect_uri": FYERS_REDIRECT_URI,
-        "response_type": "code",
-        "state": state,
-    }
-    login_url = "https://api-t1.fyers.in/api/v3/generate-authcode?" + urlencode(params)
-    return RedirectResponse(url=login_url, status_code=302)
+def fyers_login() -> RedirectResponse:
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy FYERS login is disabled. Add and connect the broker from Account.",
+    )
 
 
 @app.get("/auth/fyers/callback")
-def fyers_callback(
-    auth_code: str | None = None,
-    state: str | None = None,
-    request: Request = None,
-) -> RedirectResponse:
-    global _fyers_access_token
-
-    if not auth_code:
-        raise HTTPException(status_code=400, detail="FYERS did not return an auth_code.")
-    expected_session = _fyers_states.pop(state, None) if state else None
-    current_session = request.cookies.get(auth.SESSION_COOKIE) if request else None
-    valid_session = bool(expected_session and current_session and hmac.compare_digest(
-        expected_session,
-        hashlib.sha256(current_session.encode("utf-8")).hexdigest(),
-    ))
-    if not valid_session:
-        raise HTTPException(status_code=400, detail="Invalid or expired FYERS login state.")
-
-    if not FYERS_CLIENT_ID or not FYERS_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="FYERS app credentials are not configured.")
-
-    app_id_hash = hashlib.sha256(
-        f"{FYERS_CLIENT_ID}:{FYERS_SECRET_KEY}".encode("utf-8")
-    ).hexdigest()
-
-    try:
-        response = requests.post(
-            "https://api-t1.fyers.in/api/v3/validate-authcode",
-            json={
-                "grant_type": "authorization_code",
-                "appIdHash": app_id_hash,
-                "code": auth_code,
-            },
-            timeout=20,
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"FYERS token request failed: {exc}") from exc
-
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"FYERS returned a non-JSON response ({response.status_code}).",
-        ) from exc
-
-    if not response.ok or payload.get("s") == "error" or not payload.get("access_token"):
-        message = payload.get("message") or f"FYERS token exchange failed ({response.status_code})."
-        raise HTTPException(status_code=502, detail=message)
-
-    _fyers_access_token = str(payload["access_token"])
-    provider.set_access_token(_fyers_access_token)
-    _save_fyers_token(_fyers_access_token)
-
-    # Return directly to the web terminal after OAuth so the normal startup
-    # flow is: start PIPSGOX -> FYERS login if needed -> back to the chart.
-    return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+def fyers_callback() -> RedirectResponse:
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy FYERS callback is disabled. Add and connect the broker from Account.",
+    )
 
 
 def _fyers_session_valid() -> bool:
-    if not FYERS_CLIENT_ID or not FYERS_SECRET_KEY or not _fyers_access_token:
-        return False
-
     try:
-        provider.validate_session()
-        return True
+        return any(
+            account.broker == "fyers" and account.status == "connected"
+            for account in broker_accounts.list_accounts()
+        )
     except Exception:
         return False
 
