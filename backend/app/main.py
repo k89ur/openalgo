@@ -66,7 +66,7 @@ FYERS_REDIRECT_URI = os.getenv(
 FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: dict[str, str] = {}
-_broker_auth_states: dict[str, tuple[int, str]] = {}
+_broker_auth_states: dict[str, tuple[int, str, str]] = {}
 _dhan_auth_states: dict[str, tuple[int, str]] = {}\n_LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}\n_LOGIN_MAX_ATTEMPTS = 5\n_LOGIN_WINDOW_SECONDS = 300
 _fyers_token_lock = threading.Lock()
 FYERS_TOKEN_FILE = os.getenv(
@@ -992,8 +992,12 @@ def broker_account_connect(account_id: int, request: Request, response: Response
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    app_session = request.cookies.get(auth.SESSION_COOKIE)
+    if not app_session:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    session_hash = hashlib.sha256(app_session.encode("utf-8")).hexdigest()
     state = secrets.token_urlsafe(24)
-    _broker_auth_states[state] = (account.id, account.broker)
+    _broker_auth_states[state] = (account.id, account.broker, session_hash)
 
     try:
         if account.broker == "fyers":
