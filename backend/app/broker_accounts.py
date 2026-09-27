@@ -117,7 +117,7 @@ def create_account(broker: str, account_name: str, client_id: str, api_secret: s
             INSERT INTO broker_accounts (broker, account_name, client_id, api_key, secret_blob)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (broker, account_name, client_id, api_key_blob, secret_blob),
+            (broker, account_name, client_id, cipher.encrypt(api_key.encode("utf-8")).decode("ascii") if api_key else "", secret_blob),
         )
         connection.commit()
         row = connection.execute(
