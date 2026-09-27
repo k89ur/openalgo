@@ -13,6 +13,40 @@ class AccountBrokerProvider(Protocol):
     def validate(self) -> None:
         ...
 
+    def get_history(self, security_id: str, exchange_segment: str, instrument: str, timeframe: str, from_date: str, to_date: str) -> dict[str, Any]:
+        if timeframe == "D":
+            path = "/charts/historical"
+            payload = {
+                "securityId": str(security_id),
+                "exchangeSegment": exchange_segment,
+                "instrument": instrument,
+                "oi": False,
+                "fromDate": from_date,
+                "toDate": to_date,
+            }
+        else:
+            interval_map = {"1m": "1", "5m": "5", "15m": "15", "30m": None, "1h": "60"}
+            interval = interval_map.get(timeframe)
+            if not interval:
+                raise ValueError(f"Dhan does not provide a native {timeframe} chart interval through this endpoint.")
+            path = "/charts/intraday"
+            payload = {
+                "securityId": str(security_id),
+                "exchangeSegment": exchange_segment,
+                "instrument": instrument,
+                "interval": interval,
+                "oi": False,
+                "fromDate": from_date,
+                "toDate": to_date,
+            }
+        result = self._request("POST", path, "historical data", json=payload)
+        if not isinstance(result, dict):
+            raise RuntimeError("Dhan historical data returned an invalid response.")
+        return result
+
+    def get_ltp(self, instruments: dict[str, list[int]]) -> dict[str, Any]:
+        return self._request("POST", "/marketfeed/ltp", "market quote", json=instruments)
+
     def get_funds(self) -> dict[str, Any]:
         ...
 
