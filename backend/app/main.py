@@ -1411,14 +1411,46 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
     }
 
 
+def _dhan_quote(account_id: int, symbol: str) -> Quote:
+    account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
+    if account.broker != "dhan":
+        raise ValueError("Selected account is not a Dhan account.")
+    if not access_token:
+        raise HTTPException(status_code=409, detail="Selected Dhan account is not connected.")
+
+    from app.providers.accounts import DhanAccountProvider
+    dhan = DhanAccountProvider(client_id, access_token)
+    instrument = dhan.resolve_instrument(symbol)
+    if not instrument or not instrument.get("security_id"):
+        raise ValueError(f"Dhan instrument not found for {symbol}.")
+    payload = dhan.get_ltp({"NSE_EQ": [int(instrument["security_id"])]})
+    data = payload.get("data", {}) if isinstance(payload, dict) else {}
+    segment = data.get(instrument["exchange_segment"], {}) if isinstance(data, dict) else {}
+    item = segment.get(instrument["security_id"], {}) if isinstance(segment, dict) else {}
+    if not isinstance(item, dict) or item.get("last_price") is None:
+        raise ValueError(f"Dhan returned no LTP for {symbol}.")
+    return Quote(
+        symbol=symbol.upper(),
+        exchange="NSE",
+        last=float(item["last_price"]),
+        change=0.0,
+        change_percent=0.0,
+        source="DhanHQ API V2",
+    )
+
+
 @app.get("/api/quote", response_model=Quote)
 def quote(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
     account_id: int | None = Query(default=None, ge=1),
 ) -> Quote:
     try:
-        selected_provider = _market_data_provider_for_account(account_id)
         original = symbol.strip().upper()
+        if account_id is not None:
+            account, _, _, _ = broker_accounts.get_account_credentials(account_id)
+            if account.broker == "dhan":
+                return _dhan_quote(account_id, original)
+        selected_provider = _market_data_provider_for_account(account_id)
         api_symbol = resolve_api_symbol(original)
         if not api_symbol:
             raise unresolved_symbol_error(original)
