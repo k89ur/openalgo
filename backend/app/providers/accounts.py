@@ -303,6 +303,57 @@ class DhanAccountProvider:
         return self._request("DELETE", f"/orders/{order_id}", "cancel order")
 
 
+def normalize_position(provider: object, item: dict[str, Any]) -> dict[str, Any]:
+    broker = str(getattr(provider, "broker", "")).lower()
+    if broker == "dhan":
+        buy_qty = int(float(item.get("buyQty") or 0))
+        sell_qty = int(float(item.get("sellQty") or 0))
+        net_qty = int(float(item.get("netQty") or buy_qty - sell_qty))
+        buy_avg = float(item.get("buyAvg") or 0)
+        sell_avg = float(item.get("sellAvg") or 0)
+        realized = float(item.get("realizedProfit") or 0)
+        unrealized = float(item.get("unrealizedProfit") or 0)
+        return {
+            "symbol": str(item.get("tradingSymbol") or ""),
+            "security_id": str(item.get("securityId") or ""),
+            "exchange": str(item.get("exchangeSegment") or ""),
+            "product": str(item.get("productType") or ""),
+            "side": str(item.get("positionType") or ("LONG" if net_qty > 0 else "SHORT" if net_qty < 0 else "CLOSED")),
+            "quantity": net_qty,
+            "buy_quantity": buy_qty,
+            "sell_quantity": sell_qty,
+            "buy_avg": buy_avg,
+            "sell_avg": sell_avg,
+            "cost_price": float(item.get("costPrice") or 0),
+            "realized_pnl": realized,
+            "unrealized_pnl": unrealized,
+            "pnl": realized + unrealized,
+            "expiry": item.get("drvExpiryDate"),
+            "option_type": item.get("drvOptionType"),
+            "strike": float(item.get("drvStrikePrice") or 0),
+        }
+
+    return {
+        "symbol": str(item.get("symbol") or item.get("tradingSymbol") or ""),
+        "security_id": str(item.get("symbol") or ""),
+        "exchange": str(item.get("exchange") or item.get("exchangeSegment") or ""),
+        "product": str(item.get("productType") or ""),
+        "side": str(item.get("side") or ("LONG" if float(item.get("netQty") or 0) > 0 else "SHORT" if float(item.get("netQty") or 0) < 0 else "CLOSED")),
+        "quantity": int(float(item.get("netQty") or item.get("qty") or 0)),
+        "buy_quantity": int(float(item.get("buyQty") or 0)),
+        "sell_quantity": int(float(item.get("sellQty") or 0)),
+        "buy_avg": float(item.get("buyAvg") or item.get("avgPrice") or 0),
+        "sell_avg": float(item.get("sellAvg") or 0),
+        "cost_price": float(item.get("costPrice") or 0),
+        "realized_pnl": float(item.get("realized_profit") or item.get("realizedProfit") or 0),
+        "unrealized_pnl": float(item.get("unrealized_profit") or item.get("unrealizedProfit") or item.get("pl") or 0),
+        "pnl": float(item.get("pl_total") or item.get("pl") or item.get("realized_profit") or 0) ,
+        "expiry": item.get("drvExpiryDate"),
+        "option_type": item.get("drvOptionType"),
+        "strike": float(item.get("drvStrikePrice") or 0),
+    }
+
+
 def build_account_provider(
     broker: str,
     client_id: str,
