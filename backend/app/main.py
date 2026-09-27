@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 import hashlib
-import hmac
 import os
 import secrets
 import threading
@@ -67,8 +66,8 @@ FYERS_REDIRECT_URI = os.getenv(
 FYERS_CLIENT_ID = os.getenv("FYERS_CLIENT_ID", "").strip()
 FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY", "").strip()
 _fyers_states: dict[str, str] = {}
-_broker_auth_states: dict[str, tuple[int, str, str]] = {}
-_dhan_auth_states: dict[str, tuple[int, str]] = {}\n_LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}\n_LOGIN_MAX_ATTEMPTS = 5\n_LOGIN_WINDOW_SECONDS = 300\n_order_idempotency_lock = threading.Lock()\n_order_idempotency_keys: set[tuple[int, str]] = set()\n_MAX_CORRELATION_ID_LENGTH = 64
+_broker_auth_states: dict[str, tuple[int, str]] = {}
+_dhan_auth_states: dict[str, tuple[int, str]] = {}\n_LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}\n_LOGIN_MAX_ATTEMPTS = 5\n_LOGIN_WINDOW_SECONDS = 300
 _fyers_token_lock = threading.Lock()
 FYERS_TOKEN_FILE = os.getenv(
     "PIPSGOX_FYERS_TOKEN_FILE",

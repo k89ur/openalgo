@@ -169,6 +169,8 @@ def get_account_credentials(account_id: int) -> tuple[BrokerAccount, str, str, s
 
     try:
         secret = cipher.decrypt(str(row["secret_blob"]).encode("ascii")).decode("utf-8")
+        api_key_blob = str(row["api_key"] or "")
+        api_key = cipher.decrypt(api_key_blob.encode("ascii")).decode("utf-8") if api_key_blob else ""
     except Exception as exc:
         raise RuntimeError("Could not decrypt broker account credentials.") from exc
 
