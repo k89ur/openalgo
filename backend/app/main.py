@@ -868,9 +868,14 @@ def broker_accounts_list() -> list[BrokerAccountResponse]:
 
 @app.post("/api/broker/accounts", response_model=BrokerAccountResponse, status_code=201)
 def broker_accounts_create(payload: BrokerAccountCreate) -> BrokerAccountResponse:
+    broker = payload.broker.strip().lower()
+    if broker == "fyers" and not payload.api_key.strip():
+        raise HTTPException(status_code=400, detail="FYERS App ID is required.")
+    if broker == "dhan" and (not payload.client_id.strip() or not payload.api_key.strip()):
+        raise HTTPException(status_code=400, detail="Dhan Client ID and API Key are required.")
     try:
         account = broker_accounts.create_account(
-            payload.broker, payload.account_name, payload.client_id, payload.api_secret, payload.api_key
+            broker, payload.account_name, payload.client_id, payload.api_secret, payload.api_key
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
