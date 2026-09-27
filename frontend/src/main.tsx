@@ -1282,6 +1282,12 @@ function App() {
     code?: string;
     symbol?: string;
   }) => {
+    if (!selectedAccountId) {
+      setPipscriptOutput(null);
+      setPipscriptStatus("Select a connected broker account before running Pipscript.");
+      return;
+    }
+
     const executionSymbol = override?.symbol ?? symbol;
     const language = override?.language ?? pipscriptLanguage;
     const outputType = override?.outputType ?? pipscriptOutputType;
@@ -1470,7 +1476,7 @@ json.dumps(_result)`;
       code: active.code,
       symbol,
     });
-  }, [symbol]);
+  }, [symbol, selectedAccountId]);
 
   const savePipscript = () => {
     const value = window.prompt(
