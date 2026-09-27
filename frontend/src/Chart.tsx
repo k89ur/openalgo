@@ -48,6 +48,7 @@ type Props = {
   chartType: ChartType;
   dark: boolean;
   symbol: string;
+  accountId?: number | null;
   timeframe: Timeframe;
   range: ChartRange;
   activeDrawingTool: DrawingTool | null;
@@ -581,6 +582,7 @@ export function Chart({
               symbol,
               timeframe,
               limit: String(pageSize),
+              ...(accountId ? { account_id: String(accountId) } : {}),
             });
 
             // KLineChart calls "forward" when the user reaches the left
