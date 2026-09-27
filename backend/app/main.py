@@ -923,7 +923,21 @@ def broker_account_connect(account_id: int, request: Request, response: Response
         _broker_auth_states.pop(state, None)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    if account.broker == "dhan":
+    if account.broker == "fyers":
+        # The web UI (3001) and OAuth callback (8000) are different hosts in
+        # Codespaces, so the host-only app session cookie is not available at
+        # the callback. Bind the OAuth transaction to a short-lived, HttpOnly
+        # cookie on the API host instead.
+        response.set_cookie(
+            "pipsgox_fyers_state",
+            state,
+            httponly=True,
+            secure=SESSION_COOKIE_SECURE,
+            samesite="lax",
+            max_age=600,
+            path="/",
+        )
+    else:
         response.set_cookie(
             "pipsgox_dhan_state",
             login_state,
@@ -944,17 +958,13 @@ def broker_fyers_callback(
 ) -> RedirectResponse:
     if not auth_code or not state:
         raise HTTPException(status_code=400, detail="FYERS did not return a valid authorization response.")
+    callback_state = request.cookies.get("pipsgox_fyers_state") if request else None
     context = _broker_auth_states.pop(state, None)
-    current_session = request.cookies.get(auth.SESSION_COOKIE) if request else None
-    valid_session = bool(
-        context
-        and current_session
-        and hmac.compare_digest(
-            context[2],
-            hashlib.sha256(current_session.encode("utf-8")).hexdigest(),
-        )
+    valid_state_cookie = bool(
+        callback_state
+        and hmac.compare_digest(callback_state, state)
     )
-    if not context or context[1] != "fyers" or not valid_session:
+    if not context or context[1] != "fyers" or not valid_state_cookie:
         raise HTTPException(status_code=400, detail="Invalid or expired broker login state.")
 
     account_id = context[0]
@@ -969,20 +979,20 @@ def broker_fyers_callback(
         broker_accounts.set_status(account_id, "error")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+    redirect = RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+    redirect.delete_cookie("pipsgox_fyers_state", path="/")
+    return redirect
 
 
 @app.get("/auth/broker/dhan/callback")
 def broker_dhan_callback(token_id: str | None = None, request: Request = None) -> RedirectResponse:
     state = request.cookies.get("pipsgox_dhan_state") if request else None
     context = _dhan_auth_states.pop(state, None) if state else None
-    current_session = request.cookies.get(auth.SESSION_COOKIE) if request else None
     account_id = context[0] if context else None
-    valid_session = bool(context and current_session and hmac.compare_digest(
-        context[1],
-        hashlib.sha256(current_session.encode("utf-8")).hexdigest(),
-    ))
-    if not token_id or account_id is None or not valid_session:
+    valid_state_cookie = bool(
+        state and context and hmac.compare_digest(state, request.cookies.get("pipsgox_dhan_state", ""))
+    )
+    if not token_id or account_id is None or not valid_state_cookie:
         raise HTTPException(status_code=400, detail="Dhan login state is missing, invalid, or expired.")
     try:
         account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
