@@ -978,12 +978,11 @@ def broker_fyers_callback(auth_code: str | None = None, state: str | None = None
 
 
 @app.get("/auth/broker/dhan/callback")
-def broker_dhan_callback(token_id: str | None = None) -> RedirectResponse:
-    global _pending_dhan_account_id
-    account_id = _pending_dhan_account_id
-    _pending_dhan_account_id = None
+def broker_dhan_callback(token_id: str | None = None, request: Request = None) -> RedirectResponse:
+    state = request.cookies.get("pipsgox_dhan_state") if request else None
+    account_id = _dhan_auth_states.pop(state, None) if state else None
     if not token_id or account_id is None:
-        raise HTTPException(status_code=400, detail="Dhan did not return a valid tokenId or no Dhan login is pending.")
+        raise HTTPException(status_code=400, detail="Dhan login state is missing, invalid, or expired.")
     try:
         account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
         if account.broker != "dhan":
@@ -996,7 +995,9 @@ def broker_dhan_callback(token_id: str | None = None) -> RedirectResponse:
     except Exception as exc:
         broker_accounts.set_status(account_id, "error")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+    redirect = RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+    redirect.delete_cookie("pipsgox_dhan_state", path="/")
+    return redirect
 
 
 @app.get("/api/broker/accounts/{account_id}/session")
