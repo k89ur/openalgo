@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiFetch } from "./api";
 
 type BrokerAccount = {
   id: number;
@@ -36,7 +37,7 @@ export function BrokerConnections({ onClose }: Props) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/broker/accounts");
+      const response = await apiFetch("/api/broker/accounts");
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Could not load broker accounts.");
       setAccounts(Array.isArray(payload) ? payload : []);
@@ -66,7 +67,7 @@ export function BrokerConnections({ onClose }: Props) {
 
     setSaving(true);
     try {
-      const response = await fetch("/api/broker/accounts", {
+      const response = await apiFetch("/api/broker/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -97,7 +98,7 @@ export function BrokerConnections({ onClose }: Props) {
     setError("");
     setMessage("");
     try {
-      const response = await fetch("/api/broker/accounts/" + account.id + "/connect");
+      const response = await apiFetch("/api/broker/accounts/" + account.id + "/connect");
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Could not start broker login.");
       if (!payload.authorization_url) throw new Error("Broker did not return a login URL.");
@@ -112,7 +113,7 @@ export function BrokerConnections({ onClose }: Props) {
     setMessage("");
     setDeletingId(id);
     try {
-      const response = await fetch("/api/broker/accounts/" + id, { method: "DELETE" });
+      const response = await apiFetch("/api/broker/accounts/" + id, { method: "DELETE" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Could not delete broker account.");
       setAccounts((current) => current.filter((account) => account.id !== id));
