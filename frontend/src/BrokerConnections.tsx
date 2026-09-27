@@ -65,6 +65,14 @@ export function BrokerConnections({ onClose, onDisconnectAll }: Props) {
       setError("API secret is required.");
       return;
     }
+    if (broker === "fyers" && !apiKey.trim()) {
+      setError("FYERS App ID is required.");
+      return;
+    }
+    if (broker === "dhan" && (!clientId.trim() || !apiKey.trim())) {
+      setError("Dhan Client ID and API Key are required.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -201,21 +209,21 @@ export function BrokerConnections({ onClose, onDisconnectAll }: Props) {
             </label>
 
             <label>
-              <span>Client ID</span>
+              <span>{broker === "fyers" ? "Trading Client ID" : "Client ID"}</span>
               <input
                 value={clientId}
                 onChange={(event) => setClientId(event.target.value)}
-                placeholder="Broker client ID"
+                placeholder={broker === "fyers" ? "Optional FYERS trading client ID" : "Dhan client ID"}
                 autoComplete="off"
               />
             </label>
 
             <label>
-              <span>API Key / App ID <small>(Dhan)</small></span>
+              <span>API Key / App ID</span>
               <input
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder="Required for Dhan"
+                placeholder={broker === "fyers" ? "FYERS App ID (API ID)" : "Dhan API Key"}
                 autoComplete="off"
               />
             </label>
@@ -236,7 +244,8 @@ export function BrokerConnections({ onClose, onDisconnectAll }: Props) {
           {message && <div className="broker-message broker-success">{message}</div>}
 
           <div className="broker-security-note">
-            API secrets are encrypted in the backend database and are never returned to the browser after saving.
+            FYERS: enter your API App ID in “API Key / App ID”; the trading Client ID is optional for the API connection.
+            Dhan: enter Client ID + API Key. API secrets are encrypted in the backend database and are never returned to the browser after saving.
           </div>
 
           {onDisconnectAll && (
