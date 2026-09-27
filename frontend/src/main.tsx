@@ -575,6 +575,59 @@ function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" }) {
 }
 
 function App() {
+  const [authReady, setAuthReady] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [setupRequired, setSetupRequired] = useState(false);
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/api/auth/status")
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.detail || "Authentication check failed.");
+        return payload;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setSetupRequired(Boolean(payload.setup_required));
+        setAuthenticated(Boolean(payload.authenticated));
+        setAuthReady(true);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAuthError(error instanceof Error ? error.message : "Authentication check failed.");
+        setAuthReady(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const submitAuth = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const endpoint = setupRequired ? "/api/auth/setup" : "/api/auth/login";
+      const response = await apiFetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: authUsername, password: authPassword }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.detail || "Authentication failed.");
+      setAuthenticated(true);
+      setSetupRequired(false);
+      setAuthPassword("");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Authentication failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
@@ -615,6 +668,7 @@ function App() {
   };
 
   useEffect(() => {
+    if (!authenticated) return;
     let cancelled = false;
     apiFetch("/api/broker/accounts")
       .then(async (response) => {
@@ -1798,6 +1852,23 @@ json.dumps(_result)`;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop);
   };
+
+  if (!authReady || !authenticated) {
+    return (
+      <main className="auth-screen">
+        <form className="auth-card" onSubmit={submitAuth}>
+          <div className="auth-brand">PIPSGOX</div>
+          <div className="auth-title">{authReady && setupRequired ? "Create private account" : "Sign in to PIPSGOX"}</div>
+          <div className="auth-subtitle">{setupRequired ? "Set the owner password for this private terminal." : "Your broker accounts and trading data are protected behind this login."}</div>
+          <label>Username<input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" required /></label>
+          <label>Password<input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete={setupRequired ? "new-password" : "current-password"} minLength={12} required /></label>
+          {setupRequired && <div className="auth-note">Use a strong password of at least 12 characters.</div>}
+          {authError && <div className="auth-error">{authError}</div>}
+          <button className="auth-submit" type="submit" disabled={!authReady || authBusy}>{authBusy ? "Securing..." : setupRequired ? "Create & Enter" : "Sign In"}</button>
+        </form>
+      </main>
+    );
+  }
 
   return (
     <main className={`app ${dark ? "theme-dark" : "theme-light"}`}>
