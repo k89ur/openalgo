@@ -14,6 +14,7 @@ except ImportError:  # pragma: no cover
 
 _DB_LOCK = threading.Lock()
 _DEFAULT_DB = Path(__file__).resolve().parents[2] / ".pipsgox" / "broker_accounts.db"
+_DEFAULT_KEY_FILE = Path(__file__).resolve().parents[2] / ".pipsgox" / "broker_encryption.key"
 
 
 @dataclass(frozen=True)
@@ -31,19 +32,58 @@ def _db_path() -> Path:
     return Path(os.getenv("PIPSGOX_BROKER_DB", str(_DEFAULT_DB))).expanduser()
 
 
+def _encryption_key() -> str:
+    configured = os.getenv("PIPSGOX_BROKER_ENCRYPTION_KEY", "").strip()
+    if configured:
+        return configured
+
+    path = Path(
+        os.getenv("PIPSGOX_BROKER_ENCRYPTION_KEY_FILE", str(_DEFAULT_KEY_FILE))
+    ).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        key = path.read_text(encoding="ascii").strip()
+        if key:
+            return key
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise RuntimeError("Could not read the broker encryption key file.") from exc
+
+    if Fernet is None:
+        raise RuntimeError("Broker credential encryption requires the cryptography package.")
+
+    key = Fernet.generate_key().decode("ascii")
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, key.encode("ascii"))
+        finally:
+            os.close(fd)
+    except FileExistsError:
+        # Another worker created it first; use the persisted key so every
+        # process encrypts/decrypts with the same secret.
+        try:
+            key = path.read_text(encoding="ascii").strip()
+        except OSError as exc:
+            raise RuntimeError("Could not read the broker encryption key file.") from exc
+    except OSError as exc:
+        raise RuntimeError("Could not create the broker encryption key file.") from exc
+
+    if not key:
+        raise RuntimeError("Broker encryption key file is empty.")
+    return key
+
+
 def _cipher() -> Any:
     if Fernet is None:
         raise RuntimeError("Broker credential encryption requires the cryptography package.")
-    key = os.getenv("PIPSGOX_BROKER_ENCRYPTION_KEY", "").strip()
-    if not key:
-        raise RuntimeError(
-            "PIPSGOX_BROKER_ENCRYPTION_KEY is not configured. "
-            "Generate a Fernet key before saving broker credentials."
-        )
+    key = _encryption_key()
     try:
         return Fernet(key.encode("ascii"))
     except Exception as exc:
-        raise RuntimeError("PIPSGOX_BROKER_ENCRYPTION_KEY is invalid.") from exc
+        raise RuntimeError("Broker encryption key is invalid.") from exc
 
 
 def _connect() -> sqlite3.Connection:
