@@ -4,3 +4,4 @@ pydantic
 requests
 python-dotenv
 fyers-apiv3
+cryptography
