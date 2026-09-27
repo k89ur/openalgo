@@ -1137,10 +1137,12 @@ def broker_account_trades(account_id: int) -> dict[str, object]:
 def broker_account_holdings(account_id: int) -> dict[str, object]:
     provider = _broker_account_provider(account_id)
     try:
+        from app.providers.accounts import normalize_holding, _normalize_broker_items
+        items = _normalize_broker_items(provider.get_holdings(), "holdings", "data")
         return {
             "account_id": account_id,
             "broker": provider.broker,
-            "data": provider.get_holdings(),
+            "data": [normalize_holding(provider, item) for item in items],
         }
     except Exception as exc:
         broker_accounts.set_status(account_id, "error")
