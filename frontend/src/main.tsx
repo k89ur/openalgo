@@ -784,7 +784,7 @@ function App() {
         if (!cancelled) setBrokerAccounts([]);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [authenticated]);
 
   useEffect(() => {
     if (selectedAccountId) localStorage.setItem("pipsgox-selected-account", String(selectedAccountId));
