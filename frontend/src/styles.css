@@ -1593,3 +1593,32 @@ button { cursor: pointer; }
   cursor: pointer;
 }
 .broker-emergency:hover { background: #2d1418; }
+
+
+/* First-run setup wizard */
+.setup-card { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; }
+.setup-step { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+.setup-step-number { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid #303844; border-radius: 50%; color: #dce2e8; font-size: 12px; font-weight: 800; }
+.setup-step-content { min-width: 0; }
+.setup-step-title { font-size: 13px; font-weight: 750; color: #e9edf2; }
+.setup-step-subtitle { margin-top: 4px; color: #7f8a97; font-size: 11px; line-height: 1.45; }
+.setup-divider { height: 1px; background: #20262e; margin: 20px 0; }
+.broker-choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0; }
+.broker-choice { text-align: left; padding: 12px; border: 1px solid #2a313b; border-radius: 9px; background: #090c10; color: #dfe4e9; cursor: pointer; }
+.broker-choice strong { display: block; font-size: 12px; }
+.broker-choice span { display: block; margin-top: 4px; color: #7e8996; font-size: 10px; }
+.broker-choice.active { border-color: #aeb7c2; background: #151a21; }
+.setup-fields { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; }
+.setup-fields label:first-child { grid-column: 1 / -1; }
+.setup-status { margin-top: 14px; padding: 10px 12px; border: 1px solid #2a313b; border-radius: 8px; color: #aeb8c3; background: #0a0e13; font-size: 11px; line-height: 1.45; }
+.setup-status.success { border-color: #24533e; color: #9ce1bf; background: #0c1712; }
+.setup-status.error { border-color: #63303a; color: #ff9da7; background: #211014; }
+.setup-submit { margin-top: 14px; }
+.setup-security-note { margin-top: 10px; color: #687482; font-size: 10px; line-height: 1.5; text-align: center; }
+@media (max-width: 620px) {
+  .auth-screen { padding: 12px; align-items: start; }
+  .setup-card { margin: 4px 0; padding: 22px; }
+  .setup-fields { grid-template-columns: 1fr; }
+  .setup-fields label:first-child { grid-column: auto; }
+  .broker-choice-grid { grid-template-columns: 1fr 1fr; }
+}
