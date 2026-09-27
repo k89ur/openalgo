@@ -1066,6 +1066,51 @@ def symbol_search(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _aggregate_daily_candles(candles: list[Candle], period: str) -> list[Candle]:
+    import datetime as _dt
+    groups: dict[tuple[int, int], list[Candle]] = {}
+    for candle in candles:
+        dt = _dt.datetime.fromtimestamp(candle.time, tz=_dt.timezone.utc)
+        key = (dt.year, dt.isocalendar().week) if period == "W" else (dt.year, dt.month)
+        groups.setdefault(key, []).append(candle)
+
+    result: list[Candle] = []
+    for items in groups.values():
+        items.sort(key=lambda item: item.time)
+        result.append(Candle(
+            time=items[0].time,
+            open=items[0].open,
+            high=max(item.high for item in items),
+            low=min(item.low for item in items),
+            close=items[-1].close,
+            volume=sum(item.volume for item in items),
+        ))
+    return sorted(result, key=lambda item: item.time)
+
+
+def _aggregate_intraday_candles(candles: list[Candle], minutes: int) -> list[Candle]:
+    if minutes <= 1:
+        return candles
+    bucket_seconds = minutes * 60
+    groups: dict[int, list[Candle]] = {}
+    for candle in candles:
+        bucket = candle.time - (candle.time % bucket_seconds)
+        groups.setdefault(bucket, []).append(candle)
+
+    result: list[Candle] = []
+    for bucket, items in groups.items():
+        items.sort(key=lambda item: item.time)
+        result.append(Candle(
+            time=bucket,
+            open=items[0].open,
+            high=max(item.high for item in items),
+            low=min(item.low for item in items),
+            close=items[-1].close,
+            volume=sum(item.volume for item in items),
+        ))
+    return sorted(result, key=lambda item: item.time)
+
+
 def _dhan_history_to_candles(payload: dict[str, object]) -> list[Candle]:
     timestamps = payload.get("timestamp") or payload.get("timestamps") or []
     opens = payload.get("open") or []
