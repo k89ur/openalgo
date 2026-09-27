@@ -1012,6 +1012,57 @@ def broker_account_cancel_order(account_id: int, order_id: str) -> dict[str, obj
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+def _normalize_funds(provider: object, raw: object) -> dict[str, object]:
+    """Normalize broker-specific fund responses into one UI-facing schema."""
+    payload = raw.get("data") if isinstance(raw, dict) and isinstance(raw.get("data"), dict) else raw
+    if not isinstance(payload, dict):
+        raise ValueError("Broker returned an invalid funds response.")
+
+    def number(*keys: str) -> float | None:
+        for key in keys:
+            value = payload.get(key)
+            try:
+                result = float(value)
+            except (TypeError, ValueError):
+                continue
+            if result == result:
+                return result
+        return None
+
+    broker = str(getattr(provider, "broker", "")).lower()
+    if broker == "dhan":
+        return {
+            "available": number("availabelBalance", "availableBalance"),
+            "sod_limit": number("sodLimit"),
+            "utilized": number("utilizedAmount"),
+            "collateral": number("collateralAmount"),
+            "receivable": number("receiveableAmount", "receivableAmount"),
+            "withdrawable": number("withdrawableBalance"),
+            "currency": "INR",
+            "broker": "dhan",
+        }
+
+    # FYERS commonly returns fund_limit as a list of account-level limits.
+    limits = payload.get("fund_limit")
+    if isinstance(limits, list):
+        merged: dict[str, object] = {}
+        for item in limits:
+            if isinstance(item, dict):
+                merged.update(item)
+        payload = {**payload, **merged}
+
+    return {
+        "available": number("avail_cash", "availableBalance", "available"),
+        "sod_limit": number("fund_limit", "fund_limit_total", "sodLimit"),
+        "utilized": number("utilized_amount", "utilizedAmount", "utilized"),
+        "collateral": number("collateral", "collateralAmount"),
+        "receivable": number("receivable", "receiveableAmount"),
+        "withdrawable": number("withdrawable_balance", "withdrawableBalance"),
+        "currency": "INR",
+        "broker": "fyers",
+    }
+
+
 @app.get("/api/broker/accounts/{account_id}/funds")
 def broker_account_funds(account_id: int) -> dict[str, object]:
     provider = _broker_account_provider(account_id)
@@ -1019,7 +1070,7 @@ def broker_account_funds(account_id: int) -> dict[str, object]:
         return {
             "account_id": account_id,
             "broker": provider.broker,
-            "data": provider.get_funds(),
+            "data": _normalize_funds(provider, provider.get_funds()),
         }
     except Exception as exc:
         broker_accounts.set_status(account_id, "error")
