@@ -913,6 +913,71 @@ def broker_account_session(account_id: int) -> dict[str, object]:
     return {"id": account.id, "broker": account.broker, "status": "connected" if connected else account.status}
 
 
+def _broker_account_provider(account_id: int):
+    try:
+        return BrokerManager.account_provider(account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/broker/accounts/{account_id}/funds")
+def broker_account_funds(account_id: int) -> dict[str, object]:
+    provider = _broker_account_provider(account_id)
+    try:
+        return {
+            "account_id": account_id,
+            "broker": provider.broker,
+            "data": provider.get_funds(),
+        }
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/broker/accounts/{account_id}/positions")
+def broker_account_positions(account_id: int) -> dict[str, object]:
+    provider = _broker_account_provider(account_id)
+    try:
+        return {
+            "account_id": account_id,
+            "broker": provider.broker,
+            "data": provider.get_positions(),
+        }
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/broker/accounts/{account_id}/orders")
+def broker_account_orders(account_id: int) -> dict[str, object]:
+    provider = _broker_account_provider(account_id)
+    try:
+        return {
+            "account_id": account_id,
+            "broker": provider.broker,
+            "data": provider.get_orders(),
+        }
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/broker/accounts/{account_id}/holdings")
+def broker_account_holdings(account_id: int) -> dict[str, object]:
+    provider = _broker_account_provider(account_id)
+    try:
+        return {
+            "account_id": account_id,
+            "broker": provider.broker,
+            "data": provider.get_holdings(),
+        }
+    except Exception as exc:
+        broker_accounts.set_status(account_id, "error")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.delete("/api/broker/accounts/{account_id}")
 def broker_accounts_delete(account_id: int) -> dict[str, bool]:
     if not broker_accounts.delete_account(account_id):
