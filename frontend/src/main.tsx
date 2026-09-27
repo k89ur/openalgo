@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction, type FormEvent } from "react";
 import { apiFetch } from "./api";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe, type ChartRange, type DrawingTool, type PipscriptOutput, type ChartColors } from "./Chart";
@@ -605,7 +605,7 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
-  const submitAuth = async (event: React.FormEvent) => {
+  const submitAuth = async (event: FormEvent) => {
     event.preventDefault();
     setAuthBusy(true);
     setAuthError("");
