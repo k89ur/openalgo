@@ -77,6 +77,32 @@ def _connect() -> sqlite3.Connection:
     return connection
 
 
+def claim_order_correlation(account_id: int, correlation_id: str) -> bool:
+    value = correlation_id.strip()
+    if not value or len(value) > 64:
+        return False
+    with _DB_LOCK:
+        connection = _connect()
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS order_idempotency (
+                account_id INTEGER NOT NULL,
+                correlation_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (account_id, correlation_id),
+                FOREIGN KEY (account_id) REFERENCES broker_accounts(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor = connection.execute(
+            "INSERT OR IGNORE INTO order_idempotency (account_id, correlation_id) VALUES (?, ?)",
+            (account_id, value),
+        )
+        connection.commit()
+        connection.close()
+    return cursor.rowcount == 1
+
+
 def initialize() -> None:
     with _DB_LOCK:
         connection = _connect()
