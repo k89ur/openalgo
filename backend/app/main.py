@@ -1066,6 +1066,23 @@ def symbol_search(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _market_data_provider_for_account(account_id: int | None):
+    if account_id is None:
+        return provider
+    try:
+        account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if account.broker != "fyers":
+        raise HTTPException(
+            status_code=501,
+            detail="Dhan market-data routing is not enabled yet.",
+        )
+    if not access_token:
+        raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
+    return FyersMarketDataProvider(client_id=client_id, access_token=access_token)
+
+
 @app.get("/api/history", response_model=list[Candle])
 def history(
     symbol: str = Query(default="BHARTIARTL", min_length=1, max_length=40),
@@ -1076,20 +1093,7 @@ def history(
     account_id: int | None = Query(default=None, ge=1),
 ) -> list[Candle]:
     try:
-        selected_provider = provider
-        if account_id is not None:
-            try:
-                account, client_id, _, access_token = broker_accounts.get_account_credentials(account_id)
-                if account.broker != "fyers":
-                    raise HTTPException(
-                        status_code=501,
-                        detail="Dhan chart routing is not enabled yet; complete Stage 4 Dhan market-data adapter first.",
-                    )
-                if not access_token:
-                    raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
-                selected_provider = FyersMarketDataProvider(client_id=client_id, access_token=access_token)
-            except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
+        selected_provider = _market_data_provider_for_account(account_id)
 
         api_symbol = resolve_api_symbol(symbol)
         if not api_symbol:
