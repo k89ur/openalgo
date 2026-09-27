@@ -1049,3 +1049,29 @@ button { cursor: pointer; }
     grid-row:1;
   }
 }
+
+.broker-connect {
+  height:25px;
+  padding:0 8px;
+  border:1px solid #315f82;
+  background:#162b3a;
+  color:#9fc5df;
+  font-size:7px;
+  cursor:pointer;
+}
+.broker-connect:hover {
+  background:#1e4055;
+  color:#d7e6f2;
+}
+.broker-form small {
+  color:#555d64;
+  font-size:7px;
+}
+@media (max-width:620px) {
+  .broker-account-row {
+    grid-template-columns:minmax(0,1fr) auto auto;
+  }
+  .broker-account-status {
+    display:none;
+  }
+}
