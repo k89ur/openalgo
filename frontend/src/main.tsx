@@ -1013,7 +1013,7 @@ function App() {
     if ((orderType === "STOP_LOSS" || orderType === "STOP_LOSS_MARKET") && (!triggerPrice || triggerPrice <= 0)) { setOrderMessage("Enter a valid trigger price."); return; }
     setOrderSubmitting(true); setOrderMessage("");
     try {
-      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol, side: orderSide, quantity, order_type: orderType, product_type: orderProduct, validity: "DAY", price, trigger_price: triggerPrice }) });
+      const response = await apiFetch("/api/broker/accounts/" + selectedAccountId + "/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol, side: orderSide, quantity, order_type: orderType, product_type: orderProduct, validity: "DAY", price, trigger_price: triggerPrice, correlation_id: crypto.randomUUID() }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload.detail || "Order request failed."));
       const orderId = payload?.data?.orderId || payload?.data?.id || payload?.data?.order_id || "submitted";
