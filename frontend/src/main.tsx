@@ -1678,7 +1678,7 @@ json.dumps(_result)`;
   }, [watchlist, selectedAccountId]);
 
   useEffect(() => {
-    if (!watchlist.length) {
+    if (!watchlist.length || !selectedAccountId) {
       setLiveQuotes({});
       return;
     }
@@ -1689,7 +1689,7 @@ json.dumps(_result)`;
       try {
         const symbols = watchlist.map((item) => item.symbol).join(",");
         const response = await apiFetch("/api/quotes?symbols=" + encodeURIComponent(symbols) +
-            (selectedAccountId ? "&account_id=" + selectedAccountId : ""),
+            "&account_id=" + encodeURIComponent(String(selectedAccountId ?? "")),
           { cache: "no-store" },
         );
         if (!response.ok) throw new Error("watchlist quote request failed");
