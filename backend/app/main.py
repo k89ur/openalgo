@@ -1133,14 +1133,14 @@ def _broker_account_provider(account_id: int):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-def _safe_broker_error(account_id: int, operation: str, provider: object, exc: Exception) -> HTTPException:
+def _safe_broker_error(account_id: int, operation: str, provider: object, exc: Exception, *, username: str = "") -> HTTPException:
     message = str(exc).lower()
     if any(marker in message for marker in ("401", "403", "unauthorized", "access token", "session expired", "token expired")):
         broker_accounts.set_status(account_id, "expired")
-        security_audit.record(operation, account_id=account_id, broker=str(getattr(provider, "broker", "")), success=False)
+        security_audit.record(operation, username=username, account_id=account_id, broker=str(getattr(provider, "broker", "")), success=False)
         return HTTPException(status_code=409, detail="Broker session expired. Reconnect this account.")
     broker_accounts.set_status(account_id, "error")
-    security_audit.record(operation, account_id=account_id, broker=str(getattr(provider, "broker", "")), success=False)
+    security_audit.record(operation, username=username, account_id=account_id, broker=str(getattr(provider, "broker", "")), success=False)
     return HTTPException(status_code=502, detail="Broker request failed.")
 
 def _verify_order_belongs_to_account(provider: object, order_id: str) -> None:
@@ -1169,12 +1169,8 @@ def broker_account_place_order(account_id: int, request: OrderRequest, http_requ
 
     provider = _broker_account_provider(account_id)
     user = _request_user(http_request)
-    if correlation_id:
-        with _order_idempotency_lock:
-            key = (account_id, correlation_id)
-            if key in _order_idempotency_keys:
-                raise HTTPException(status_code=409, detail="Duplicate order request blocked.")
-            _order_idempotency_keys.add(key)
+    if correlation_id and not broker_accounts.claim_order_correlation(account_id, correlation_id):
+        raise HTTPException(status_code=409, detail="Duplicate order request blocked.")
     try:
         data = provider.place_order(request.model_dump())
         security_audit.record("order_place", username=str(user["username"]) if user else "", account_id=account_id, broker=provider.broker, success=True)
@@ -1183,7 +1179,7 @@ def broker_account_place_order(account_id: int, request: OrderRequest, http_requ
         security_audit.record("order_place", username=str(user["username"]) if user else "", account_id=account_id, broker=provider.broker, success=False)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _safe_broker_error(account_id, "order_place", provider, exc) from exc
+        raise _safe_broker_error(account_id, "order_place", provider, exc, username=str(user["username"]) if user else "") from exc
 
 @app.put("/api/broker/accounts/{account_id}/orders/{order_id}")
 def broker_account_modify_order(account_id: int, order_id: str, request: OrderModifyRequest, http_request: Request) -> dict[str, object]:
@@ -1207,7 +1203,7 @@ def broker_account_modify_order(account_id: int, order_id: str, request: OrderMo
         security_audit.record("order_modify", username=str(user["username"]) if user else "", account_id=account_id, broker=provider.broker, success=False)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise _safe_broker_error(account_id, "order_modify", provider, exc) from exc
+        raise _safe_broker_error(account_id, "order_modify", provider, exc, username=str(user["username"]) if user else "") from exc
 
 @app.delete("/api/broker/accounts/{account_id}/orders/{order_id}")
 def broker_account_cancel_order(account_id: int, order_id: str, http_request: Request) -> dict[str, object]:
@@ -1221,7 +1217,7 @@ def broker_account_cancel_order(account_id: int, order_id: str, http_request: Re
     except HTTPException:
         raise
     except Exception as exc:
-        raise _safe_broker_error(account_id, "order_cancel", provider, exc) from exc
+        raise _safe_broker_error(account_id, "order_cancel", provider, exc, username=str(user["username"]) if user else "") from exc
 
 
 def _normalize_funds(provider: object, raw: object) -> dict[str, object]:
