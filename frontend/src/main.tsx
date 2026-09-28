@@ -2151,21 +2151,22 @@ json.dumps(_result)`;
               {drawingToolbarOpen && (
                 <>
                   <span className="drawing-toolbar-grip" title="Drag toolbar" aria-label="Drag toolbar">⠿</span>
+                  <button type="button" className={activeDrawingTool === "crosshair" ? "active" : ""} onClick={() => setActiveDrawingTool("crosshair")} title="Crosshair" aria-label="Crosshair"><DrawingIcon name="crosshair" /></button>
+                  <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trend Line" aria-label="Trend Line"><DrawingIcon name="trendline" /></button>
                   <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray"><DrawingIcon name="horizontalRay" /></button>
-                  <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trendline" aria-label="Trendline"><DrawingIcon name="trendline" /></button>
                   <button type="button" className={activeDrawingTool === "rectangle" ? "active" : ""} onClick={() => setActiveDrawingTool("rectangle")} title="Rectangle" aria-label="Rectangle"><DrawingIcon name="rectangle" /></button>
                   <span className="drawing-toolbar-divider" />
                   <button type="button" className={activeDrawingTool === "long" ? "active" : ""} onClick={() => setActiveDrawingTool("long")} title="Long Position" aria-label="Long Position"><DrawingIcon name="long" /></button>
                   <button type="button" className={activeDrawingTool === "short" ? "active" : ""} onClick={() => setActiveDrawingTool("short")} title="Short Position" aria-label="Short Position"><DrawingIcon name="short" /></button>
-                  <button type="button" className={activeDrawingTool === "arrow" ? "active" : ""} onClick={() => setActiveDrawingTool("arrow")} title="Arrow" aria-label="Arrow"><DrawingIcon name="arrow" /></button>
+                  <button type="button" className={activeDrawingTool === "channel" ? "active" : ""} onClick={() => setActiveDrawingTool("channel")} title="Channel" aria-label="Channel"><DrawingIcon name="channel" /></button>
                   <button type="button" className={activeDrawingTool === "brush" ? "active" : ""} onClick={() => setActiveDrawingTool("brush")} title="Brush" aria-label="Brush"><DrawingIcon name="brush" /></button>
                   <button type="button" className={activeDrawingTool === "text" ? "active" : ""} onClick={() => setActiveDrawingTool("text")} title="Text" aria-label="Text"><DrawingIcon name="text" /></button>
+                  <button type="button" className="drawing-toolbar-more" title="More drawing tools" aria-label="More drawing tools"><TerminalIcon name="more" /></button>
                   <span className="drawing-toolbar-divider" />
-                  <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete Last Drawing" aria-label="Delete Last Drawing"><DrawingIcon name="delete" /></button>
-                  <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear Drawings" aria-label="Clear Drawings"><DrawingIcon name="clear" /></button>
+                  <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete" aria-label="Delete"><DrawingIcon name="delete" /></button>
+                  <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear All" aria-label="Clear All"><DrawingIcon name="clear" /></button>
                 </>
-              )}
-              <button type="button" className="drawing-toolbar-toggle" onClick={() => setDrawingToolbarOpen((value) => !value)} title={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"} aria-label={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"}>
+              )}              <button type="button" className="drawing-toolbar-toggle" onClick={() => setDrawingToolbarOpen((value) => !value)} title={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"} aria-label={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"}>
                 {drawingToolbarOpen ? "‹" : "›"}
               </button>
             </div>
@@ -2193,16 +2194,18 @@ json.dumps(_result)`;
           </div>
 
           <div className="bottom-bar">
-            {(["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "5Y", "ALL"] as ChartRange[]).map((preset) => (
-              <button
-                key={preset}
-                className={chartRange === preset ? "active" : ""}
-                onClick={() => selectChartRange(preset)}
-              >
-                {preset}
-              </button>
-            ))}
+            <div className="bottom-range-group">
+              {(["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "5Y", "ALL"] as ChartRange[]).map((preset) => <button key={preset} className={chartRange === preset ? "active" : ""} onClick={() => selectChartRange(preset)}>{preset}</button>)}
+              <button className="bottom-calendar" title="Date range"><TerminalIcon name="calendar" /></button>
+            </div>
             <span className="bottom-spacer" />
+            <div className="bottom-chart-controls">
+              <span className="terminal-clock">{terminalClock.toLocaleTimeString("en-IN", { hour12: false })} (UTC+5:30)</span>
+              <button className={priceScaleMode === "percent" ? "active" : ""} onClick={() => setPriceScaleMode(v => v === "price" ? "percent" : "price")} title="Percentage scale">%</button>
+              <button className={logScale ? "active" : ""} onClick={() => setLogScale(v => !v)} title="Log scale">log</button>
+              <button className={autoScale ? "active" : ""} onClick={() => setAutoScale(v => !v)} title="Auto scale">auto</button>
+              <button onClick={() => setPanel("settings")} title="Chart settings"><TerminalIcon name="settings" /></button>
+            </div>
           </div>
         </section>
 
@@ -2225,8 +2228,6 @@ json.dumps(_result)`;
                 {Object.keys(watchlists).map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
               <button className="active">WATCHLIST</button>
-              <button>MARKET</button>
-              <button>MOVERS</button>
             </div>
             <div className="watch-header">
               <strong>{activeWatchlistName}</strong>
@@ -2287,6 +2288,17 @@ json.dumps(_result)`;
                 </div>
                 );
               })}
+            </div>
+            <div className="symbol-detail-card">
+              <div className="symbol-detail-head">
+                <div><strong>{symbol}</strong><span>NSE</span><button title="Open instrument"><TerminalIcon name="external" /></button></div>
+                <button className="symbol-detail-more" title="More"><TerminalIcon name="more" /></button>
+              </div>
+              <div className="symbol-detail-sub">NSE · Equity</div>
+              <div className="symbol-detail-price-row"><strong>{hasLiveData ? price.toFixed(2) : "—"}</strong><span className={changePercent < 0 ? "negative" : "positive"}>{hasLiveData ? ((changeAmount >= 0 ? "+" : "") + changeAmount.toFixed(2) + " (" + changePercent.toFixed(2) + "%)") : "—"}</span></div>
+              <div className="symbol-detail-day"><span>Day High <b>{high != null ? high.toFixed(2) : "—"}</b></span><span>Day Low <b>{low != null ? low.toFixed(2) : "—"}</b></span></div>
+              <div className="symbol-detail-stats"><span><small>Open</small><b>{open != null ? open.toFixed(2) : "—"}</b></span><span><small>Prev Close</small><b>{previousClose != null ? previousClose.toFixed(2) : "—"}</b></span><span><small>Volume</small><b>{formatWatchVolume(quote?.volume ?? liveSelected?.volume)}</b></span><span><small>Avg Vol</small><b>—</b></span></div>
+              <div className="symbol-detail-range"><span>{low != null ? low.toFixed(2) : "—"}</span><i /></div>
             </div>
             <div className="watch-footer">
               {watchlist.length ? "Click a symbol to load chart" : "Watchlist empty — use symbol search or ADD"}
