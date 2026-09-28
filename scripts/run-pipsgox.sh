@@ -275,6 +275,28 @@ HEALTH="$(curl -fsS --max-time 3 http://127.0.0.1:8000/health || true)"
 if [[ -n "$HEALTH" ]]; then
   echo "STATUS: PASS — Backend health"
   echo "$HEALTH"
+  python - "$HEALTH" <<'PY'
+import json
+import sys
+
+try:
+    health = json.loads(sys.argv[1])
+except Exception:
+    print("STATUS: WARN — Health response could not be parsed.")
+    raise SystemExit(0)
+
+print(f"STATUS: {'PASS' if health.get('server') == 'running' else 'WARN'} — Server: {health.get('server', 'unknown')}")
+print(f"STATUS: {'PASS' if health.get('user_configured') else 'INFO'} — Owner account: {'configured' if health.get('user_configured') else 'not configured'}")
+print(
+    f"STATUS: {'PASS' if health.get('broker_accounts_configured') else 'INFO'} — "
+    f"Broker accounts: {health.get('broker_account_count', 0)}"
+)
+print(
+    f"STATUS: {'PASS' if health.get('broker_connected') else 'INFO'} — "
+    f"Connected brokers: {health.get('connected_broker_count', 0)}"
+)
+print(f"STATUS: {'PASS' if health.get('ready') else 'INFO'} — System ready: {'yes' if health.get('ready') else 'no'}")
+PY
 else
   echo "STATUS: FAIL — Backend health unavailable"
 fi
