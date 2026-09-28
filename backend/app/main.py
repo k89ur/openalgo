@@ -1803,9 +1803,6 @@ def health() -> dict[str, object]:
         "server": "running",
         "data_provider": "broker_account",
         **readiness,
-        # Backward-compatible FYERS field for older tooling. This is
-        # provider-specific and must not be used as overall readiness.
-        "fyers_connected": _fyers_session_valid(),
     }
 
 
