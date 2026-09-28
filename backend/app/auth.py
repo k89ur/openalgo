@@ -24,7 +24,8 @@ def _connect() -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path)
     connection.row_factory = sqlite3.Row
-    connection.execute("""
+        connection.execute("PRAGMA foreign_keys = ON")
+connection.execute("""
         CREATE TABLE IF NOT EXISTS auth_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
@@ -84,6 +85,29 @@ def has_user() -> bool:
         row = connection.execute("SELECT 1 FROM auth_users LIMIT 1").fetchone()
         connection.close()
     return row is not None
+
+
+def verify_user_password(user_id: int, password: str) -> bool:
+    if not password:
+        return False
+    with _DB_LOCK:
+        connection = _connect()
+        row = connection.execute(
+            "SELECT password_hash FROM auth_users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        connection.close()
+    return row is not None and _verify_password(password, str(row["password_hash"]))
+
+
+def delete_all_users() -> int:
+    """Delete all owner accounts and their sessions."""
+    with _DB_LOCK:
+        connection = _connect()
+        cursor = connection.execute("DELETE FROM auth_users")
+        connection.commit()
+        connection.close()
+    return cursor.rowcount
 
 
 def create_initial_user(username: str, password: str) -> None:
