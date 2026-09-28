@@ -70,7 +70,8 @@ FYERS_REDIRECT_URI = os.getenv(
 ).strip()
 
 
-_dhan_auth_states: dict[str, tuple[int, str]] = {}
+# Dhan OAuth state is persisted in broker_accounts.broker_oauth_states so the
+# callback survives backend restarts during the external login flow.
 _LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
 _LOGIN_MAX_ATTEMPTS = 5
 _LOGIN_WINDOW_SECONDS = 300
@@ -1312,9 +1313,12 @@ def broker_account_connect(account_id: int, request: Request, response: Response
             app_session = request.cookies.get(auth.SESSION_COOKIE)
             if not app_session:
                 raise HTTPException(status_code=401, detail="Authentication required.")
-            _dhan_auth_states[login_state] = (
+            broker_accounts.create_oauth_state(
+                login_state,
                 account.id,
+                account.broker,
                 hashlib.sha256(app_session.encode("utf-8")).hexdigest(),
+                int(time.time()) + 600,
             )
             result = BrokerManager.start_dhan(account.id, client_id, api_key, api_secret)
         else:
@@ -1395,12 +1399,10 @@ def broker_fyers_callback(
 @app.get("/auth/broker/dhan/callback")
 def broker_dhan_callback(token_id: str | None = None, request: Request = None) -> RedirectResponse:
     state = request.cookies.get("pipsgox_dhan_state") if request else None
-    context = _dhan_auth_states.pop(state, None) if state else None
+    context = broker_accounts.consume_oauth_state(state) if state else None
     account_id = context[0] if context else None
-    valid_state_cookie = bool(
-        state and context and hmac.compare_digest(state, request.cookies.get("pipsgox_dhan_state", ""))
-    )
-    if not token_id or account_id is None or not valid_state_cookie:
+    valid_state = bool(context and context[1] == "dhan")
+    if not token_id or account_id is None or not valid_state:
         raise HTTPException(status_code=400, detail="Dhan login state is missing, invalid, or expired.")
     try:
         account, client_id, api_key, api_secret = broker_accounts.get_account_credentials(account_id)
