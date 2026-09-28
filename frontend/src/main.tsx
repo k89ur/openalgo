@@ -5,6 +5,8 @@ import { Chart, type ChartType, type Timeframe, type ChartRange, type DrawingToo
 import "./styles.css";
 import { DevConsole } from "./DevConsole";
 import { BrokerConnections } from "./BrokerConnections";
+import { StartupGate } from "./StartupGate";
+import { StatusCenter } from "./StatusCenter";
 
 type WatchItem = { symbol: string; price: string; change: string; apiSymbol?: string };
 export type ChartTheme = "pipsgox" | "classic" | "light";
@@ -577,6 +579,7 @@ function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" }) {
 function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [appReady, setAppReady] = useState(false);
   const [setupRequired, setSetupRequired] = useState(false);
   const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -633,10 +636,12 @@ function App() {
       }
 
       if (!setupAccountName.trim()) throw new Error("Trading account name is required.");
-      if (!setupClientId.trim()) throw new Error("Client ID is required.");
       if (!setupApiSecret.trim()) throw new Error("API secret is required.");
-      if (setupBroker === "dhan" && !setupApiKey.trim()) {
-        throw new Error("Dhan API key / App ID is required.");
+      if (setupBroker === "fyers" && !setupApiKey.trim()) {
+        throw new Error("FYERS App ID / API ID is required.");
+      }
+      if (setupBroker === "dhan" && (!setupClientId.trim() || !setupApiKey.trim())) {
+        throw new Error("Dhan Client ID and API key are required.");
       }
 
       setSetupStatus("Creating your private PIPSGOX account...");
@@ -757,14 +762,21 @@ function App() {
   };
 
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
+    const queryAccount = new URLSearchParams(window.location.search).get("account_id");
+    const queryValue = queryAccount ? Number(queryAccount) : NaN;
+    if (Number.isInteger(queryValue) && queryValue > 0) return queryValue;
     const raw = localStorage.getItem("pipsgox-selected-account");
     const value = raw ? Number(raw) : NaN;
     return Number.isInteger(value) && value > 0 ? value : null;
   });
 
   useEffect(() => {
-    if (!authenticated) return;
+    if (!authenticated) {
+      setAppReady(false);
+      return;
+    }
     let cancelled = false;
+    setAppReady(false);
     apiFetch("/api/broker/accounts")
       .then(async (response) => {
         const payload = await response.json().catch(() => []);
@@ -873,6 +885,7 @@ function App() {
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
   const [orderType, setOrderType] = useState<"MARKET" | "LIMIT" | "STOP_LOSS" | "STOP_LOSS_MARKET">("MARKET");
@@ -1966,10 +1979,14 @@ json.dumps(_result)`;
 
                   <div className="setup-fields">
                     <label>Account name<input value={setupAccountName} onChange={(e) => setSetupAccountName(e.target.value)} placeholder="e.g. Main Trading" autoComplete="off" required /></label>
-                    <label>Client ID<input value={setupClientId} onChange={(e) => setSetupClientId(e.target.value)} placeholder="Broker client ID" autoComplete="off" required /></label>
-                    {setupBroker === "dhan" && (
-                      <label>API Key / App ID<input value={setupApiKey} onChange={(e) => setSetupApiKey(e.target.value)} placeholder="Dhan App ID" autoComplete="off" required /></label>
-                    )}
+                    <label>
+                      {setupBroker === "fyers" ? "Trading Client ID (optional)" : "Client ID"}
+                      <input value={setupClientId} onChange={(e) => setSetupClientId(e.target.value)} placeholder={setupBroker === "fyers" ? "Optional trading client ID" : "Dhan client ID"} autoComplete="off" required={setupBroker === "dhan"} />
+                    </label>
+                    <label>
+                      {setupBroker === "fyers" ? "FYERS App ID / API ID" : "API Key / App ID"}
+                      <input value={setupApiKey} onChange={(e) => setSetupApiKey(e.target.value)} placeholder={setupBroker === "fyers" ? "FYERS App ID (API ID)" : "Dhan App ID"} autoComplete="off" required />
+                    </label>
                     <label>API Secret<input type="password" value={setupApiSecret} onChange={(e) => setSetupApiSecret(e.target.value)} placeholder="Stored encrypted on the server" autoComplete="new-password" required /></label>
                   </div>
                 </div>
@@ -1996,6 +2013,19 @@ json.dumps(_result)`;
     );
   }
 
+  if (!appReady) {
+    const selected = brokerAccounts.find((account) => account.id === selectedAccountId);
+    return (
+      <StartupGate
+        accountId={selectedAccountId}
+        accountName={selected?.account_name || "No connected account"}
+        broker={selected?.broker || "broker"}
+        onReady={() => setAppReady(true)}
+        onLogout={() => void logout()}
+      />
+    );
+  }
+
   return (
     <main className={`app ${dark ? "theme-dark" : "theme-light"}`}>
       <div className="menu-bar">
@@ -2010,6 +2040,7 @@ json.dumps(_result)`;
           <button onClick={() => void loadPositions()}>{positionsLoading ? "Positions..." : "Positions"}</button>
           <button onClick={() => void loadOrdersAndTrades("orders")}>{ordersLoading ? "Orders..." : "Orders"}</button>
           <button onClick={() => void loadHoldings()}>{holdingsLoading ? "Holdings..." : "Holdings"}</button>
+          <button onClick={() => setStatusOpen(true)}>Status</button>
           <button>Help</button>
           <button onClick={() => void logout()}>Logout</button>
           <span className="status-dot" /> {selectedAccountId ? "Broker data: " + ((brokerAccounts.find((item) => item.id === selectedAccountId)?.broker || "broker").toUpperCase()) : "Select broker account"}
@@ -2023,7 +2054,7 @@ json.dumps(_result)`;
           <span className="account-selector-label">ACCOUNT</span>
           <select
             value={selectedAccountId ?? ""}
-            onChange={(event) => setSelectedAccountId(event.target.value ? Number(event.target.value) : null)}
+            onChange={(event) => { setAppReady(false); setSelectedAccountId(event.target.value ? Number(event.target.value) : null); }}
             aria-label="Trading account"
           >
             {!brokerAccounts.length && <option value="">No account</option>}
@@ -2375,6 +2406,14 @@ json.dumps(_result)`;
                 </button>
               )}
             </div>
+          </section>
+        </div>
+      )}
+
+      {statusOpen && (
+        <div className="modal-backdrop status-modal-backdrop" onClick={() => setStatusOpen(false)}>
+          <section className="status-modal" onClick={(event) => event.stopPropagation()}>
+            <StatusCenter accountId={selectedAccountId} onClose={() => setStatusOpen(false)} />
           </section>
         </div>
       )}
