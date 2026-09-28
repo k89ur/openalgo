@@ -2413,7 +2413,7 @@ json.dumps(_result)`;
       {statusOpen && (
         <div className="modal-backdrop status-modal-backdrop" onClick={() => setStatusOpen(false)}>
           <section className="status-modal" onClick={(event) => event.stopPropagation()}>
-            <StatusCenter accountId={selectedAccountId} onClose={() => setStatusOpen(false)} />
+            <StatusCenter accountId={selectedAccountId} embedded onClose={() => setStatusOpen(false)} />
           </section>
         </div>
       )}
