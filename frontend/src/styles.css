@@ -2125,3 +2125,142 @@ button { cursor: pointer; }
     display:grid !important;
   }
 }
+
+/* FINAL REFERENCE OVERRIDE — remove tablet zoom hack and preserve the reference desktop terminal composition. */
+@media (max-width:1000px) {
+  .app {
+    zoom:1 !important;
+    width:100% !important;
+    height:100vh !important;
+    height:100dvh !important;
+  }
+
+  .terminal-nav {
+    height:70px !important;
+    min-height:70px !important;
+    display:grid !important;
+    grid-template-columns:225px minmax(390px,470px) minmax(250px,1fr) auto !important;
+    gap:14px !important;
+    padding:0 14px 0 18px !important;
+  }
+  .terminal-primary-nav {
+    display:flex !important;
+    height:100% !important;
+  }
+  .terminal-nav-item {
+    min-width:86px !important;
+    padding:0 13px !important;
+    font-size:13px !important;
+  }
+  .terminal-nav-item span { display:inline !important; }
+
+  .terminal-global-search {
+    order:initial !important;
+    grid-column:auto !important;
+    width:auto !important;
+    min-width:220px !important;
+    max-width:none !important;
+  }
+
+  .terminal-account-hub {
+    height:42px !important;
+  }
+  .terminal-account-card { width:125px !important; }
+  .terminal-metric {
+    min-width:72px !important;
+    display:grid !important;
+  }
+  .terminal-icon-btn {
+    display:grid !important;
+  }
+
+  .instrument-toolbar {
+    height:66px !important;
+    min-height:66px !important;
+    overflow:hidden !important;
+    padding:0 13px !important;
+  }
+  .instrument-search {
+    width:224px !important;
+    flex:0 0 224px !important;
+  }
+  .timeframe-group button {
+    min-width:43px !important;
+  }
+
+  .workspace {
+    height:calc(100vh - 136px) !important;
+    height:calc(100dvh - 136px) !important;
+    min-height:0 !important;
+    min-width:0 !important;
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) 430px !important;
+    gap:10px !important;
+    padding:10px 12px 12px !important;
+  }
+  .chart-workspace {
+    min-width:0 !important;
+    min-height:0 !important;
+    display:grid !important;
+    grid-template-rows:minmax(0,1fr) 48px !important;
+  }
+  .watchlist {
+    width:430px !important;
+    min-width:430px !important;
+    max-width:430px !important;
+    height:100% !important;
+  }
+
+  .watch-items {
+    max-height:none !important;
+    flex:1 1 auto !important;
+    min-height:0 !important;
+  }
+  .watch-row,
+  .watch-row-main {
+    min-height:40px !important;
+    height:40px !important;
+  }
+
+  .drawing-toolbar {
+    width:42px !important;
+  }
+}
+
+/* Keep the target terminal usable on narrower tablet CSS viewports without switching to mobile layout. */
+@media (max-width:900px) {
+  .terminal-nav {
+    min-width:0 !important;
+    grid-template-columns:225px minmax(330px,1fr) auto !important;
+    gap:8px !important;
+  }
+  .terminal-global-search {
+    min-width:210px !important;
+  }
+  .terminal-account-hub {
+    max-width:none !important;
+  }
+  .workspace {
+    grid-template-columns:minmax(0,1fr) 430px !important;
+  }
+  .watchlist {
+    width:430px !important;
+    min-width:430px !important;
+  }
+}
+
+/* At the target reference viewport, never collapse the navigation or hide the watchlist. */
+@media (max-width:720px) {
+  .terminal-nav {
+    min-width:1180px !important;
+    grid-template-columns:225px 390px 300px auto !important;
+  }
+  .workspace {
+    min-width:1180px !important;
+    grid-template-columns:minmax(0,1fr) 430px !important;
+  }
+  .watchlist {
+    width:430px !important;
+    min-width:430px !important;
+  }
+}
