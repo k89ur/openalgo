@@ -747,7 +747,7 @@ function App() {
   const [chartType, setChartType] = useState<ChartType>("candles");
   const [timeframe, setTimeframe] = useState<Timeframe>("D");
   const [chartRange, setChartRange] = useState<ChartRange>("6M");
-  const [drawingToolbarOpen, setDrawingToolbarOpen] = useState(false);
+  const [drawingToolbarOpen, setDrawingToolbarOpen] = useState(true);
   const [drawingToolbarPosition, setDrawingToolbarPosition] = useState(() => {
     try {
       const saved = localStorage.getItem("pipsgox-drawing-toolbar-position");
@@ -763,7 +763,7 @@ function App() {
     return { x: 10, y: 10 };
   });
   const drawingToolbarDragRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
-  const [activeDrawingTool, setActiveDrawingTool] = useState<DrawingTool | null>(null);
+  const [activeDrawingTool, setActiveDrawingTool] = useState<DrawingTool | null>("crosshair");
   const [drawingCommand, setDrawingCommand] = useState<{ type: "delete" | "clear"; nonce: number } | undefined>();
 
   const chartRangeTimeframes: Record<ChartRange, Timeframe> = {
@@ -2149,7 +2149,6 @@ json.dumps(_result)`;
             >
               {drawingToolbarOpen && (
                 <>
-                  <span className="drawing-toolbar-grip" title="Drag toolbar" aria-label="Drag toolbar">⠿</span>
                   <button type="button" className={activeDrawingTool === "crosshair" ? "active" : ""} onClick={() => setActiveDrawingTool("crosshair")} title="Crosshair" aria-label="Crosshair"><DrawingIcon name="crosshair" /></button>
                   <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trend Line" aria-label="Trend Line"><DrawingIcon name="trendline" /></button>
                   <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray"><DrawingIcon name="horizontalRay" /></button>
@@ -2165,9 +2164,7 @@ json.dumps(_result)`;
                   <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete" aria-label="Delete"><DrawingIcon name="delete" /></button>
                   <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear All" aria-label="Clear All"><DrawingIcon name="clear" /></button>
                 </>
-              )}              <button type="button" className="drawing-toolbar-toggle" onClick={() => setDrawingToolbarOpen((value) => !value)} title={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"} aria-label={drawingToolbarOpen ? "Hide drawing tools" : "Show drawing tools"}>
-                {drawingToolbarOpen ? "‹" : "›"}
-              </button>
+              )}
             </div>
             <div className="chart-header-overlay">
               <span className="chart-header-symbol">
