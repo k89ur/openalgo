@@ -170,6 +170,22 @@ def resolve(
     return cursor.rowcount
 
 
+def resolve_service(*, service: str, account_id: int | None = None) -> int:
+    with _DB_LOCK:
+        connection = _connect()
+        cursor = connection.execute(
+            """
+            UPDATE diagnostic_events
+            SET resolved = 1, last_seen = CURRENT_TIMESTAMP
+            WHERE service = ? AND account_id IS ? AND resolved = 0
+            """,
+            (sanitize(service), account_id),
+        )
+        connection.commit()
+        connection.close()
+    return cursor.rowcount
+
+
 def list_events(
     *,
     account_id: int | None = None,
