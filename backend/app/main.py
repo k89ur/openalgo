@@ -47,6 +47,10 @@ if os.getenv("PIPSGOX_FORCE_HTTPS", "0").strip().lower() in {"1", "true", "yes"}
 
 broker_accounts.initialize()
 auth.initialize()
+# PIPSGOX is currently a single-owner installation. Broker configuration must
+# not survive after the owner has been removed.
+if not auth.has_user():
+    broker_accounts.reset_all()
 diagnostics.initialize()
 
 def _codespace_forwarded_url(port: int) -> str:
