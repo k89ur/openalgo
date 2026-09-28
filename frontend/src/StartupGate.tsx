@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "./api";
 import { StatusCenter, type DiagnosticCheck } from "./StatusCenter";
+import { BrokerConnections } from "./BrokerConnections";
 
 type Props = {
   accountId: number | null;
@@ -21,6 +22,7 @@ export function StartupGate({ accountId, accountName, broker, onReady, onLogout 
   const [result, setResult] = useState<CheckResponse | null>(null);
   const [running, setRunning] = useState(true);
   const [error, setError] = useState("");
+  const [brokerOpen, setBrokerOpen] = useState(false);
 
   const run = async () => {
     if (!accountId) {
@@ -101,8 +103,18 @@ export function StartupGate({ accountId, accountName, broker, onReady, onLogout 
 
         <div className="startup-actions">
           <button className="status-primary" onClick={() => void run()}>RETRY FULL CHECK</button>
+          <button className="status-secondary" onClick={() => setBrokerOpen(true)}>BROKER SETUP</button>
           <button className="status-secondary" onClick={onLogout}>LOG OUT</button>
         </div>
+
+        {brokerOpen && (
+          <BrokerConnections
+            onClose={() => {
+              setBrokerOpen(false);
+              void run();
+            }}
+          />
+        )}
 
         <details className="startup-advanced">
           <summary>ADVANCED DIAGNOSTICS</summary>
