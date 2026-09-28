@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 import hashlib
 import logging
 import hmac
@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, dev_control, broker_accounts, security_audit
+from app import auth, dev_control, broker_accounts, security_audit, diagnostics
 from app.broker_manager import BrokerManager
 
 load_dotenv()
@@ -46,6 +46,7 @@ if os.getenv("PIPSGOX_FORCE_HTTPS", "0").strip().lower() in {"1", "true", "yes"}
 
 broker_accounts.initialize()
 auth.initialize()
+diagnostics.initialize()
 
 def _codespace_forwarded_url(port: int) -> str:
     codespace_name = os.getenv("CODESPACE_NAME", "").strip()
@@ -104,6 +105,27 @@ async def require_private_api(request: Request, call_next):
     response.headers["Referrer-Policy"] = "same-origin"
     if path.startswith("/api/") or path.startswith("/auth/"):
         response.headers["Cache-Control"] = "no-store"
+    if (
+        path.startswith("/api/")
+        and not path.startswith("/api/auth/")
+        and not path.startswith("/api/diagnostics/")
+        and response.status_code >= 500
+    ):
+        raw_account_id = request.query_params.get("account_id")
+        try:
+            parsed_account_id = int(raw_account_id) if raw_account_id else None
+        except ValueError:
+            parsed_account_id = None
+        diagnostics.record(
+            severity="ERROR",
+            category="HTTP",
+            component="API",
+            service=path,
+            error_code=f"PIP-API-HTTP-{response.status_code}",
+            message=f"{request.method} {path} returned HTTP {response.status_code}.",
+            account_id=parsed_account_id,
+            http_status=response.status_code,
+        )
     return response
 
 
@@ -852,6 +874,317 @@ class BrokerAccountResponse(BaseModel):
     updated_at: str
 
 
+def _diagnostic_check(
+    checks: list[dict[str, object]],
+    *,
+    check_id: str,
+    label: str,
+    category: str,
+    component: str,
+    severity: str,
+    operation,
+    error_code: str,
+    account_id: int,
+    broker: str,
+    symbol: str = "",
+) -> None:
+    started = time.monotonic()
+    try:
+        operation()
+    except Exception as exc:
+        technical = diagnostics.sanitize(f"{type(exc).__name__}: {exc}")
+        checks.append({
+            "id": check_id,
+            "label": label,
+            "category": category,
+            "component": component,
+            "severity": severity,
+            "status": "ERROR" if severity in {"CRITICAL", "ERROR"} else "WARNING",
+            "error_code": error_code,
+            "message": diagnostics.sanitize(str(exc) or "Check failed."),
+            "technical_detail": technical,
+            "duration_ms": round((time.monotonic() - started) * 1000),
+            "symbol": symbol,
+        })
+        diagnostics.record(
+            severity=severity,
+            category=category,
+            component=component,
+            service=label,
+            error_code=error_code,
+            message=str(exc) or "Check failed.",
+            account_id=account_id,
+            broker=broker,
+            symbol=symbol,
+            technical_detail=technical,
+        )
+        return
+
+    checks.append({
+        "id": check_id,
+        "label": label,
+        "category": category,
+        "component": component,
+        "severity": severity,
+        "status": "OK",
+        "message": "Check passed.",
+        "technical_detail": "",
+        "duration_ms": round((time.monotonic() - started) * 1000),
+        "symbol": symbol,
+    })
+    diagnostics.resolve(error_code=error_code, account_id=account_id, symbol=symbol)
+
+
+def _run_startup_checks(account_id: int) -> dict[str, object]:
+    checks: list[dict[str, object]] = []
+
+    try:
+        account, client_id, _, _ = broker_accounts.get_account_credentials(account_id)
+        broker = account.broker.lower()
+        access_token = broker_accounts.get_access_token(account_id)
+    except Exception as exc:
+        message = str(exc) or "Broker account could not be loaded."
+        diagnostics.record(
+            severity="CRITICAL",
+            category="BROKER",
+            component="Account",
+            service="credentials",
+            error_code="PIP-BROKER-ACCOUNT-001",
+            message=message,
+            account_id=account_id,
+            technical_detail=f"{type(exc).__name__}: {exc}",
+        )
+        return {
+            "ready": False,
+            "status": "FAILED",
+            "account_id": account_id,
+            "broker": "",
+            "account_name": "",
+            "checks": [{
+                "id": "broker-account",
+                "label": "Broker account",
+                "category": "BROKER",
+                "component": "Account",
+                "severity": "CRITICAL",
+                "status": "ERROR",
+                "error_code": "PIP-BROKER-ACCOUNT-001",
+                "message": message,
+                "technical_detail": f"{type(exc).__name__}: {exc}",
+            }],
+            "summary": diagnostics.summary(account_id),
+            "checked_at": time.time(),
+        }
+
+    if not access_token:
+        message = "Broker account has no active access token. Reconnect the broker account."
+        diagnostics.record(
+            severity="CRITICAL",
+            category="BROKER",
+            component="Authentication",
+            service="access token",
+            error_code="PIP-BROKER-AUTH-001",
+            message=message,
+            account_id=account_id,
+            broker=broker,
+        )
+        checks.append({
+            "id": "broker-auth",
+            "label": "Broker authentication",
+            "category": "BROKER",
+            "component": "Authentication",
+            "severity": "CRITICAL",
+            "status": "ERROR",
+            "error_code": "PIP-BROKER-AUTH-001",
+            "message": message,
+            "technical_detail": "",
+        })
+        return {
+            "ready": False,
+            "status": "FAILED",
+            "account_id": account_id,
+            "broker": broker,
+            "account_name": account.account_name,
+            "checks": checks,
+            "summary": diagnostics.summary(account_id),
+            "checked_at": time.time(),
+        }
+
+    _diagnostic_check(
+        checks, check_id="broker-session", label="Broker session",
+        category="BROKER", component="Authentication", severity="CRITICAL",
+        operation=lambda: BrokerManager.account_provider(account_id).validate(),
+        error_code="PIP-BROKER-SESSION-001", account_id=account_id, broker=broker,
+    )
+
+    provider = None
+    market_provider = None
+    test_symbol = "RELIANCE"
+
+    try:
+        if broker == "dhan":
+            from app.providers.accounts import DhanAccountProvider
+            provider = DhanAccountProvider(client_id, access_token)
+            market_provider = provider
+        else:
+            market_provider = _market_data_provider_for_account(account_id)
+    except Exception as exc:
+        _diagnostic_check(
+            checks, check_id="market-provider", label="Market-data provider",
+            category="MARKET_DATA", component="Provider", severity="CRITICAL",
+            operation=lambda exc=exc: (_ for _ in ()).throw(exc),
+            error_code="PIP-MARKET-PROVIDER-001", account_id=account_id, broker=broker,
+        )
+
+    def check_symbol() -> None:
+        if broker == "dhan":
+            resolved = provider.resolve_instrument(test_symbol)
+            if not resolved or not resolved.get("security_id"):
+                raise ValueError(f"Dhan instrument master could not resolve {test_symbol}.")
+        else:
+            master = _load_nse_symbol_master()
+            if not master or not resolve_api_symbol(test_symbol):
+                raise ValueError(f"{test_symbol} was not found in the current FYERS NSE symbol master.")
+
+    _diagnostic_check(
+        checks, check_id="market-symbol", label="Symbol master / resolution",
+        category="MARKET_DATA", component="Symbol Master", severity="CRITICAL",
+        operation=check_symbol, error_code="PIP-MARKET-SYMBOL-001",
+        account_id=account_id, broker=broker, symbol=test_symbol,
+    )
+
+    def check_quote() -> None:
+        if market_provider is None:
+            raise ValueError("Market-data provider is unavailable.")
+        if broker == "dhan":
+            resolved = provider.resolve_instrument(test_symbol)
+            if not resolved or not resolved.get("security_id"):
+                raise ValueError(f"Dhan instrument master could not resolve {test_symbol}.")
+            payload = provider.get_ltp({resolved["exchange_segment"]: [int(resolved["security_id"])]})
+            data = payload.get("data", {}) if isinstance(payload, dict) else {}
+            segment = data.get(resolved["exchange_segment"], {}) if isinstance(data, dict) else {}
+            item = segment.get(str(resolved["security_id"]), {}) if isinstance(segment, dict) else {}
+            if not isinstance(item, dict) or item.get("last_price") is None:
+                raise ValueError(f"Dhan returned no market quote for {test_symbol}.")
+        else:
+            api_symbol = resolve_api_symbol(test_symbol)
+            if not api_symbol:
+                raise ValueError(f"{test_symbol} could not be resolved.")
+            quote_result = market_provider.get_quote(api_symbol)
+            if float(quote_result.last) <= 0:
+                raise ValueError(f"FYERS returned no usable quote for {api_symbol}.")
+
+    _diagnostic_check(
+        checks, check_id="market-quote", label="Market quote",
+        category="MARKET_DATA", component="Quote API", severity="CRITICAL",
+        operation=check_quote, error_code="PIP-MARKET-QUOTE-001",
+        account_id=account_id, broker=broker, symbol=test_symbol,
+    )
+
+    def check_history() -> None:
+        start = date.today() - timedelta(days=10)
+        end = date.today()
+        if market_provider is None:
+            raise ValueError("Market-data provider is unavailable.")
+        if broker == "dhan":
+            resolved = provider.resolve_instrument(test_symbol)
+            if not resolved or not resolved.get("security_id"):
+                raise ValueError(f"Dhan instrument master could not resolve {test_symbol}.")
+            payload = provider.get_history(
+                resolved["security_id"], resolved["exchange_segment"], resolved["instrument"],
+                "D", start.isoformat(), end.isoformat(),
+            )
+            if not isinstance(payload, dict) or not payload.get("timestamp") or not payload.get("close"):
+                raise ValueError(f"Dhan returned no daily historical candles for {test_symbol}.")
+        else:
+            api_symbol = resolve_api_symbol(test_symbol)
+            if not api_symbol:
+                raise ValueError(f"{test_symbol} could not be resolved.")
+            candles = market_provider.get_history(api_symbol, "D", 5, start=start, end=end)
+            if not candles:
+                raise ValueError(f"FYERS returned no daily historical candles for {api_symbol}.")
+
+    _diagnostic_check(
+        checks, check_id="market-history", label="Historical market data",
+        category="MARKET_DATA", component="History API", severity="CRITICAL",
+        operation=check_history, error_code="PIP-MARKET-HISTORY-001",
+        account_id=account_id, broker=broker, symbol=test_symbol,
+    )
+
+    # These APIs are useful signals but do not block chart access.
+    for check_id, label, method_name, error_code in (
+        ("account-funds", "Funds API", "get_funds", "PIP-BROKER-FUNDS-001"),
+        ("account-positions", "Positions API", "get_positions", "PIP-BROKER-POSITIONS-001"),
+        ("account-holdings", "Holdings API", "get_holdings", "PIP-BROKER-HOLDINGS-001"),
+        ("account-orders", "Orders API", "get_orders", "PIP-BROKER-ORDERS-001"),
+    ):
+        _diagnostic_check(
+            checks, check_id=check_id, label=label, category="ACCOUNT",
+            component=label.replace(" API", ""), severity="WARNING",
+            operation=lambda method_name=method_name: getattr(
+                provider or BrokerManager.account_provider(account_id), method_name
+            )(),
+            error_code=error_code, account_id=account_id, broker=broker,
+        )
+
+    checks.append({
+        "id": "live-stream",
+        "label": "Live market stream",
+        "category": "MARKET_DATA",
+        "component": "WebSocket",
+        "severity": "INFO",
+        "status": "SKIPPED",
+        "message": "Live stream is checked when the watchlist session starts; HTTP quote polling is the startup-safe fallback.",
+        "technical_detail": "",
+    })
+
+    blocking = [
+        item for item in checks
+        if item.get("severity") == "CRITICAL" and item.get("status") == "ERROR"
+    ]
+    warnings = [item for item in checks if item.get("status") == "WARNING"]
+    status = "FAILED" if blocking else "DEGRADED" if warnings else "HEALTHY"
+
+    if blocking:
+        diagnostics.record(
+            severity="CRITICAL", category="STARTUP", component="Readiness Gate",
+            service="startup", error_code="PIP-STARTUP-001",
+            message="PIPSGOX startup checks found one or more blocking failures.",
+            account_id=account_id, broker=broker,
+        )
+    else:
+        diagnostics.resolve(error_code="PIP-STARTUP-001", account_id=account_id)
+
+    return {
+        "ready": not blocking,
+        "status": status,
+        "account_id": account_id,
+        "broker": broker,
+        "account_name": account.account_name,
+        "checks": checks,
+        "summary": diagnostics.summary(account_id),
+        "checked_at": time.time(),
+    }
+
+
+@app.post("/api/startup/check/{account_id}")
+def startup_check(account_id: int) -> dict[str, object]:
+    return _run_startup_checks(account_id)
+
+
+@app.get("/api/diagnostics/summary")
+def diagnostics_summary(account_id: int | None = Query(default=None, ge=1)) -> dict[str, object]:
+    return diagnostics.summary(account_id)
+
+
+@app.get("/api/diagnostics/events")
+def diagnostics_events(
+    account_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=100, ge=1, le=500),
+    include_resolved: bool = True,
+) -> list[dict[str, object]]:
+    return diagnostics.list_events(account_id=account_id, limit=limit, include_resolved=include_resolved)
+
+
 def _broker_account_response(account) -> BrokerAccountResponse:
     return BrokerAccountResponse(
         id=account.id,
@@ -987,13 +1320,23 @@ def broker_fyers_callback(
         token = BrokerManager.exchange_fyers_code(fyers_app_id, api_secret, auth_code)
         BrokerManager.validate_fyers_token(fyers_app_id, token)
         broker_accounts.set_access_token(account_id, token, "connected")
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
+    except ValueError:
         broker_accounts.set_status(account_id, "error")
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse(
+            url=PIPSGOX_WEB_URL.rstrip("/") + "/startup?account_id=" + str(account_id) + "&oauth_error=1",
+            status_code=303,
+        )
+    except Exception:
+        broker_accounts.set_status(account_id, "error")
+        return RedirectResponse(
+            url=PIPSGOX_WEB_URL.rstrip("/") + "/startup?account_id=" + str(account_id) + "&oauth_error=1",
+            status_code=303,
+        )
 
-    redirect = RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+    redirect = RedirectResponse(
+        url=PIPSGOX_WEB_URL.rstrip("/") + "/startup?account_id=" + str(account_id),
+        status_code=303,
+    )
     redirect.delete_cookie("pipsgox_fyers_state", path="/")
     return redirect
 
@@ -1015,12 +1358,22 @@ def broker_dhan_callback(token_id: str | None = None, request: Request = None) -
         token = BrokerManager.exchange_dhan_token(api_key, api_secret, token_id)
         BrokerManager.validate_dhan_token(client_id, token)
         broker_accounts.set_access_token(account_id, token, "connected")
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
+    except ValueError:
         broker_accounts.set_status(account_id, "error")
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    redirect = RedirectResponse(url=PIPSGOX_WEB_URL, status_code=303)
+        return RedirectResponse(
+            url=PIPSGOX_WEB_URL.rstrip("/") + "/startup?account_id=" + str(account_id) + "&oauth_error=1",
+            status_code=303,
+        )
+    except Exception:
+        broker_accounts.set_status(account_id, "error")
+        return RedirectResponse(
+            url=PIPSGOX_WEB_URL.rstrip("/") + "/startup?account_id=" + str(account_id) + "&oauth_error=1",
+            status_code=303,
+        )
+    redirect = RedirectResponse(
+        url=PIPSGOX_WEB_URL.rstrip("/") + "/startup?account_id=" + str(account_id),
+        status_code=303,
+    )
     redirect.delete_cookie("pipsgox_dhan_state", path="/")
     return redirect
 
