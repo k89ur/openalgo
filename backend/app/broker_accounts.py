@@ -302,6 +302,13 @@ def reset_all() -> dict[str, int]:
         connection = _connect()
         counts: dict[str, int] = {}
         for table in ("broker_oauth_states", "order_idempotency", "broker_accounts"):
+            exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table,),
+            ).fetchone()
+            if exists is None:
+                counts[table] = 0
+                continue
             cursor = connection.execute("DELETE FROM " + table)
             counts[table] = cursor.rowcount
         connection.commit()
