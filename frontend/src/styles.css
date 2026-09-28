@@ -2413,3 +2413,119 @@ button { cursor: pointer; }
     box-sizing:border-box !important;
   }
 }
+
+
+/* FINAL DEVICE-FIT TERMINAL
+   Render the desktop-density shell at device width/height without horizontal clipping.
+   Drawing tools live beside the chart, not over the chart canvas. */
+html, body, #root {
+  width:100% !important;
+  height:100% !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  margin:0 !important;
+  overflow:hidden !important;
+}
+
+.app {
+  width:140% !important;
+  height:140% !important;
+  max-width:none !important;
+  max-height:none !important;
+  transform:scale(.7142857) !important;
+  transform-origin:top left !important;
+  zoom:1 !important;
+}
+
+/* The terminal bars are intentionally 50% shorter for the device-fit view. */
+.terminal-nav {
+  height:35px !important;
+  min-height:35px !important;
+  padding:0 9px !important;
+  gap:8px !important;
+}
+.terminal-brand-mark { width:24px !important; height:24px !important; }
+.terminal-brand-copy strong { font-size:15px !important; }
+.terminal-brand-copy span { font-size:7px !important; }
+.terminal-primary-nav { height:35px !important; }
+.terminal-nav-item { height:35px !important; min-width:64px !important; padding:0 8px !important; font-size:11px !important; }
+.terminal-global-search { height:28px !important; min-height:28px !important; }
+.terminal-account-hub { height:30px !important; }
+
+.instrument-toolbar {
+  height:33px !important;
+  min-height:33px !important;
+  padding:0 7px !important;
+  gap:4px !important;
+}
+.instrument-search { height:30px !important; }
+.timeframe-group { height:30px !important; }
+.timeframe-group button { min-width:32px !important; height:30px !important; padding:0 6px !important; }
+.toolbar-action,
+.toolbar-icon-only { height:30px !important; }
+.toolbar-icon-only { width:32px !important; }
+
+/* Workspace consumes exactly the remaining app viewport. */
+.workspace {
+  width:100% !important;
+  max-width:100% !important;
+  height:calc(100% - 68px) !important;
+  min-height:0 !important;
+  box-sizing:border-box !important;
+  grid-template-columns:minmax(0,1fr) 430px !important;
+  gap:8px !important;
+  padding:7px 8px 8px !important;
+  overflow:hidden !important;
+}
+
+.chart-workspace {
+  min-width:0 !important;
+  min-height:0 !important;
+  display:grid !important;
+  grid-template-rows:minmax(0,1fr) 42px !important;
+  gap:0 !important;
+}
+
+.chart-main-row {
+  min-width:0 !important;
+  min-height:0 !important;
+  display:grid !important;
+  grid-template-columns:42px minmax(0,1fr) !important;
+  gap:6px !important;
+  overflow:hidden !important;
+}
+
+.chart-container {
+  min-width:0 !important;
+  min-height:0 !important;
+  width:100% !important;
+  height:100% !important;
+}
+
+.drawing-toolbar {
+  position:relative !important;
+  left:auto !important;
+  top:auto !important;
+  align-self:start !important;
+  justify-self:start !important;
+  width:42px !important;
+  margin-top:10px !important;
+  box-sizing:border-box !important;
+  z-index:12 !important;
+}
+
+.bottom-bar {
+  width:100% !important;
+  height:42px !important;
+  min-height:42px !important;
+  box-sizing:border-box !important;
+}
+
+.watchlist {
+  width:430px !important;
+  min-width:430px !important;
+  max-width:430px !important;
+  height:100% !important;
+  min-height:0 !important;
+  box-sizing:border-box !important;
+}
