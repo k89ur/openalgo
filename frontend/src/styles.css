@@ -1622,3 +1622,140 @@ button { cursor: pointer; }
   .setup-fields label:first-child { grid-column: auto; }
   .broker-choice-grid { grid-template-columns: 1fr 1fr; }
 }
+
+
+/* PIPSGOX startup gate + diagnostics */
+.startup-screen {
+  width:100%; min-height:100vh; min-height:100dvh; display:flex; align-items:center; justify-content:center;
+  padding:24px; background:#080808; color:#ddd; overflow:auto;
+}
+.startup-card,.startup-failed-card {
+  width:min(860px,100%); border:1px solid #2b3136; border-radius:14px; background:#101214;
+  box-shadow:0 24px 80px rgba(0,0,0,.45); padding:30px;
+}
+.startup-card { text-align:center; }
+.startup-card h1,.startup-failed-card h1 { margin:8px 0 8px; color:#e5e9ec; font-size:20px; letter-spacing:.08em; }
+.startup-card p,.startup-lead { margin:0 auto; max-width:650px; color:#7f8991; font-size:11px; line-height:1.7; }
+.startup-spinner {
+  width:34px; height:34px; margin:28px auto 18px; border:2px solid #26343f; border-top-color:#6f9abb;
+  border-radius:50%; animation:pipsgox-spin .8s linear infinite;
+}
+@keyframes pipsgox-spin { to { transform:rotate(360deg); } }
+.startup-progress { margin:22px auto 0; padding:12px 14px; border:1px solid #252d33; background:#0c0f11; color:#68747d; font-size:9px; letter-spacing:.04em; }
+.startup-failed-card { max-height:calc(100vh - 48px); overflow:auto; }
+.startup-failed-icon {
+  width:42px; height:42px; margin:20px 0 10px; display:flex; align-items:center; justify-content:center;
+  border:1px solid #6d373d; border-radius:50%; background:#241417; color:#ef8c95; font-size:24px;
+}
+.startup-eyebrow,.status-eyebrow { color:#77828b; font-size:8px; letter-spacing:.14em; font-weight:700; }
+.startup-account {
+  margin:22px 0 12px; padding:12px 14px; display:flex; align-items:center; gap:12px;
+  border:1px solid #272f35; background:#0d1012; font-size:9px;
+}
+.startup-account span { color:#5f6971; letter-spacing:.08em; }
+.startup-account strong { color:#d3d8dc; font-size:11px; }
+.startup-account small { margin-left:auto; color:#7c9ab0; }
+.startup-results { display:grid; gap:6px; }
+.startup-result {
+  display:flex; align-items:flex-start; gap:10px; padding:11px 12px; border:1px solid #252c31; background:#0c0f11;
+}
+.startup-result-icon { width:18px; text-align:center; font-weight:700; }
+.startup-result.ok .startup-result-icon { color:#5ec48d; }
+.startup-result.error .startup-result-icon { color:#ef7d86; }
+.startup-result.warning .startup-result-icon { color:#e2ad5f; }
+.startup-result > div { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.startup-result strong { color:#cfd5d9; font-size:10px; }
+.startup-result span { color:#7b858d; font-size:9px; line-height:1.5; }
+.startup-result code { color:#788e9e; font:8px "Consolas","Courier New",monospace; }
+.startup-summary { display:flex; gap:18px; padding:13px 2px; color:#69747d; font-size:9px; }
+.startup-actions { display:flex; justify-content:flex-end; gap:7px; margin-top:8px; }
+.status-primary,.status-secondary,.status-text-button {
+  height:30px; padding:0 13px; border-radius:6px; font-size:9px; font-weight:600; letter-spacing:.03em;
+}
+.status-primary { border:1px solid #315c79; background:#28577d; color:#fff; }
+.status-primary:hover { background:#326b96; }
+.status-primary:disabled { opacity:.45; cursor:not-allowed; }
+.status-secondary { border:1px solid #2d353b; background:#15191c; color:#8b959c; }
+.status-secondary:hover { color:#d2d8dc; background:#1b2024; }
+.startup-error-box {
+  display:flex; flex-direction:column; gap:5px; margin-top:14px; padding:12px;
+  border:1px solid #5a3439; background:#1b1113; color:#d88b92; font-size:9px;
+}
+.startup-error-box strong { color:#f0a3a8; font-size:9px; }
+.startup-advanced { margin-top:18px; border-top:1px solid #252c31; padding-top:12px; }
+.startup-advanced summary { cursor:pointer; color:#71808a; font-size:9px; letter-spacing:.08em; }
+.status-screen { min-height:100vh; min-height:100dvh; overflow:auto; background:#080808; color:#ddd; padding:24px; }
+.status-center { width:min(1040px,100%); margin:0 auto; }
+.status-center.embedded { width:100%; margin-top:14px; }
+.status-center-header { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; margin-bottom:18px; }
+.status-center-header h1 { margin:4px 0 5px; font-size:20px; letter-spacing:.08em; }
+.status-center-header p { margin:0; color:#727d85; font-size:10px; }
+.status-header-actions { display:flex; gap:6px; align-items:center; }
+.status-message { margin-bottom:12px; padding:10px 12px; border:1px solid #28343c; background:#0e1418; color:#91a5b4; font-size:9px; }
+.status-message.failed { border-color:#5a3439; background:#1b1113; color:#db8b92; }
+.status-message.degraded { border-color:#5a4b31; background:#1a160f; color:#d6b06d; }
+.status-overview-grid { display:grid; grid-template-columns:2fr repeat(3,1fr); gap:7px; margin-bottom:16px; }
+.status-health-card,.status-stat {
+  min-height:74px; padding:13px; border:1px solid #252d33; background:#0d1012;
+  display:flex; flex-direction:column; justify-content:center;
+}
+.status-health-card span,.status-stat span { color:#5f6971; font-size:8px; letter-spacing:.09em; }
+.status-health-card strong { margin-top:5px; font-size:15px; }
+.status-health-card small { margin-top:4px; color:#69747d; font-size:8px; }
+.status-health-card.healthy strong { color:#62c993; }
+.status-health-card.degraded strong { color:#dfb15f; }
+.status-health-card.failed strong { color:#ed7f88; }
+.status-stat strong { margin-top:5px; color:#cbd1d5; font-size:16px; }
+.status-section { margin-top:16px; }
+.status-section-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:7px; color:#67727a; font-size:8px; letter-spacing:.1em; }
+.status-text-button { height:auto; padding:3px 0; border:0; background:transparent; color:#7590a2; font-size:8px; }
+.diagnostic-check-list,.diagnostic-event-list { display:grid; gap:5px; }
+.diagnostic-check {
+  display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px; padding:10px 11px; border:1px solid #242c31; background:#0d1012;
+}
+.diagnostic-check-icon { font-weight:700; text-align:center; color:#62c993; }
+.diagnostic-check.warning .diagnostic-check-icon { color:#dfb15f; }
+.diagnostic-check.error .diagnostic-check-icon { color:#ed7f88; }
+.diagnostic-check-main { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.diagnostic-check-main strong { color:#cdd3d7; font-size:10px; }
+.diagnostic-check-main span { color:#727d85; font-size:9px; line-height:1.5; }
+.diagnostic-check-main code { color:#7891a4; font:8px "Consolas","Courier New",monospace; }
+.diagnostic-technical { grid-column:2; margin:2px 0 0; padding:8px; overflow:auto; background:#080a0b; color:#7f929f; font:8px/1.45 "Consolas","Courier New",monospace; white-space:pre-wrap; }
+.diagnostic-event {
+  position:relative; width:100%; display:grid; grid-template-columns:72px 150px minmax(0,1fr) 38px; gap:9px;
+  align-items:center; padding:10px 11px; border:1px solid #242c31; background:#0d1012; color:#aeb6bb; text-align:left;
+}
+.diagnostic-event:hover { background:#12171a; }
+.diagnostic-event-severity { font-size:7px; font-weight:700; letter-spacing:.08em; }
+.diagnostic-event.critical .diagnostic-event-severity,.diagnostic-event.error .diagnostic-event-severity { color:#ed7f88; }
+.diagnostic-event.warning .diagnostic-event-severity { color:#dfb15f; }
+.diagnostic-event.info .diagnostic-event-severity { color:#7898ad; }
+.diagnostic-event-time { color:#5f6971; font-size:8px; }
+.diagnostic-event-main { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.diagnostic-event-main strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#cdd3d7; font-size:9px; }
+.diagnostic-event-main small { color:#68737b; font-size:8px; }
+.diagnostic-event-count { color:#657079; font-size:8px; text-align:right; }
+.diagnostic-event-detail {
+  grid-column:1 / -1; padding:9px; border-top:1px solid #252d33; margin-top:2px; color:#78848d; font-size:8px; line-height:1.7;
+}
+.diagnostic-event-detail pre { margin:5px 0 0; padding:8px; overflow:auto; background:#080a0b; color:#81939f; white-space:pre-wrap; font:8px/1.45 "Consolas","Courier New",monospace; }
+.status-empty { padding:18px; border:1px dashed #293139; color:#66717a; text-align:center; font-size:9px; }
+.status-modal-backdrop { z-index:60; background:rgba(0,0,0,.72); }
+.status-modal { width:min(1080px,94vw); max-height:92vh; overflow:auto; background:#090b0c; border:1px solid #30383e; border-radius:10px; box-shadow:0 24px 80px #000; }
+.status-modal .status-center { padding:22px; }
+.status-modal .status-center-header { position:sticky; top:-22px; padding-top:2px; background:#090b0c; z-index:2; }
+
+@media (max-width:700px) {
+  .startup-screen { padding:12px; align-items:flex-start; }
+  .startup-card,.startup-failed-card { padding:20px; margin-top:10px; }
+  .status-screen { padding:12px; }
+  .status-center-header { flex-direction:column; }
+  .status-header-actions { width:100%; }
+  .status-header-actions .status-primary { flex:1; }
+  .status-overview-grid { grid-template-columns:1fr 1fr; }
+  .status-health-card { grid-column:1 / -1; }
+  .diagnostic-event { grid-template-columns:64px 1fr 30px; }
+  .diagnostic-event-time { display:none; }
+  .startup-actions { justify-content:stretch; }
+  .startup-actions button { flex:1; }
+}
