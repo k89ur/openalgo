@@ -1956,7 +1956,17 @@ def history(
         if not access_token:
             raise HTTPException(status_code=409, detail="Selected broker account is not connected.")
         if account.broker == "dhan":
-            return _dhan_history(account_id, symbol, timeframe, limit, from_date, to_date)
+            candles = _dhan_history(account_id, symbol, timeframe, limit, from_date, to_date)
+            if not candles:
+                diagnostics.record(
+                    severity="ERROR", category="MARKET_DATA", component="History API",
+                    service="/api/history", error_code="PIP-MARKET-HISTORY-002",
+                    message=f"No historical data was returned for {symbol.strip().upper()}.",
+                    account_id=account_id, broker=account.broker, symbol=symbol.strip().upper(),
+                )
+                raise HTTPException(status_code=503, detail=f"No historical data returned for {symbol.strip().upper()}.")
+            diagnostics.resolve(error_code="PIP-MARKET-HISTORY-002", account_id=account_id, symbol=symbol.strip().upper())
+            return candles
 
         selected_provider = _market_data_provider_for_account(account_id)
 
@@ -1992,6 +2002,20 @@ def history(
             if candles is None:
                 raise last_error
 
+        if not candles:
+            clean_symbol = symbol.strip().upper()
+            diagnostics.record(
+                severity="ERROR", category="MARKET_DATA", component="History API",
+                service="/api/history", error_code="PIP-MARKET-HISTORY-002",
+                message=f"No historical data was returned for {clean_symbol}.",
+                account_id=account_id, broker=account.broker, symbol=clean_symbol,
+            )
+            raise HTTPException(status_code=503, detail=f"No historical data returned for {clean_symbol}.")
+        diagnostics.resolve(
+            error_code="PIP-MARKET-HISTORY-002",
+            account_id=account_id,
+            symbol=symbol.strip().upper(),
+        )
         return [to_candle(item) for item in candles]
     except ValueError as exc:
         logger.exception("Market-data history failed: account_id=%s symbol=%s timeframe=%s", account_id, symbol.strip().upper(), timeframe)
@@ -2088,6 +2112,21 @@ def pipscript_data(request: PipscriptDataBatchRequest) -> dict[str, object]:
         except (ValueError, HTTPException) as exc:
             message = exc.detail if isinstance(exc, HTTPException) else str(exc)
             errors.append({"name": name, "type": item.type, "message": str(message)})
+    if errors:
+        severity = "ERROR" if len(errors) == len(request.requests) and request.requests else "WARNING"
+        diagnostics.record(
+            severity=severity,
+            category="PIPSCRIPT",
+            component="Data Gateway",
+            service="/api/pipscript/data",
+            error_code="PIP-PIPSCRIPT-DATA-001",
+            message=f"{len(errors)} Pipscript data request(s) failed.",
+            account_id=request.account_id,
+            broker=account.broker,
+            technical_detail=json.dumps(errors, ensure_ascii=False),
+        )
+    else:
+        diagnostics.resolve(error_code="PIP-PIPSCRIPT-DATA-001", account_id=request.account_id)
     return {"history": history_data, "quotes": quotes_data, "errors": errors}
 
 def _dhan_quote(account_id: int, symbol: str) -> Quote:
@@ -2155,7 +2194,17 @@ def quote(
             if result is None:
                 raise last_error
         result = replace(result, symbol=original)
-        return to_quote(result)
+        normalized = to_quote(result)
+        if normalized.last <= 0:
+            diagnostics.record(
+                severity="ERROR", category="MARKET_DATA", component="Quote API",
+                service="/api/quote", error_code="PIP-MARKET-QUOTE-002",
+                message=f"No usable quote was returned for {original}.",
+                account_id=account_id, broker=account.broker, symbol=original,
+            )
+            raise HTTPException(status_code=503, detail=f"No usable quote returned for {original}.")
+        diagnostics.resolve(error_code="PIP-MARKET-QUOTE-002", account_id=account_id, symbol=original)
+        return normalized
     except ValueError as exc:
         logger.exception("Market-data quote failed: account_id=%s symbol=%s", account_id, symbol.strip().upper())
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -2258,7 +2307,29 @@ def quotes(
     requested = [item.strip().upper() for item in symbols.split(",") if item.strip()]
     selected_provider = _market_data_provider_for_account(account_id)
     try:
-        return get_quotes_for_symbols(requested, selected_provider)
+        results = get_quotes_for_symbols(requested, selected_provider)
+        broker_name = str(getattr(selected_provider, "broker", "") or "unknown")
+        missing = [symbol for symbol in requested if symbol not in {item.symbol.upper() for item in results}]
+        if requested and not results:
+            diagnostics.record(
+                severity="ERROR", category="MARKET_DATA", component="Quotes API",
+                service="/api/quotes", error_code="PIP-MARKET-QUOTES-001",
+                message=f"No quotes were returned for the {len(requested)} requested symbol(s).",
+                account_id=account_id, broker=broker_name,
+                technical_detail=", ".join(requested[:20]),
+            )
+        elif missing:
+            diagnostics.record(
+                severity="WARNING", category="MARKET_DATA", component="Quotes API",
+                service="/api/quotes", error_code="PIP-MARKET-QUOTES-002",
+                message=f"{len(missing)} requested symbol(s) did not return quotes.",
+                account_id=account_id, broker=broker_name,
+                technical_detail=", ".join(missing[:20]),
+            )
+        else:
+            diagnostics.resolve(error_code="PIP-MARKET-QUOTES-001", account_id=account_id)
+            diagnostics.resolve(error_code="PIP-MARKET-QUOTES-002", account_id=account_id)
+        return results
     except Exception:
         logger.exception("Market-data quotes failed: account_id=%s broker=%s symbols=%s", account_id, getattr(selected_provider, "broker", "unknown"), requested[:20])
         raise
