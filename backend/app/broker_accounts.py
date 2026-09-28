@@ -91,7 +91,8 @@ def _connect() -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path)
     connection.row_factory = sqlite3.Row
-    connection.execute(
+        connection.execute("PRAGMA foreign_keys = ON")
+connection.execute(
         """
         CREATE TABLE IF NOT EXISTS broker_accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -293,6 +294,23 @@ def create_account(broker: str, account_name: str, client_id: str, api_secret: s
         ).fetchone()
         connection.close()
     return BrokerAccount(**dict(row))
+
+
+def reset_all() -> dict[str, int]:
+    """Clear all broker configuration owned by this single-owner installation."""
+    with _DB_LOCK:
+        connection = _connect()
+        counts: dict[str, int] = {}
+        for table in ("broker_oauth_states", "order_idempotency", "broker_accounts"):
+            cursor = connection.execute("DELETE FROM " + table)
+            counts[table] = cursor.rowcount
+        connection.commit()
+        connection.close()
+    return {
+        "broker_accounts": counts["broker_accounts"],
+        "oauth_states": counts["broker_oauth_states"],
+        "order_correlations": counts["order_idempotency"],
+    }
 
 
 def delete_account(account_id: int) -> bool:
