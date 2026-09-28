@@ -2117,75 +2117,61 @@ json.dumps(_result)`;
         <button className="toolbar-icon-only" title="Fullscreen" onClick={() => { const root = document.querySelector<HTMLElement>(".app"); if (root?.requestFullscreen) void root.requestFullscreen(); }}><TerminalIcon name="fullscreen" /></button>
       </header>
       <section className="workspace">
-        <section className="chart-workspace">
-          <div className="chart-container">
-            <Chart
-              chartType={chartType}
-              dark={dark}
-              symbol={symbol}
-              accountId={selectedAccountId}
-              timeframe={timeframe}
-              range={chartRange}
-              activeDrawingTool={activeDrawingTool}
-              drawingCommand={drawingCommand}
-              chartTheme={chartSettings.theme}
-              chartColors={chartSettings.colors}
-              showGrid={chartSettings.showGrid}
-              showCrosshair={chartSettings.showCrosshair}
-              showVolume={chartSettings.showVolume}
-              showVwap={chartSettings.showVwap}
-              show52WeekHigh={chartSettings.show52WeekHigh}
-              show52WeekLow={chartSettings.show52WeekLow}
-              showPreviousClose={chartSettings.showPreviousClose}
-              previousClose={previousClose}
-              pipscriptOutput={pipscriptOutput}
-            />
-
-            <div
-              className={"drawing-toolbar" + (drawingToolbarOpen ? "" : " is-hidden")}
-              aria-label="Drawing tools"
-              style={{ left: drawingToolbarPosition.x, top: drawingToolbarPosition.y }}
-              onPointerDown={startDrawingToolbarDrag}
-            >
-              {drawingToolbarOpen && (
-                <>
-                  <button type="button" className={activeDrawingTool === "crosshair" ? "active" : ""} onClick={() => setActiveDrawingTool("crosshair")} title="Crosshair" aria-label="Crosshair"><DrawingIcon name="crosshair" /></button>
-                  <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trend Line" aria-label="Trend Line"><DrawingIcon name="trendline" /></button>
-                  <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray"><DrawingIcon name="horizontalRay" /></button>
-                  <button type="button" className={activeDrawingTool === "rectangle" ? "active" : ""} onClick={() => setActiveDrawingTool("rectangle")} title="Rectangle" aria-label="Rectangle"><DrawingIcon name="rectangle" /></button>
-                  <span className="drawing-toolbar-divider" />
-                  <button type="button" className={activeDrawingTool === "long" ? "active" : ""} onClick={() => setActiveDrawingTool("long")} title="Long Position" aria-label="Long Position"><DrawingIcon name="long" /></button>
-                  <button type="button" className={activeDrawingTool === "short" ? "active" : ""} onClick={() => setActiveDrawingTool("short")} title="Short Position" aria-label="Short Position"><DrawingIcon name="short" /></button>
-                  <button type="button" className={activeDrawingTool === "channel" ? "active" : ""} onClick={() => setActiveDrawingTool("channel")} title="Channel" aria-label="Channel"><DrawingIcon name="channel" /></button>
-                  <button type="button" className={activeDrawingTool === "brush" ? "active" : ""} onClick={() => setActiveDrawingTool("brush")} title="Brush" aria-label="Brush"><DrawingIcon name="brush" /></button>
-                  <button type="button" className={activeDrawingTool === "text" ? "active" : ""} onClick={() => setActiveDrawingTool("text")} title="Text" aria-label="Text"><DrawingIcon name="text" /></button>
-                  <button type="button" className="drawing-toolbar-more" title="More drawing tools" aria-label="More drawing tools"><TerminalIcon name="more" /></button>
-                  <span className="drawing-toolbar-divider" />
-                  <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete" aria-label="Delete"><DrawingIcon name="delete" /></button>
-                  <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear All" aria-label="Clear All"><DrawingIcon name="clear" /></button>
-                </>
-              )}
+          <div className="chart-main-row">
+            <div className="drawing-toolbar" aria-label="Drawing tools">
+              <>
+                <button type="button" className={activeDrawingTool === "crosshair" ? "active" : ""} onClick={() => setActiveDrawingTool("crosshair")} title="Crosshair" aria-label="Crosshair"><DrawingIcon name="crosshair" /></button>
+                <button type="button" className={activeDrawingTool === "trendline" ? "active" : ""} onClick={() => setActiveDrawingTool("trendline")} title="Trend Line" aria-label="Trend Line"><DrawingIcon name="trendline" /></button>
+                <button type="button" className={activeDrawingTool === "horizontalRay" ? "active" : ""} onClick={() => setActiveDrawingTool("horizontalRay")} title="Horizontal Ray" aria-label="Horizontal Ray"><DrawingIcon name="horizontalRay" /></button>
+                <button type="button" className={activeDrawingTool === "rectangle" ? "active" : ""} onClick={() => setActiveDrawingTool("rectangle")} title="Rectangle" aria-label="Rectangle"><DrawingIcon name="rectangle" /></button>
+                <span className="drawing-toolbar-divider" />
+                <button type="button" className={activeDrawingTool === "long" ? "active" : ""} onClick={() => setActiveDrawingTool("long")} title="Long Position" aria-label="Long Position"><DrawingIcon name="long" /></button>
+                <button type="button" className={activeDrawingTool === "short" ? "active" : ""} onClick={() => setActiveDrawingTool("short")} title="Short Position" aria-label="Short Position"><DrawingIcon name="short" /></button>
+                <button type="button" className={activeDrawingTool === "channel" ? "active" : ""} onClick={() => setActiveDrawingTool("channel")} title="Channel" aria-label="Channel"><DrawingIcon name="channel" /></button>
+                <button type="button" className={activeDrawingTool === "brush" ? "active" : ""} onClick={() => setActiveDrawingTool("brush")} title="Brush" aria-label="Brush"><DrawingIcon name="brush" /></button>
+                <button type="button" className={activeDrawingTool === "text" ? "active" : ""} onClick={() => setActiveDrawingTool("text")} title="Text" aria-label="Text"><DrawingIcon name="text" /></button>
+                <button type="button" className="drawing-toolbar-more" title="More drawing tools" aria-label="More drawing tools"><TerminalIcon name="more" /></button>
+                <span className="drawing-toolbar-divider" />
+                <button type="button" onClick={() => setDrawingCommand({ type: "delete", nonce: Date.now() })} title="Delete" aria-label="Delete"><DrawingIcon name="delete" /></button>
+                <button type="button" onClick={() => setDrawingCommand({ type: "clear", nonce: Date.now() })} title="Clear All" aria-label="Clear All"><DrawingIcon name="clear" /></button>
+              </>
             </div>
-            <div className="chart-header-overlay">
-              <span className="chart-header-symbol">
-                {symbol} · {timeframe} · NSE
-              </span>
-              <span className={`chart-header-price ${changePercent < 0 ? "negative" : "positive"}`}>
-                {hasLiveData ? price.toFixed(2) : "—"}
-              </span>
-              <span className={`chart-header-change ${changePercent < 0 ? "negative" : "positive"}`}>
-                {hasLiveData
-                  ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)`
-                  : "No data"}
-              </span>
-              {hasLiveData && (
-                <span className="chart-header-ohlc">
-                  O <b>{open != null ? open.toFixed(2) : "—"}</b>
-                  H <b>{high != null ? high.toFixed(2) : "—"}</b>
-                  L <b>{low != null ? low.toFixed(2) : "—"}</b>
-                  C <b>{price.toFixed(2)}</b>
-                </span>
-              )}
+
+            <div className="chart-container">
+              <Chart
+                chartType={chartType}
+                dark={dark}
+                symbol={symbol}
+                accountId={selectedAccountId}
+                timeframe={timeframe}
+                range={chartRange}
+                activeDrawingTool={activeDrawingTool}
+                drawingCommand={drawingCommand}
+                chartTheme={chartSettings.theme}
+                chartColors={chartSettings.colors}
+                showGrid={chartSettings.showGrid}
+                showCrosshair={chartSettings.showCrosshair}
+                showVolume={chartSettings.showVolume}
+                showVwap={chartSettings.showVwap}
+                show52WeekHigh={chartSettings.show52WeekHigh}
+                show52WeekLow={chartSettings.show52WeekLow}
+                showPreviousClose={chartSettings.showPreviousClose}
+                previousClose={previousClose}
+                pipscriptOutput={pipscriptOutput}
+              />
+              <div className="chart-header-overlay">
+                <span className="chart-header-symbol">{symbol} · {timeframe} · NSE</span>
+                <span className={`chart-header-price ${changePercent < 0 ? "negative" : "positive"}`}>{hasLiveData ? price.toFixed(2) : "—"}</span>
+                <span className={`chart-header-change ${changePercent < 0 ? "negative" : "positive"}`}>{hasLiveData ? `${changeAmount >= 0 ? "+" : ""}${changeAmount.toFixed(2)} (${changePercent.toFixed(2)}%)` : "No data"}</span>
+                {hasLiveData && (
+                  <span className="chart-header-ohlc">
+                    O <b>{open != null ? open.toFixed(2) : "—"}</b>
+                    H <b>{high != null ? high.toFixed(2) : "—"}</b>
+                    L <b>{low != null ? low.toFixed(2) : "—"}</b>
+                    C <b>{price.toFixed(2)}</b>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
