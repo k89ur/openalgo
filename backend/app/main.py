@@ -884,6 +884,32 @@ def _fyers_session_valid() -> bool:
         return False
 
 
+def _system_readiness() -> dict[str, object]:
+    """Return broker-agnostic PIPSGOX server/configuration readiness."""
+    user_configured = auth.has_user()
+    try:
+        accounts = broker_accounts.list_accounts()
+    except Exception:
+        accounts = []
+
+    connected_accounts = [
+        account for account in accounts
+        if account.status.strip().lower() == "connected"
+    ]
+    broker_accounts_configured = bool(accounts)
+    broker_connected = bool(connected_accounts)
+    ready = user_configured and broker_connected
+
+    return {
+        "user_configured": user_configured,
+        "broker_accounts_configured": broker_accounts_configured,
+        "broker_connected": broker_connected,
+        "connected_broker_count": len(connected_accounts),
+        "broker_account_count": len(accounts),
+        "ready": ready,
+    }
+
+
 
 
 class BrokerAccountCreate(BaseModel):
@@ -1727,12 +1753,13 @@ def fyers_status() -> dict[str, object]:
 @app.get("/api/dev/status")
 def dev_status() -> dict[str, object]:
     process = dev_control.status()
-    configured = _fyers_session_valid()
-    connected = configured
+    readiness = _system_readiness()
     return {
         **process,
-        "fyers_configured": configured,
-        "fyers_connected": connected,
+        **readiness,
+        # Keep provider-specific status for diagnostics/backward compatibility.
+        "fyers_configured": _fyers_session_valid(),
+        "fyers_connected": _fyers_session_valid(),
         "web_url": PIPSGOX_WEB_URL,
         "api_url": _codespace_forwarded_url(8000),
     }
@@ -1764,14 +1791,17 @@ def dev_restart() -> dict[str, str]:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    connected = _fyers_session_valid()
+def health() -> dict[str, object]:
+    readiness = _system_readiness()
     return {
         "status": "ok",
         "app": "pipsgox",
+        "server": "running",
         "data_provider": "broker_account",
-        "configured": "true" if connected else "false",
-        "fyers_connected": "true" if connected else "false",
+        **readiness,
+        # Backward-compatible FYERS field for older tooling. This is
+        # provider-specific and must not be used as overall readiness.
+        "fyers_connected": _fyers_session_valid(),
     }
 
 
