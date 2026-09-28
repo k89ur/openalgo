@@ -592,7 +592,6 @@ function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" | "cross
   if (name === "rectangle") return <svg {...common}><rect x="4" y="6" width="16" height="12" rx="1" /></svg>;
   if (name === "long") return <svg {...common}><path d="M5 18L18 5" /><path d="M12 5h6v6" /><path d="M5 18h6" /></svg>;
   if (name === "short") return <svg {...common}><path d="M5 6l13 13" /><path d="M12 19h6v-6" /><path d="M5 6h6" /></svg>;
-  if (name === "arrow") return <svg {...common}><path d="M4 20L19 5" /><path d="M11 5h8v8" /></svg>;
   if (name === "brush") return <svg {...common}><path d="M14 5l5 5-9.5 9.5H5V15z" /><path d="M13 6l5 5" /><path d="M5 20c1.5-2 3-2 4 0" /></svg>;
   if (name === "text") return <svg {...common}><path d="M5 5h14M12 5v14M8 19h8" /></svg>;
   if (name === "delete") return <svg {...common}><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></svg>;
