@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction, type FormEvent } from "react";
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type FormEvent } from "react";
 import { apiFetch } from "./api";
 import ReactDOM from "react-dom/client";
 import { Chart, type ChartType, type Timeframe, type ChartRange, type DrawingTool, type PipscriptOutput, type ChartColors } from "./Chart";
@@ -2821,6 +2821,77 @@ json.dumps(_result)`;
   );
 }
 
+type AppErrorBoundaryState = {
+  hasError: boolean;
+  message: string;
+  details: string;
+};
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = { hasError: false, message: "", details: "" };
+
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return {
+      hasError: true,
+      message: error?.message || "PIPSGOX frontend encountered an unexpected error.",
+      details: error?.stack || "",
+    };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    let accountId: number | null = null;
+    try {
+      const raw = localStorage.getItem("pipsgox-selected-account");
+      const value = raw ? Number(raw) : NaN;
+      accountId = Number.isInteger(value) && value > 0 ? value : null;
+    } catch {
+      accountId = null;
+    }
+
+    void apiFetch("/api/diagnostics/frontend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        account_id: accountId,
+        message: error?.message || "PIPSGOX frontend render failure.",
+        stack: error?.stack || "",
+        component_stack: info?.componentStack || "",
+      }),
+    }).catch(() => undefined);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <main className="startup-screen">
+        <div className="startup-failed-card">
+          <div className="auth-brand">PIPSGOX</div>
+          <div className="startup-failed-icon">×</div>
+          <div className="startup-eyebrow">FRONTEND FAILURE</div>
+          <h1>APPLICATION FAILED TO RENDER</h1>
+          <p className="startup-lead">
+            PIPSGOX stopped the main interface because a frontend component crashed. The failure has been recorded in Status Center.
+          </p>
+          <div className="startup-error-box">
+            <strong>PIP-FRONTEND-RENDER-001</strong>
+            <span>{this.state.message}</span>
+          </div>
+          <div className="startup-actions">
+            <button className="status-primary" onClick={() => window.location.reload()}>RELOAD PIPSGOX</button>
+          </div>
+          <details className="startup-advanced">
+            <summary>ADVANCED TECHNICAL DETAILS</summary>
+            <pre className="diagnostic-technical">{this.state.details || "No stack trace available."}</pre>
+          </details>
+        </div>
+      </main>
+    );
+  }
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  window.location.pathname === "/dev" ? <DevConsole /> : <App />,
+  <AppErrorBoundary>
+    {window.location.pathname === "/dev" ? <DevConsole /> : <App />}
+  </AppErrorBoundary>,
 );
