@@ -2229,16 +2229,14 @@ json.dumps(_result)`;
               <button className="active">WATCHLIST</button>
             </div>
             <div className="watch-header">
-              <strong>{activeWatchlistName}</strong>
+              <strong>Watchlist</strong>
               <span>{watchlist.length} / {MAX_WATCHLIST_SIZE}</span>
               <div className="watch-spacer" />
               <div className="watch-actions" aria-label="Watchlist actions">
-                <button onClick={() => setWatchDialog({ type: "add", value: "" })} title="Add symbol" aria-label="Add symbol"><UiIcon name="add" /></button>
-                <button onClick={() => setWatchDialog({ type: "import", value: "" })} title="Import watchlist" aria-label="Import watchlist"><UiIcon name="import" /></button>
-                <button onClick={() => setWatchDialog({ type: "export", value: "" })} title="Export watchlist" aria-label="Export watchlist"><UiIcon name="export" /></button>
-                <button onClick={() => setWatchDialog({ type: "new", value: "" })} title="New watchlist" aria-label="New watchlist"><UiIcon name="new" /></button>
-                <button onClick={() => setWatchDialog({ type: "delete", value: "" })} title="Delete watchlist" aria-label="Delete watchlist"><UiIcon name="delete" /></button>
-                <button onClick={() => setWatchOpen(false)} title="Hide watchlist" aria-label="Hide watchlist"><UiIcon name="hide" /></button>
+                <button onClick={() => setWatchDialog({ type: "add", value: "" })} title="Add symbol" aria-label="Add symbol"><TerminalIcon name="plus" /></button>
+                <button onClick={() => setWatchDialog({ type: "import", value: "" })} title="Import watchlist" aria-label="Import watchlist"><TerminalIcon name="upload" /></button>
+                <button onClick={() => setWatchDialog({ type: "export", value: "" })} title="Export watchlist" aria-label="Export watchlist"><TerminalIcon name="download" /></button>
+                <button onClick={() => setWatchDialog({ type: "new", value: "" })} title="More watchlist actions" aria-label="More watchlist actions"><TerminalIcon name="more" /></button>
               </div>
               <input
                 ref={watchImportRef}
