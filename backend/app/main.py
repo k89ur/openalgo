@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, dev_control, broker_accounts, security_audit, diagnostics
+from app import auth, broker_accounts, security_audit, diagnostics
 from app.broker_manager import BrokerManager
 
 load_dotenv()
@@ -1752,46 +1752,6 @@ def fyers_status() -> dict[str, object]:
         "status": "connected" if connected else "not_connected",
         "redirect_uri": FYERS_REDIRECT_URI,
     }
-
-
-@app.get("/api/dev/status")
-def dev_status() -> dict[str, object]:
-    process = dev_control.status()
-    readiness = _system_readiness()
-    return {
-        **process,
-        **readiness,
-        # Keep provider-specific status for diagnostics/backward compatibility.
-        "fyers_configured": _fyers_session_valid(),
-        "fyers_connected": _fyers_session_valid(),
-        "web_url": PIPSGOX_WEB_URL,
-        "api_url": _codespace_forwarded_url(8000),
-    }
-
-
-@app.get("/api/dev/logs/{name}")
-def dev_logs(name: str, lines: int = Query(default=80, ge=1, le=200)) -> dict[str, str]:
-    if name not in {"backend", "frontend"}:
-        raise HTTPException(status_code=400, detail="Log name must be backend or frontend.")
-    return {"name": name, "content": dev_control.tail_log(name, lines)}
-
-
-@app.post("/api/dev/start")
-def dev_start() -> dict[str, str]:
-    dev_control.start()
-    return {"status": "starting"}
-
-
-@app.post("/api/dev/stop")
-def dev_stop() -> dict[str, str]:
-    dev_control.stop()
-    return {"status": "stopping"}
-
-
-@app.post("/api/dev/restart")
-def dev_restart() -> dict[str, str]:
-    dev_control.restart()
-    return {"status": "restarting"}
 
 
 @app.get("/health")
