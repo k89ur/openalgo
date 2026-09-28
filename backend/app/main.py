@@ -1195,6 +1195,28 @@ def _run_startup_checks(account_id: int) -> dict[str, object]:
     }
 
 
+class FrontendDiagnosticRequest(BaseModel):
+    account_id: int | None = None
+    message: str
+    stack: str = ""
+    component_stack: str = ""
+
+
+@app.post("/api/diagnostics/frontend")
+def diagnostics_frontend(request: FrontendDiagnosticRequest) -> dict[str, object]:
+    event = diagnostics.record(
+        severity="CRITICAL",
+        category="FRONTEND",
+        component="React",
+        service="frontend-renderer",
+        error_code="PIP-FRONTEND-RENDER-001",
+        message=request.message,
+        account_id=request.account_id,
+        technical_detail=f"{request.stack}\n{request.component_stack}".strip(),
+    )
+    return {"recorded": True, "event_id": event.get("id")}
+
+
 @app.post("/api/startup/check/{account_id}")
 def startup_check(account_id: int) -> dict[str, object]:
     return _run_startup_checks(account_id)
