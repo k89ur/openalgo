@@ -997,8 +997,7 @@ button { cursor: pointer; }
   margin-top:11px;
   color:#565d64;
   font-size:7px;  line-height:1.5;
-}
-.broker-actions {
+}.broker-actions {
   display:flex;
   justify-content:flex-end;
   gap:6px;
@@ -1997,8 +1996,7 @@ button { cursor: pointer; }
   height:30px !important;  margin:0 !important;
   border:0 !important;
   color:#9ba5ac !important;
-  background:transparent !important;
-}
+  background:transparent !important;}
 .drawing-toolbar.is-hidden .drawing-toolbar-toggle:hover {
   color:#fff !important;
   background:#171e23 !important;
@@ -2655,3 +2653,136 @@ html, body, #root {
 .app .watch-columns,
 .app .bottom-bar,
 .app .symbol-detail-card { background-color:#000 !important; background-image:none !important; }
+
+/* FINAL REFERENCE-SCALE PASS — restore target terminal density without changing layout/data */
+.terminal-nav {
+  height:54px !important;
+  min-height:54px !important;
+  padding:0 12px !important;
+  gap:10px !important;
+}
+.terminal-brand { gap:9px !important; }
+.terminal-brand-mark { width:31px !important; height:31px !important; font-size:23px !important; border-radius:7px 10px 7px 10px !important; }
+.terminal-brand-copy strong { font-size:18px !important; }
+.terminal-brand-copy span { margin-top:3px !important; font-size:8px !important; }
+.terminal-nav-item { height:54px !important; min-width:76px !important; padding:0 10px !important; gap:7px !important; font-size:12px !important; }
+.terminal-nav-item svg { width:15px !important; height:15px !important; }
+.terminal-global-search { height:37px !important; min-height:37px !important; padding:0 10px 0 12px !important; gap:8px !important; border-radius:6px !important; }
+.terminal-global-search svg { width:15px !important; height:15px !important; }
+.terminal-global-search input { font-size:11px !important; }
+.terminal-global-search kbd { padding:3px 6px !important; font-size:9px !important; }
+.terminal-account-hub { height:38px !important; border-radius:6px !important; }
+.terminal-account-card { width:125px !important; gap:7px !important; padding:0 8px !important; }
+.terminal-account-logo { width:23px !important; height:23px !important; font-size:11px !important; }
+.terminal-account-copy strong { font-size:10px !important; }
+.terminal-account-copy small { font-size:8px !important; }
+.terminal-metric { min-width:68px !important; padding:0 8px !important; }
+.terminal-metric span { font-size:8px !important; }
+.terminal-metric strong { font-size:10px !important; }
+.terminal-icon-btn { width:38px !important; }
+.terminal-icon-btn svg { width:15px !important; height:15px !important; }
+
+.instrument-toolbar {
+  height:48px !important;
+  min-height:48px !important;
+  gap:6px !important;
+  padding:0 10px !important;
+}
+.instrument-search { height:40px !important; width:224px !important; flex:0 0 224px !important; gap:8px !important; }
+.instrument-search>svg { width:15px !important; height:15px !important; margin-left:11px !important; }
+.instrument-search input { font-size:13px !important; }
+.instrument-exchange { min-width:66px !important; font-size:11px !important; }
+.timeframe-group { height:40px !important; }
+.timeframe-group button { min-width:39px !important; height:40px !important; padding:0 7px !important; font-size:11px !important; }
+.toolbar-divider { height:27px !important; }
+.toolbar-action,.toolbar-icon-only { height:40px !important; }
+.toolbar-action { padding:0 11px !important; gap:7px !important; font-size:11px !important; }
+.toolbar-action svg { width:14px !important; height:14px !important; }
+.toolbar-icon-only { width:40px !important; }
+.toolbar-icon-only svg { width:14px !important; height:14px !important; }
+
+.workspace { height:calc(100% - 102px) !important; padding:7px 9px 9px !important; gap:8px !important; }
+.chart-workspace { grid-template-rows:minmax(0,1fr) 42px !important; }
+.chart-main-row { grid-template-columns:42px minmax(0,1fr) !important; gap:6px !important; }
+.chart-header-overlay { left:10px !important; top:10px !important; gap:9px !important; padding:7px 9px !important; }
+.chart-header-symbol { font-size:13px !important; }
+.chart-header-price,.chart-header-change { font-size:12px !important; }
+.chart-header-ohlc { font-size:10px !important; }
+
+.drawing-toolbar { width:38px !important; padding:4px !important; gap:2px !important; margin-top:8px !important; }
+.drawing-toolbar button { width:29px !important; height:29px !important; }
+.drawing-toolbar button svg { width:14px !important; height:14px !important; }
+.drawing-toolbar-divider { width:21px !important; margin:3px auto !important; }
+
+.bottom-bar { height:42px !important; min-height:42px !important; padding:0 8px !important; }
+.bottom-range-group button,.bottom-chart-controls button { height:30px !important; min-width:31px !important; padding:0 8px !important; font-size:10px !important; }
+.bottom-calendar { width:34px !important; min-width:34px !important; }
+.bottom-calendar svg,.bottom-chart-controls svg { width:13px !important; height:13px !important; }
+.terminal-clock { font-size:10px !important; padding:0 6px !important; }
+
+/* Watchlist copied to the reference panel proportions. */
+.watchlist {
+  width:430px !important;
+  min-width:430px !important;
+  max-width:430px !important;
+  border:1px solid #1d2226 !important;
+  border-radius:5px !important;
+  background:#000 !important;
+}
+.watch-header {
+  height:53px !important;
+  padding:0 11px !important;
+  gap:10px !important;
+  border-bottom:1px solid #1b2024 !important;
+}
+.watch-header>strong { font-size:16px !important; font-weight:500 !important; }
+.watch-header>span { font-size:11px !important; }
+.watch-actions { gap:4px !important; }
+.watch-actions button { width:31px !important; height:31px !important; }
+.watch-actions button svg { width:16px !important; height:16px !important; }
+.watch-search {
+  height:39px !important;
+  margin:8px 10px !important;
+  width:calc(100% - 20px) !important;
+  padding:0 10px 0 34px !important;
+  border-radius:6px !important;
+  font-size:11px !important;
+}
+.watch-columns {
+  height:32px !important;
+  grid-template-columns:minmax(100px,1.55fr) 62px 70px 46px 76px 18px !important;
+  padding:0 9px !important;
+  font-size:9px !important;
+}
+.watch-row { min-height:41px !important; }
+.watch-row-main {
+  height:41px !important;
+  padding:0 9px !important;
+  grid-template-columns:minmax(100px,1.55fr) 62px 70px 46px 76px 18px !important;
+}
+.watch-row:hover { background:#11181d !important; }
+.watch-row.selected { background:#06211c !important; box-shadow:inset 3px 0 0 var(--pg-green) !important; }
+.watch-symbol { gap:9px !important; font-size:11px !important; font-weight:500 !important; }
+.watch-symbol::before { content:"◇" !important; color:#ffb300 !important; font-size:17px !important; transform:scaleX(.85) !important; }
+.watch-row:hover .watch-symbol::before { color:#ffc000 !important; }
+.watch-price,.watch-change,.watch-volume,.watch-bid-ask { font-size:10px !important; }
+.watch-remove { font-size:15px !important; }
+
+.symbol-detail-card {
+  left:8px !important; right:8px !important; bottom:8px !important;
+  min-height:244px !important; padding:13px !important;
+  border-color:#1d2226 !important; border-radius:5px !important;
+}
+.symbol-detail-head strong { font-size:21px !important; }
+.symbol-detail-head span { padding:3px 7px !important; font-size:10px !important; }
+.symbol-detail-sub { margin-top:6px !important; font-size:10px !important; }
+.symbol-detail-price-row { margin-top:12px !important; gap:8px !important; }
+.symbol-detail-price-row strong { font-size:27px !important; }
+.symbol-detail-price-row span { font-size:12px !important; }
+.symbol-detail-day { gap:17px !important; margin-top:-21px !important; }
+.symbol-detail-day span { font-size:10px !important; gap:4px !important; }
+.symbol-detail-day b { font-size:11px !important; }
+.symbol-detail-stats { margin-top:16px !important; }
+.symbol-detail-stats span { padding:8px 6px !important; gap:5px !important; }
+.symbol-detail-stats small { font-size:9px !important; }
+.symbol-detail-stats b { font-size:10px !important; }
