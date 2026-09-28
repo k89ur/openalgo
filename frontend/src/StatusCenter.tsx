@@ -155,10 +155,18 @@ export function StatusCenter({ accountId, embedded = false, onClose }: Props) {
         {events.length ? (
           <div className="diagnostic-event-list">
             {events.map((event) => (
-              <button
+              <div
                 className={"diagnostic-event " + statusClass(event.severity)}
                 key={event.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedEvent(selectedEvent === event.id ? null : event.id)}
+                onKeyDown={(keyboardEvent) => {
+                  if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+                    keyboardEvent.preventDefault();
+                    setSelectedEvent(selectedEvent === event.id ? null : event.id);
+                  }
+                }}
               >
                 <span className="diagnostic-event-severity">{event.severity}</span>
                 <span className="diagnostic-event-time">{new Date(event.last_seen).toLocaleString()}</span>
@@ -176,7 +184,7 @@ export function StatusCenter({ accountId, embedded = false, onClose }: Props) {
                     {advanced && <><b>Technical detail:</b><pre>{event.technical_detail || "No technical detail recorded."}</pre></>}
                   </span>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         ) : (
