@@ -176,13 +176,13 @@ export function StatusCenter({ accountId, embedded = false, onClose }: Props) {
                 </span>
                 <span className="diagnostic-event-count">{event.occurrence_count}×</span>
                 {selectedEvent === event.id && (
-                  <span className="diagnostic-event-detail">
+                  <div className="diagnostic-event-detail">
                     <b>Component:</b> {event.component}<br />
                     <b>Service:</b> {event.service || "—"}<br />
                     <b>Status:</b> {event.http_status ?? "—"}<br />
                     <b>Provider code:</b> {event.provider_code || "—"}<br />
                     {advanced && <><b>Technical detail:</b><pre>{event.technical_detail || "No technical detail recorded."}</pre></>}
-                  </span>
+                  </div>
                 )}
               </div>
             ))}
