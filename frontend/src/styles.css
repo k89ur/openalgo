@@ -2079,3 +2079,49 @@ button { cursor: pointer; }
     min-width:430px !important;
   }
 }
+
+/* Final responsive override: never collapse the reference terminal into mobile navigation at the target tablet viewport. */
+@media (max-width:900px) {
+  .terminal-nav {
+    display:grid !important;
+    grid-template-columns:225px 390px 300px auto !important;
+    min-width:1230px !important;
+    height:70px !important;
+  }
+  .terminal-primary-nav {
+    display:flex !important;
+    height:100% !important;
+  }
+  .terminal-nav-item span { display:inline !important; }
+  .terminal-global-search {
+    order:initial !important;
+    grid-column:auto !important;
+  }
+  .terminal-account-hub .terminal-metric {
+    display:grid !important;
+  }
+  .workspace {
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) 430px !important;
+    min-width:1230px !important;
+  }
+  .watchlist {
+    width:430px !important;
+    min-width:430px !important;
+    height:100% !important;
+  }
+}
+@media (max-width:720px) {
+  .workspace {
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) 430px !important;
+  }
+  .watchlist {
+    width:430px !important;
+    min-width:430px !important;
+    height:100% !important;
+  }
+  .terminal-account-hub .terminal-metric {
+    display:grid !important;
+  }
+}
