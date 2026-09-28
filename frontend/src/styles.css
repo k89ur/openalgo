@@ -997,8 +997,7 @@ button { cursor: pointer; }
   margin-top:11px;
   color:#565d64;
   font-size:7px;  line-height:1.5;
-}.broker-actions {
-  display:flex;
+}.broker-actions {  display:flex;
   justify-content:flex-end;
   gap:6px;
   margin-top:14px;
@@ -1997,8 +1996,7 @@ button { cursor: pointer; }
   border:0 !important;
   color:#9ba5ac !important;
   background:transparent !important;}
-.drawing-toolbar.is-hidden .drawing-toolbar-toggle:hover {
-  color:#fff !important;
+.drawing-toolbar.is-hidden .drawing-toolbar-toggle:hover {  color:#fff !important;
   background:#171e23 !important;
 }
 
@@ -2786,3 +2784,11 @@ html, body, #root {
 .symbol-detail-stats span { padding:8px 6px !important; gap:5px !important; }
 .symbol-detail-stats small { font-size:9px !important; }
 .symbol-detail-stats b { font-size:10px !important; }
+
+/* WATCHLIST VERTICAL ALIGNMENT — begin at the second-toolbar level like the reference terminal. */
+.watchlist {
+  position:relative !important;
+  top:-48px !important;
+  height:calc(100% + 48px) !important;
+  z-index:20 !important;
+}
