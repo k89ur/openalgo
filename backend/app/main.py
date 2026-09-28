@@ -110,6 +110,19 @@ async def require_private_api(request: Request, call_next):
         path.startswith("/api/")
         and not path.startswith("/api/auth/")
         and not path.startswith("/api/diagnostics/")
+        and 200 <= response.status_code < 400
+    ):
+        raw_account_id = request.query_params.get("account_id")
+        try:
+            parsed_account_id = int(raw_account_id) if raw_account_id else None
+        except ValueError:
+            parsed_account_id = None
+        diagnostics.resolve_service(service=path, account_id=parsed_account_id)
+
+    if (
+        path.startswith("/api/")
+        and not path.startswith("/api/auth/")
+        and not path.startswith("/api/diagnostics/")
         and response.status_code >= 400
     ):
         raw_account_id = request.query_params.get("account_id")
