@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import hashlib
 import logging
 import hmac
+import json
 import os
 import secrets
 import threading
@@ -109,22 +110,31 @@ async def require_private_api(request: Request, call_next):
         path.startswith("/api/")
         and not path.startswith("/api/auth/")
         and not path.startswith("/api/diagnostics/")
-        and response.status_code >= 500
+        and response.status_code >= 400
     ):
         raw_account_id = request.query_params.get("account_id")
         try:
             parsed_account_id = int(raw_account_id) if raw_account_id else None
         except ValueError:
             parsed_account_id = None
+        detail = ""
+        try:
+            body = getattr(response, "body", b"")
+            if body:
+                payload = json.loads(body.decode("utf-8"))
+                detail = str(payload.get("detail") or payload.get("message") or "") if isinstance(payload, dict) else ""
+        except Exception:
+            detail = ""
         diagnostics.record(
-            severity="ERROR",
+            severity="ERROR" if response.status_code >= 500 or response.status_code in {409, 422} else "WARNING",
             category="HTTP",
             component="API",
             service=path,
             error_code=f"PIP-API-HTTP-{response.status_code}",
-            message=f"{request.method} {path} returned HTTP {response.status_code}.",
+            message=detail or f"{request.method} {path} returned HTTP {response.status_code}.",
             account_id=parsed_account_id,
             http_status=response.status_code,
+            technical_detail=detail,
         )
     return response
 
