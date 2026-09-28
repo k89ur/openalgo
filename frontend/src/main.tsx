@@ -2060,168 +2060,63 @@ json.dumps(_result)`;
 
   return (
     <main className={`app ${dark ? "theme-dark" : "theme-light"}`}>
-      <div className="menu-bar">
-        <div className="menu-left">
-          <span className="brand">PIPSGOX</span>
+      <div className="terminal-nav">
+        <div className="terminal-brand">
+          <div className="terminal-brand-mark">P</div>
+          <div className="terminal-brand-copy"><strong>PIPSGOX</strong><span>TRADING TERMINAL</span></div>
         </div>
-        <div className="menu-center">PIPSGOX WEB TERMINAL</div>
-        <div className="menu-right">
-          <button onClick={() => setAccountOpen(true)}>Account</button>
-          <button onClick={() => { setOrderMessage(""); setOrderOpen(true); }}>Trade</button>
-          <button onClick={() => void loadAccountFunds()}>{accountFundsLoading ? "Funds..." : "Funds"}</button>
-          <button onClick={() => void loadPositions()}>{positionsLoading ? "Positions..." : "Positions"}</button>
-          <button onClick={() => void loadOrdersAndTrades("orders")}>{ordersLoading ? "Orders..." : "Orders"}</button>
-          <button onClick={() => void loadHoldings()}>{holdingsLoading ? "Holdings..." : "Holdings"}</button>
-          <button onClick={() => setStatusOpen(true)}>Status</button>
-          <button>Help</button>
-          <button onClick={() => void logout()}>Logout</button>
-          <span className="status-dot" /> {selectedAccountId ? "Broker data: " + ((brokerAccounts.find((item) => item.id === selectedAccountId)?.broker || "broker").toUpperCase()) : "Select broker account"}
-        </div>
-      </div>
-
-      <header className="topbar">
-        <button className="top-command">MARKET</button>
-        <button className="top-command">WATCHLIST</button>
-        <div className="account-selector">
-          <span className="account-selector-label">ACCOUNT</span>
-          <select
-            value={selectedAccountId ?? ""}
-            onChange={(event) => { setAppReady(false); setSelectedAccountId(event.target.value ? Number(event.target.value) : null); }}
-            aria-label="Trading account"
-          >
-            {!brokerAccounts.length && <option value="">No account</option>}
-            {brokerAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.account_name} · {account.broker.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="top-search-wrap">
-          <div className="top-search">
-            <input
-              value={search}
-              placeholder={selected.symbol}
-              aria-label="Search NSE symbol"
-              onFocus={() => setSearchOpen(true)}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setSearchOpen(true);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-                if (event.key === "Escape") setSearchOpen(false);
-              }}
-            />
-            <button onClick={submitSearch}>GO</button>
-          </div>
-
+        <nav className="terminal-primary-nav" aria-label="Primary">
+          <button className="terminal-nav-item active"><TerminalIcon name="market" /><span>Market</span></button>
+          <button className="terminal-nav-item"><TerminalIcon name="scanner" /><span>Scanner</span></button>
+          <button className="terminal-nav-item"><TerminalIcon name="watchlists" /><span>Watchlists</span></button>
+          <button className="terminal-nav-item"><TerminalIcon name="terminal" /><span>Terminal</span></button>
+        </nav>
+        <div className="terminal-global-search">
+          <TerminalIcon name="search" />
+          <input value={search} placeholder="Search symbols, eg. RELIANCE..." aria-label="Global symbol search" onFocus={() => setSearchOpen(true)} onChange={(event) => { setSearch(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter") submitSearch(); if (event.key === "Escape") setSearchOpen(false); }} />
+          <kbd>Ctrl K</kbd>
           {searchOpen && search.trim() && (
-            <div className="symbol-search-results">
-              {searchLoading ? (
-                <div className="symbol-search-empty">Searching NSE symbols...</div>
-              ) : searchResults.length ? (
-                searchResults.map((result) => (
-                  <div key={result.api_symbol} className="symbol-search-row">
-                    <button className="symbol-search-main" onClick={() => openSearchResult(result)}>
-                      <strong>{result.symbol}</strong>
-                      <span>{result.name}</span>
-                    </button>
-                    <button className="symbol-search-add" onClick={() => addSearchResult(result)} aria-label={"Add " + result.symbol + " to watchlist"}>
-                      +
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="symbol-search-empty">No NSE symbols found</div>
-              )}
+            <div className="symbol-search-results terminal-search-popover">
+              {searchLoading ? <div className="symbol-search-empty">Searching NSE symbols...</div> : searchResults.length ? searchResults.map((result) => (
+                <div key={result.api_symbol} className="symbol-search-row">
+                  <button className="symbol-search-main" onClick={() => openSearchResult(result)}><strong>{result.symbol}</strong><span>{result.name}</span></button>
+                  <button className="symbol-search-add" onClick={() => addSearchResult(result)} aria-label={"Add " + result.symbol + " to watchlist"}>+</button>
+                </div>
+              )) : <div className="symbol-search-empty">No NSE symbols found</div>}
             </div>
           )}
         </div>
-
-        <div className="top-spacer" />
-
-        <div className="top-control-hub" aria-label="Chart and workspace controls">
-          <div className="top-control-group top-timeframe-group">
-            {(["1m", "3m", "5m", "15m", "30m", "1h", "D", "W", "M"] as Timeframe[]).map((item) => (
-              <button
-                key={item}
-                className={"top-hub-button top-timeframe-button " + (timeframe === item ? "active" : "")}
-                onClick={() => setTimeframe(item)}
-                aria-label={"Timeframe " + item}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-
-          <span className="top-hub-divider" />
-
-          <div className="top-control-group top-chart-type-group">
-            {([
-              ["candles", "candle", "Candle"],
-              ["bars", "bar", "Bar"],
-              ["line", "line", "Line"],
-            ] as Array<[ChartType, UiIconName, string]>).map(([type, icon, label]) => (
-              <button
-                key={type}
-                className={"top-hub-button top-icon-button " + (chartType === type ? "active" : "")}
-                onClick={() => setChartType(type)}
-                title={label}
-                aria-label={label}
-              >
-                <UiIcon name={icon} />
-              </button>
-            ))}
-          </div>
-
-          <span className="top-hub-divider" />
-
-          <button
-            className={"top-hub-button top-label-button " + (panel === "indicators" ? "active" : "")}
-            onClick={() => setPanel("indicators")}
-            title="Indicators"
-            aria-label="Indicators"
-          >
-            <UiIcon name="indicator" />
-            <span>Indicators</span>
+        <div className="terminal-account-hub">
+          <button className="terminal-account-card" onClick={() => setAccountOpen(true)}>
+            <span className="terminal-account-logo">Z</span>
+            <span className="terminal-account-copy"><strong>{selectedAccountId ? (brokerAccounts.find((item) => item.id === selectedAccountId)?.broker || "Broker").replace(/^./, (c) => c.toUpperCase()) : "Broker"}</strong><small><i className="live-dot" /> Live</small></span>
+            <span className="terminal-account-chevron">⌄</span>
           </button>
-
-          <button
-            className={"top-hub-button top-label-button " + (panel === "pipscript" ? "active" : "")}
-            onClick={() => setPanel("pipscript")}
-            title="Pipscript"
-            aria-label="Pipscript"
-          >
-            <UiIcon name="pipscript" />
-            <span>Pipscript</span>
-          </button>
-
-          <span className="top-hub-divider" />
-
-          <button
-            className="top-hub-button top-label-button"
-            onClick={() => setDark((value) => !value)}
-            title={dark ? "Switch to light theme" : "Switch to dark theme"}
-            aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-          >
-            <UiIcon name="sun" />
-            <span>{dark ? "Light" : "Dark"}</span>
-          </button>
-
-          <button
-            className={"top-hub-button top-label-button " + (panel === "settings" ? "active" : "")}
-            onClick={() => setPanel("settings")}
-            title="Settings"
-            aria-label="Settings"
-          >
-            <UiIcon name="settings" />
-            <span>Settings</span>
-          </button>
+          <button className="terminal-metric" onClick={() => void loadAccountFunds()}><span>Funds</span><strong>—</strong></button>
+          <button className="terminal-metric" onClick={() => void loadPositions()}><span>P&amp;L</span><strong>—</strong></button>
+          <button className="terminal-metric" onClick={() => void loadOrdersAndTrades("orders")}><span>Orders</span><strong>{orders.length || 0} Open</strong></button>
+          <button className="terminal-icon-btn" title="Theme" onClick={() => setDark(value => !value)}><TerminalIcon name="moon" /></button>
+          <button className="terminal-icon-btn" title="Settings" onClick={() => setPanel("settings")}><TerminalIcon name="settings" /></button>
         </div>
+      </div>
+      <header className="instrument-toolbar">
+        <div className="instrument-search">
+          <TerminalIcon name="search" />
+          <input value={search} placeholder={symbol} aria-label="Search chart symbol" onFocus={() => setSearchOpen(true)} onChange={(event) => { setSearch(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter") submitSearch(); if (event.key === "Escape") setSearchOpen(false); }} />
+          <span className="instrument-exchange">NSE <b>⌄</b></span>
+        </div>
+        <div className="timeframe-group">
+          {(["1m","3m","5m","15m","30m","1h","D","W","M"] as Timeframe[]).map((item) => <button key={item} className={timeframe === item ? "active" : ""} onClick={() => setTimeframe(item)}>{item}</button>)}
+        </div>
+        <div className="toolbar-divider" />
+        <button className={"toolbar-action" + (panel === "indicators" ? " active" : "")} onClick={() => setPanel("indicators")}><UiIcon name="indicator" /><span>Indicators</span></button>
+        <button className={"toolbar-action" + (panel === "pipscript" ? " active" : "")} onClick={() => setPanel("pipscript")}><UiIcon name="pipscript" /><span>Pipscript</span></button>
+        <button className="toolbar-action" title="Templates"><TerminalIcon name="calendar" /><span>Templates</span></button>
+        <div className="toolbar-divider" />
+        <button className="toolbar-icon-only muted" title="Undo"><TerminalIcon name="undo" /></button>
+        <button className="toolbar-icon-only muted" title="Redo"><TerminalIcon name="redo" /></button>
+        <button className="toolbar-icon-only" title="Fullscreen" onClick={() => { const root = document.querySelector<HTMLElement>(".app"); if (root?.requestFullscreen) void root.requestFullscreen(); }}><TerminalIcon name="fullscreen" /></button>
       </header>
-
       <section className="workspace">
         <section className="chart-workspace">
           <div className="chart-container">
