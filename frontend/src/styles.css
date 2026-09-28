@@ -2368,3 +2368,48 @@ button { cursor: pointer; }
   opacity:1 !important;
   visibility:visible !important;
 }
+
+
+/* FINAL VIEWPORT GEOMETRY — keep the scaled desktop terminal inside the visible viewport. */
+@media (max-width:1100px) {
+  .workspace {
+    width:100% !important;
+    max-width:100% !important;
+    height:calc(140dvh - 190px) !important;
+    min-height:0 !important;
+    box-sizing:border-box !important;
+    overflow:hidden !important;
+    grid-template-columns:minmax(0,1fr) 430px !important;
+  }
+
+  .chart-workspace {
+    width:auto !important;
+    min-width:0 !important;
+    max-width:none !important;
+    overflow:hidden !important;
+  }
+
+  .chart-container {
+    min-width:0 !important;
+    width:100% !important;
+  }
+
+  .bottom-bar {
+    width:100% !important;
+    min-width:0 !important;
+    box-sizing:border-box !important;
+  }
+
+  .bottom-chart-controls {
+    margin-left:auto !important;
+    flex:0 0 auto !important;
+  }
+
+  .watchlist {
+    grid-column:2 !important;
+    width:430px !important;
+    min-width:430px !important;
+    max-width:430px !important;
+    box-sizing:border-box !important;
+  }
+}
