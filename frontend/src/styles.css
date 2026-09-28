@@ -1886,3 +1886,196 @@ button { cursor: pointer; }
 @media (max-width:720px){
   .workspace{grid-template-columns:1fr}.watchlist{width:100%!important;max-width:none;height:340px}.symbol-detail-card{position:relative;bottom:auto;margin:8px;left:auto;right:auto}.watch-items{max-height:190px!important}.terminal-account-hub .terminal-metric{display:none}.terminal-account-card{width:100px}.terminal-clock{display:none}
 }
+
+
+/* ==========================================================================
+   PIPSGOX REFERENCE MATCH — density/layout correction
+   The reference image is the visual source of truth. Core behavior is untouched.
+   ========================================================================== */
+
+/* Desktop reference proportions */
+.terminal-nav {
+  height: 70px;
+  grid-template-columns: 225px minmax(390px, 470px) minmax(250px, 1fr) auto;
+  gap: 14px;
+}
+.terminal-primary-nav { gap: 2px; }
+.terminal-nav-item { min-width: 78px; padding: 0 10px; }
+.terminal-nav-item span { display: inline !important; }
+.terminal-global-search { width: 320px; max-width: 320px; min-width: 280px; }
+.terminal-account-hub { flex: 0 0 auto; }
+
+.instrument-toolbar {
+  height: 66px;
+  gap: 6px;
+}
+.instrument-search { width: 224px; flex-basis:224px; }
+.timeframe-group button { min-width:42px; padding:0 9px; }
+.toolbar-action { padding:0 12px; }
+.workspace {
+  grid-template-columns: minmax(0,1fr) 430px;
+  gap: 10px;
+}
+.watchlist { width:430px; min-width:430px; }
+.watch-tabs { display:none !important; }
+.watchlist-selector { display:none !important; }
+
+.watch-header {
+  height:56px !important;
+  padding:0 10px !important;
+}
+.watch-header > strong {
+  font-size:17px !important;
+  font-weight:500 !important;
+  letter-spacing:-.02em;
+}
+.watch-header > span { font-size:12px !important; }
+.watch-actions { gap:1px; }
+.watch-actions button {
+  width:31px !important;
+  height:31px !important;
+  padding:0 !important;
+}
+.watch-actions button svg { width:17px; height:17px; }
+
+.watch-search {
+  height:34px !important;
+  margin:8px 9px !important;
+}
+.watch-columns {
+  height:31px !important;
+  grid-template-columns:minmax(100px,1.55fr) 62px 70px 46px 76px 18px !important;
+}
+.watch-row-main {
+  grid-template-columns:minmax(100px,1.55fr) 62px 70px 46px 76px 18px !important;
+}
+
+.chart-workspace { grid-template-rows:minmax(0,1fr) 48px; }
+.chart-container { border-radius:5px 5px 0 0 !important; }
+.bottom-bar { height:48px !important; }
+
+.symbol-detail-card {
+  min-height:244px;
+  left:8px; right:8px; bottom:8px;
+}
+
+/* Drawing toolbar: hidden on startup exactly as requested. */
+.drawing-toolbar {
+  flex-direction:column !important;
+  width:42px !important;
+  padding:5px !important;
+  gap:2px !important;
+  border:1px solid #2a333a !important;
+  border-radius:5px !important;
+  background:rgba(9,13,16,.95) !important;
+}
+.drawing-toolbar-grip {
+  width:30px !important;
+  height:11px !important;
+  font-size:9px !important;
+}
+.drawing-toolbar button {
+  width:30px !important;
+  height:30px !important;
+  border-radius:4px !important;
+}
+.drawing-toolbar button svg { width:15px; height:15px; }
+.drawing-toolbar-divider {
+  width:22px !important;
+  height:1px !important;
+  margin:3px auto !important;
+}
+.drawing-toolbar.is-hidden {
+  width:30px !important;
+  min-width:30px !important;
+  height:30px !important;
+  padding:0 !important;
+  border-radius:4px !important;
+  background:rgba(9,13,16,.95) !important;
+}
+.drawing-toolbar.is-hidden > *:not(.drawing-toolbar-toggle) { display:none !important; }
+.drawing-toolbar.is-hidden .drawing-toolbar-toggle {
+  display:grid !important;
+  width:30px !important;
+  height:30px !important;
+  margin:0 !important;
+  border:0 !important;
+  color:#9ba5ac !important;
+  background:transparent !important;
+}
+.drawing-toolbar.is-hidden .drawing-toolbar-toggle:hover {
+  color:#fff !important;
+  background:#171e23 !important;
+}
+
+/* The reference keeps the terminal dense rather than collapsing into icon-only nav. */
+@media (max-width:1200px) {
+  .terminal-nav {
+    grid-template-columns:205px minmax(330px,1fr) minmax(220px,1fr) auto !important;
+    gap:8px !important;
+  }
+  .terminal-nav-item {
+    min-width:70px !important;
+    padding:0 8px !important;
+  }
+  .terminal-nav-item span { display:inline !important; }
+  .terminal-global-search {
+    width:auto !important;
+    min-width:220px !important;
+    max-width:none !important;
+  }
+  .terminal-account-card { width:105px !important; }
+  .terminal-metric { min-width:60px !important; }
+  .workspace {
+    grid-template-columns:minmax(0,1fr) 390px !important;
+  }
+  .watchlist {
+    width:390px !important;
+    min-width:390px !important;
+  }
+}
+
+/* Android/tablet CSS viewport: preserve the reference's dense desktop composition.
+   This is intentionally a density adjustment, not a functional responsive redesign. */
+@media (max-width:1000px) {
+  .app {
+    zoom:.78;
+    width:128.205128%;
+    height:128.205128%;
+  }
+}
+@media (max-width:820px) {
+  .app {
+    zoom:.68;
+    width:147.058824%;
+    height:147.058824%;
+  }
+}
+@media (max-width:700px) {
+  .app {
+    zoom:.60;
+    width:166.666667%;
+    height:166.666667%;
+  }
+}
+
+/* Keep the target terminal horizontally composed even when the Android CSS viewport is narrow. */
+@media (max-width:1000px) {
+  .terminal-nav {
+    height:70px !important;
+    grid-template-columns:225px 390px 300px auto !important;
+    min-width:1230px;
+  }
+  .instrument-toolbar {
+    min-width:1120px;
+    height:66px !important;
+  }
+  .workspace {
+    min-width:1230px;
+    grid-template-columns:minmax(0,1fr) 430px !important;
+  }
+  .watchlist {
+    width:430px !important;
+    min-width:430px !important;
+  }
+}
