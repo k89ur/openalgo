@@ -214,7 +214,7 @@ start_frontend() {
 }
 
 echo
-echo "PIPSGOX DEV SERVER"
+echo "PIPSGOX SERVER"
 echo "=================="
 echo "Time: $(date)"
 echo "Web: $WEB_URL"
