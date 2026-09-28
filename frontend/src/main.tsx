@@ -551,7 +551,28 @@ function UiIcon({ name }: { name: UiIconName }) {
   );
 }
 
-function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" }) {
+function TerminalIcon({ name }: { name: "market" | "scanner" | "watchlists" | "terminal" | "search" | "moon" | "settings" | "plus" | "upload" | "download" | "more" | "fullscreen" | "undo" | "redo" | "calendar" | "percent" | "external" }) {
+  const common = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+  if (name === "market") return <svg {...common}><path d="M4 19V9h4v10M10 19V5h4v14M16 19v-7h4v7"/><path d="M3 21h18"/></svg>;
+  if (name === "scanner") return <svg {...common}><path d="M4 6h11M4 12h8M4 18h11"/><circle cx="18" cy="7" r="2.5"/><path d="M17 15l2 2 3-4"/></svg>;
+  if (name === "watchlists") return <svg {...common}><path d="M6 4h12v17l-6-3-6 3z"/><path d="M9 8h6"/></svg>;
+  if (name === "terminal") return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9l3 3-3 3M13 15h3"/></svg>;
+  if (name === "search") return <svg {...common}><circle cx="10.5" cy="10.5" r="6.5"/><path d="M16 16l5 5"/></svg>;
+  if (name === "moon") return <svg {...common}><path d="M20 15.5A8.5 8.5 0 1 1 8.5 4 6.7 6.7 0 0 0 20 15.5z"/></svg>;
+  if (name === "settings") return <svg {...common}><circle cx="12" cy="12" r="3"/><path d="M19 15l2 1-2 3-2-1-2 2h-3l-1-2-3 1-2-3 2-1v-3l-2-1 2-3 2 1 2-2h3l1 2 3-1 2 3-2 1z"/></svg>;
+  if (name === "plus") return <svg {...common}><path d="M12 5v14M5 12h14"/></svg>;
+  if (name === "upload") return <svg {...common}><path d="M12 16V4M8 8l4-4 4 4"/><path d="M5 20h14"/></svg>;
+  if (name === "download") return <svg {...common}><path d="M12 4v12M8 12l4 4 4-4"/><path d="M5 20h14"/></svg>;
+  if (name === "more") return <svg {...common}><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>;
+  if (name === "fullscreen") return <svg {...common}><path d="M8 4H4v4M16 4h4v4M8 20H4v-4M20 16v4h-4"/></svg>;
+  if (name === "undo") return <svg {...common}><path d="M9 7H4v5"/><path d="M4 12c2.5-5 9-6 14-2 2 1.6 3 4 3 6"/></svg>;
+  if (name === "redo") return <svg {...common}><path d="M15 7h5v5"/><path d="M20 12c-2.5-5-9-6-14-2-2 1.6-3 4-3 6"/></svg>;
+  if (name === "calendar") return <svg {...common}><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 9h16"/></svg>;
+  if (name === "percent") return <svg {...common}><path d="M6 18L18 6"/><circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/></svg>;
+  return <svg {...common}><path d="M14 5h5v5M19 5l-8 8"/><path d="M18 13v5H5V5h5"/></svg>;
+}
+
+function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" | "crosshair" | "channel" }) {
   const common = {
     width: 15,
     height: 15,
@@ -564,6 +585,8 @@ function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" }) {
     "aria-hidden": true,
   };
 
+  if (name === "crosshair") return <svg {...common}><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/></svg>;
+  if (name === "channel") return <svg {...common}><path d="M5 17L17 5M8 20L20 8"/><path d="M4 12l8 8M12 4l8 8"/></svg>;
   if (name === "horizontalRay") return <svg {...common}><path d="M3 12h17" /><path d="M17 8l4 4-4 4" /></svg>;
   if (name === "trendline") return <svg {...common}><path d="M4 18L20 6" /><path d="M17 6h3v3" /></svg>;
   if (name === "rectangle") return <svg {...common}><rect x="4" y="6" width="16" height="12" rx="1" /></svg>;
@@ -939,6 +962,15 @@ function App() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState(false);
   const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
+  const [terminalClock, setTerminalClock] = useState(() => new Date());
+  const [priceScaleMode, setPriceScaleMode] = useState<"price" | "percent">("price");
+  const [logScale, setLogScale] = useState(false);
+  const [autoScale, setAutoScale] = useState(true);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTerminalClock(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [savedChartThemes, setSavedChartThemes] = useState<Record<string, ChartColors>>(() => {
     try { return JSON.parse(localStorage.getItem("pipsgox-chart-themes") || "{}") as Record<string, ChartColors>; } catch { return {}; }
   });
