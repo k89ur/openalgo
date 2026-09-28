@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from urllib.parse import urlencode
 from typing import Any
@@ -45,6 +46,18 @@ class BrokerManager:
     def start_fyers(account_id: int, app_id: str, redirect_uri: str, state: str) -> BrokerAuthStart:
         if not app_id.strip():
             raise ValueError("FYERS App ID is required for this account.")
+
+        # The redirect URI is part of the FYERS application configuration and
+        # must match it exactly. Prefer the explicit environment setting so
+        # local Termux, Codespaces, and production deployments can each use
+        # their registered callback without changing broker logic.
+        configured_redirect_uri = os.getenv("FYERS_REDIRECT_URI", "").strip()
+        if configured_redirect_uri:
+            redirect_uri = configured_redirect_uri
+
+        redirect_uri = redirect_uri.strip()
+        if not redirect_uri:
+            raise ValueError("FYERS redirect URI is required.")
 
         params = {
             "client_id": app_id.strip(),
