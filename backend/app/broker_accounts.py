@@ -180,6 +180,41 @@ def consume_oauth_state(state: str) -> tuple[int, str, str] | None:
     return int(row["account_id"]), str(row["broker"]), str(row["session_hash"])
 
 
+def consume_latest_oauth_state_for_session(
+    broker: str, session_hash: str
+) -> tuple[int, str, str] | None:
+    """Consume the latest pending OAuth state bound to this app session."""
+    if not broker or not session_hash:
+        return None
+    now = int(__import__("time").time())
+    with _DB_LOCK:
+        connection = _connect()
+        connection.execute(
+            "DELETE FROM broker_oauth_states WHERE expires_at <= ?",
+            (now,),
+        )
+        row = connection.execute(
+            """
+            SELECT state, account_id, broker, session_hash, expires_at
+            FROM broker_oauth_states
+            WHERE broker = ? AND session_hash = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (broker.strip().lower(), session_hash),
+        ).fetchone()
+        if row is None:
+            connection.close()
+            return None
+        connection.execute(
+            "DELETE FROM broker_oauth_states WHERE state = ?",
+            (row["state"],),
+        )
+        connection.commit()
+        connection.close()
+    return int(row["account_id"]), str(row["broker"]), str(row["session_hash"])
+
+
 def claim_order_correlation(account_id: int, correlation_id: str) -> bool:
     value = correlation_id.strip()
     if not value or len(value) > 64:
