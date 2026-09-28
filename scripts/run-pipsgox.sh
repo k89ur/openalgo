@@ -303,7 +303,7 @@ fi
 
 # FYERS status is account/session protected now, so the dev startup script
 # must not treat an unauthenticated 401 as "credentials not configured".
-echo "STATUS: INFO — FYERS connection is checked from the PIPSGOX web UI after login."
+echo "STATUS: INFO — Broker connection is checked from the PIPSGOX web UI after owner login."
 
 echo
 echo "STATUS: PASS — PIPSGOX is running and health checks completed"
