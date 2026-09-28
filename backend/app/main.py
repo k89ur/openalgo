@@ -90,6 +90,20 @@ def _request_user(request: Request) -> dict[str, object] | None:
     return auth.get_user(request.cookies.get(auth.SESSION_COOKIE))
 
 
+def _diagnostic_account_id(request: Request) -> int | None:
+    raw = request.query_params.get("account_id")
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+    parts = [part for part in request.url.path.split("/") if part]
+    for index, part in enumerate(parts[:-1]):
+        if part == "accounts" and parts[index + 1].isdigit():
+            return int(parts[index + 1])
+    return None
+
+
 @app.middleware("http")
 async def require_private_api(request: Request, call_next):
     path = request.url.path
@@ -112,11 +126,7 @@ async def require_private_api(request: Request, call_next):
         and not path.startswith("/api/diagnostics/")
         and 200 <= response.status_code < 400
     ):
-        raw_account_id = request.query_params.get("account_id")
-        try:
-            parsed_account_id = int(raw_account_id) if raw_account_id else None
-        except ValueError:
-            parsed_account_id = None
+        parsed_account_id = _diagnostic_account_id(request)
         diagnostics.resolve_service(service=path, account_id=parsed_account_id)
 
     if (
@@ -125,11 +135,7 @@ async def require_private_api(request: Request, call_next):
         and not path.startswith("/api/diagnostics/")
         and response.status_code >= 400
     ):
-        raw_account_id = request.query_params.get("account_id")
-        try:
-            parsed_account_id = int(raw_account_id) if raw_account_id else None
-        except ValueError:
-            parsed_account_id = None
+        parsed_account_id = _diagnostic_account_id(request)
         detail = ""
         try:
             body = getattr(response, "body", b"")
