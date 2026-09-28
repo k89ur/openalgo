@@ -997,8 +997,7 @@ button { cursor: pointer; }
   margin-top:11px;
   color:#565d64;
   font-size:7px;  line-height:1.5;
-}.broker-actions {  display:flex;
-  justify-content:flex-end;
+}.broker-actions {  display:flex;  justify-content:flex-end;
   gap:6px;
   margin-top:14px;
 }
@@ -1997,8 +1996,7 @@ button { cursor: pointer; }
   color:#9ba5ac !important;
   background:transparent !important;}
 .drawing-toolbar.is-hidden .drawing-toolbar-toggle:hover {  color:#fff !important;
-  background:#171e23 !important;
-}
+  background:#171e23 !important;}
 
 /* The reference keeps the terminal dense rather than collapsing into icon-only nav. */
 @media (max-width:1200px) {
@@ -2791,4 +2789,12 @@ html, body, #root {
   top:-48px !important;
   height:calc(100% + 48px) !important;
   z-index:20 !important;
+}
+
+/* WATCHLIST ALIGNMENT FIX — allow the upward-shifted panel to escape workspace clipping. */
+.workspace {
+  overflow:visible !important;
+}
+.watchlist {
+  overflow:hidden !important;
 }
