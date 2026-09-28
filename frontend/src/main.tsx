@@ -597,7 +597,6 @@ function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" | "cross
   if (name === "delete") return <svg {...common}><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></svg>;
   return <svg {...common}><path d="M6 6l12 12M18 6L6 18" /><rect x="3.5" y="3.5" width="17" height="17" rx="2" /></svg>;
 }
-
 function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -1197,8 +1196,7 @@ function App() {
   };
 
   const createWatchlist = (rawName?: string) => {
-    if (Object.keys(watchlists).length >= MAX_WATCHLISTS) {
-      setWatchDialog(null);
+    if (Object.keys(watchlists).length >= MAX_WATCHLISTS) {      setWatchDialog(null);
       setWatchImportMessage(`Maximum ${MAX_WATCHLISTS} watchlists`);
       window.setTimeout(() => setWatchImportMessage(""), 2500);
       return;
@@ -1797,8 +1795,7 @@ json.dumps(_result)`;
   useEffect(() => {
     const query = search.trim();
 
-    if (!query) {
-      setSearchResults([]);
+    if (!query) {      setSearchResults([]);
       setSearchLoading(false);
       return;
     }
@@ -2117,6 +2114,7 @@ json.dumps(_result)`;
         <button className="toolbar-icon-only" title="Fullscreen" onClick={() => { const root = document.querySelector<HTMLElement>(".app"); if (root?.requestFullscreen) void root.requestFullscreen(); }}><TerminalIcon name="fullscreen" /></button>
       </header>
       <section className="workspace">
+        <div className="chart-workspace">
           <div className="chart-main-row">
             <div className="drawing-toolbar" aria-label="Drawing tools">
               <>
@@ -2189,7 +2187,7 @@ json.dumps(_result)`;
               <button onClick={() => setPanel("settings")} title="Chart settings"><TerminalIcon name="settings" /></button>
             </div>
           </div>
-        </section>
+        </div>
 
         {watchOpen ? (
           <aside className="watchlist" style={{ width: watchWidth }}>
@@ -2397,8 +2395,7 @@ json.dumps(_result)`;
       {holdingsOpen && (
         <div className="modal-backdrop" onClick={() => setHoldingsOpen(false)}>
           <section className="modal holdings-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <strong>HOLDINGS</strong>
+            <div className="modal-header">              <strong>HOLDINGS</strong>
               <button onClick={() => setHoldingsOpen(false)}>CLOSE</button>
             </div>
             <div className="holdings-panel">
