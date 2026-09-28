@@ -2277,6 +2277,8 @@ async def quotes_websocket(websocket: WebSocket) -> None:
                 if not isinstance(symbols, list):
                     raise ValueError("symbols must be an array.")
                 await stream.update_client(queue, [str(item) for item in symbols])
+                diagnostics.resolve(error_code="PIP-MARKET-WS-001", account_id=account_id)
+                diagnostics.resolve(error_code="PIP-MARKET-WS-002", account_id=account_id)
             except (ValueError, HTTPException) as exc:
                 detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
                 diagnostics.record(
