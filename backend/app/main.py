@@ -2279,14 +2279,33 @@ async def quotes_websocket(websocket: WebSocket) -> None:
                 await stream.update_client(queue, [str(item) for item in symbols])
             except (ValueError, HTTPException) as exc:
                 detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+                diagnostics.record(
+                    severity="WARNING",
+                    category="MARKET_DATA",
+                    component="WebSocket",
+                    service="/api/ws/quotes",
+                    error_code="PIP-MARKET-WS-001",
+                    message=str(detail),
+                    account_id=selected_account_id,
+                    technical_detail=f"{type(exc).__name__}: {detail}",
+                )
                 await websocket.send_json({
                     "type": "status",
                     "status": "error",
                     "message": str(detail),
                 })
 
-    except WebSocketDisconnect:
-        pass
+    except WebSocketDisconnect as exc:
+        if getattr(exc, "code", 1000) not in {1000, 1001}:
+            diagnostics.record(
+                severity="WARNING",
+                category="MARKET_DATA",
+                component="WebSocket",
+                service="/api/ws/quotes",
+                error_code="PIP-MARKET-WS-002",
+                message=f"Quote WebSocket disconnected unexpectedly (code {getattr(exc, 'code', 'unknown')}).",
+                account_id=selected_account_id,
+            )
     finally:
         if stream is not None:
             stream.remove_client(queue)
