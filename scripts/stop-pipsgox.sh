@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT/.pipsgox"
 
 port_pids() {
@@ -37,6 +37,20 @@ stop_one() {
 
   if [[ -z "$pids" ]]; then
     pids="$(port_pids "$port" || true)"
+  fi
+
+  # Termux/Codespaces may not expose process ownership through ss.
+  # Fall back to the exact PIPSGOX service command when the port lookup
+  # cannot return a PID.
+  if [[ -z "$pids" ]]; then
+    case "$service" in
+      frontend)
+        pids="$(pgrep -f 'npm run dev.*--port 3001|vite.*--port 3001' 2>/dev/null || true)"
+        ;;
+      backend)
+        pids="$(pgrep -f 'uvicorn app\.main:app.*--port 8000|python.*-m uvicorn app\.main:app.*--port 8000' 2>/dev/null || true)"
+        ;;
+    esac
   fi
 
   if [[ -z "$pids" ]]; then
