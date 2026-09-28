@@ -6,12 +6,13 @@ export type ChartType = "candles" | "bars" | "line";
 export type Timeframe = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "D" | "W" | "M";
 export type ChartRange = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "5Y" | "ALL";
 export type DrawingTool =
-  | "horizontalRay"
+  | "crosshair"
   | "trendline"
+  | "horizontalRay"
   | "rectangle"
   | "long"
   | "short"
-  | "arrow"
+  | "channel"
   | "brush"
   | "text";
 
@@ -954,15 +955,19 @@ export function Chart({
     const chart = chartRef.current;
     if (!chart || !activeDrawingTool) return;
 
-    const overlayNames: Record<Exclude<DrawingTool, "text">, string> = {
-      horizontalRay: "horizontalRayLine",
+    const overlayNames: Record<Exclude<DrawingTool, "text" | "crosshair">, string> = {
       trendline: "segment",
+      horizontalRay: "horizontalRayLine",
       rectangle: "pipsgoxRectangle",
       long: "pipsgoxLongPosition",
       short: "pipsgoxShortPosition",
-      arrow: "pipsgoxArrow",
+      channel: "priceChannelLine",
       brush: "brush",
     };
+
+    if (activeDrawingTool === "crosshair") {
+      return;
+    }
 
     if (activeDrawingTool === "text") {
       chart.createOverlay({
@@ -978,7 +983,7 @@ export function Chart({
     }
 
     chart.createOverlay({
-      name: overlayNames[activeDrawingTool],
+      name: overlayNames[activeDrawingTool as Exclude<DrawingTool, "text" | "crosshair">],
       groupId: PIPSGOX_DRAWING_GROUP,
       paneId: "candle_pane",
       mode: "weak_magnet",
