@@ -1400,6 +1400,19 @@ def broker_fyers_callback(
 def broker_dhan_callback(token_id: str | None = None, request: Request = None) -> RedirectResponse:
     state = request.cookies.get("pipsgox_dhan_state") if request else None
     context = broker_accounts.consume_oauth_state(state) if state else None
+
+    # Dhan does not return our application state parameter. Prefer the
+    # short-lived state cookie, but recover the pending transaction from the
+    # authenticated PIPSGOX session when the proxy/browser does not preserve
+    # the auxiliary state cookie across the OAuth redirect.
+    if not context and request:
+        app_session = request.cookies.get(auth.SESSION_COOKIE)
+        if app_session:
+            session_hash = hashlib.sha256(app_session.encode("utf-8")).hexdigest()
+            context = broker_accounts.consume_latest_oauth_state_for_session(
+                "dhan", session_hash
+            )
+
     account_id = context[0] if context else None
     valid_state = bool(context and context[1] == "dhan")
     if not token_id or account_id is None or not valid_state:
