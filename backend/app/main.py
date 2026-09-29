@@ -1133,12 +1133,12 @@ def _run_startup_checks(account_id: int) -> dict[str, object]:
             if float(quote_result.last) <= 0:
                 raise ValueError(f"FYERS returned no usable quote for {api_symbol}.")
 
-    _diagnostic_check(
-        # The HTTP Quotes endpoint is a non-blocking startup signal. FYERS can
+    # The HTTP Quotes endpoint is a non-blocking startup signal. FYERS can
     # temporarily return 429/"Bad request" from Quotes while authenticated
     # history and the live market-data WebSocket remain healthy. Do not block
     # the entire terminal on that transient/endpoint-specific condition.
-    _diagnostic_check( 
+    _diagnostic_check(
+        checks, check_id="market-quote", label="Market quote",
         category="MARKET_DATA", component="Quote API", severity="WARNING",
         operation=check_quote, error_code="PIP-MARKET-QUOTE-001",
         account_id=account_id, broker=broker, symbol=test_symbol,
