@@ -746,9 +746,12 @@ class FyersWatchlistStream:
             def on_connect() -> None:
                 with self._symbol_lock:
                     symbols = set(self._subscribed)
-                if symbols:
+                # _subscribed contains PIPSGOX display tickers. FYERS requires
+                # its full API symbols (for example NSE:RELIANCE-EQ).
+                api_symbols = self._api_symbols(symbols)
+                if api_symbols:
                     self._socket.subscribe(
-                        symbols=sorted(symbols),
+                        symbols=sorted(api_symbols),
                         data_type="SymbolUpdate",
                     )
                 self._socket.keep_running()
