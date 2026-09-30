@@ -27,10 +27,17 @@ from fyers_apiv3.FyersWebsocket import data_ws
 from app.providers.fyers import FyersMarketDataProvider
 from app import auth, broker_accounts, security_audit, diagnostics
 from app.broker_manager import BrokerManager
+from app.ma44_scanner import scanner as ma44_scanner
 
 load_dotenv()
 
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
+
+
+@app.on_event("startup")
+def start_background_scanners() -> None:
+    # LIVE runs during market hours; EOD runs once after the market closes.
+    ma44_scanner.start()
 logger = logging.getLogger("pipsgox.market_data")
 
 _trusted_hosts = [
@@ -1769,6 +1776,11 @@ def health() -> dict[str, object]:
         "data_provider": "broker_account",
         **readiness,
     }
+
+
+@app.get("/api/scanner/44ma")
+def ma44_scanner_status(mode: Literal["live", "eod"] = "live") -> dict[str, object]:
+    return ma44_scanner.snapshot(mode)
 
 
 @app.get("/api/symbols/search", response_model=list[SymbolSearchResult])
