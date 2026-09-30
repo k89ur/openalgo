@@ -138,11 +138,21 @@ class FyersMarketDataProvider:
     def _check_response(payload: dict, operation: str) -> dict:
         if not isinstance(payload, dict):
             raise ValueError(f"FYERS {operation} returned an invalid response.")
-        if payload.get("s") == "error":
-            raise ValueError(
-                payload.get("message")
-                or f"FYERS {operation} failed (code {payload.get('code', 'unknown')})."
-            )
+
+        status = str(payload.get("s") or "").strip().lower()
+        code = payload.get("code")
+        message = str(payload.get("message") or "").strip()
+
+        # Preserve FYERS' upstream code as well as its message.  A response such
+        # as {"s":"error","code":429,"message":"Bad request"} used to surface
+        # only as "Bad request", which made startup diagnostics impossible to
+        # distinguish from symbol/auth/rate-limit failures.
+        if status == "error":
+            detail = message or "Request failed."
+            if code not in (None, ""):
+                detail = f"{detail} (FYERS code {code})"
+            raise ValueError(f"FYERS {operation} failed: {detail}")
+
         return payload
 
     def validate_session(self) -> None:
