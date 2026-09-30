@@ -266,7 +266,6 @@ class MA44Scanner:
         with self._lock:
             universe = list(self._universe)
             metrics = dict(self._metrics)
-
         if not universe or not metrics:
             return
 
@@ -276,25 +275,39 @@ class MA44Scanner:
         for quote in quotes:
             ticker = api_to_ticker.get(quote.symbol.upper())
             metric = metrics.get(ticker or "")
-            if not metric or quote.high is None:
+            if not metric or quote.last is None or quote.open is None or quote.low is None:
                 continue
-            high_distance = _distance(float(quote.high), metric["sma44"])
-            low_distance = _distance(float(quote.low), metric["sma44"]) if quote.low is not None else None
-            # LIVE changes only the EOD close leg to today's HIGH. The EOD
-            # low-to-44-SMA proximity rule remains unchanged, and LTP is never
-            # used as a trigger.
-            if low_distance is None or not (-0.25 <= low_distance <= 0.20):
+            tail = metric.get("tail_closes") or []
+            if len(tail) < 43:
                 continue
-            if not (0.0 <= high_distance <= 5.0):
+
+            # LIVE treats the current price as today's running close and
+            # calculates today's 44 SMA from the previous 43 completed closes
+            # plus the current price.
+            current_close = float(quote.last)
+            sma44 = (sum(tail[-43:]) + current_close) / 44.0
+            low_distance = _distance(float(quote.low), sma44)
+
+            # Loosened filters:
+            # 1) current price > current-day 44 SMA
+            # 2) today's low is -0.25% to +2.00% from current-day 44 SMA
+            # 3) today's candle is bullish: current price > today's open
+            if current_close <= sma44:
                 continue
+            if not (-0.25 <= low_distance <= 2.0):
+                continue
+            if current_close <= float(quote.open):
+                continue
+
             results.append({
                 "symbol": ticker,
-                "closed": metric["last_close"],
+                "closed": current_close,
                 "change_percent": quote.change_percent,
-                "ma_distance": high_distance,
+                "ma_distance": _distance(current_close, sma44),
                 "low_distance": low_distance,
-                "sma44": metric["sma44"],
+                "sma44": sma44,
                 "high": quote.high,
+                "low": quote.low,
                 "mode": "live",
             })
 
@@ -386,8 +399,9 @@ class MA44Scanner:
             if (
                 rising
                 and ordered
-                and -0.25 <= low_distance <= 0.20
-                and 0.0 <= close_distance <= 5.0
+                and today_close > float(quote.open or 0)
+                and today_close > sma44
+                and -0.25 <= low_distance <= 2.0
             ):
                 change = ((today_close - previous_close) / previous_close * 100.0) if previous_close else 0.0
                 results.append({
