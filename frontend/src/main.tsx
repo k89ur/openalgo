@@ -907,7 +907,8 @@ function App() {
   const [ma44Mode, setMa44Mode] = useState<"live" | "eod">("live");
   const [ma44Search, setMa44Search] = useState("");
   const [ma44Scan, setMa44Scan] = useState<{
-    status: string; message: string; error: string;
+    status: string; stage?: string; message: string; error: string;
+    progress?: number;
     universe_count: number; eligible_trend_count: number;
     processed: number; total: number; last_scan: number | null;
     results: Array<{ symbol: string; closed: number; change_percent: number; ma_distance: number; sma44: number; high?: number; low?: number }>;
@@ -2431,6 +2432,21 @@ json.dumps(_result)`;
                   <span>{ma44Scan?.status || "CONNECTING"}</span>
                   <small>{ma44Scan ? `${ma44Scan.results.length} matches · ${ma44Scan.universe_count.toLocaleString("en-IN")} stocks` : "Loading..."}</small>
                 </div>
+                {ma44Mode === "eod" && ma44Scan && ma44Scan.stage !== "COMPLETE" && ma44Scan.stage !== "ERROR" && (
+                  <div className="ma44-loader">
+                    <div className="ma44-loader-head">
+                      <strong>{ma44Scan.stage === "SCANNING_EOD" ? "EOD SCAN" : "PREPARING EOD SCAN"}</strong>
+                      <span>{Math.round(ma44Scan.progress ?? 0)}%</span>
+                    </div>
+                    <div className="ma44-progress-track">
+                      <div className="ma44-progress-fill" style={{ width: (Math.min(100, Math.max(0, ma44Scan.progress ?? 0)) + "%") }} />
+                    </div>
+                    <div className="ma44-loader-message">{ma44Scan.message}</div>
+                    <div className="ma44-loader-count">
+                      {ma44Scan.processed.toLocaleString("en-IN")} / {ma44Scan.total.toLocaleString("en-IN")} stocks processed
+                    </div>
+                  </div>
+                )}
                 <div className="ma44-columns">
                   <span>SYMBOL</span><span>CLOSED</span><span>CHANGE %</span><span>44 MA</span>
                 </div>
