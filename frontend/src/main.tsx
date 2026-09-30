@@ -198,13 +198,13 @@ const DEFAULT_CHART_COLORS: ChartColors = {
   background: "#090909", grid: "#202020", axis: "#626b75",
   candleUp: "#12d98b", candleDown: "#ff4d5a",
   volumeUp: "#d9dde3", volumeDown: "#d9dde3",
-  ma50: "#f6c85f", ma200: "#b07cff",
+  ma44: "#4dd0e1", ma50: "#f6c85f", ma200: "#b07cff",
 };
 
 const CHART_COLOR_PRESETS: Record<ChartTheme, ChartColors> = {
   pipsgox: DEFAULT_CHART_COLORS,
-  classic: { background:"#101317", grid:"#28303a", axis:"#697482", candleUp:"#26a69a", candleDown:"#ef5350", volumeUp:"#7d8792", volumeDown:"#7d8792", ma50:"#f6c85f", ma200:"#b07cff" },
-  light: { background:"#ffffff", grid:"#e5e7eb", axis:"#9ca3af", candleUp:"#168a59", candleDown:"#c93643", volumeUp:"#8b95a1", volumeDown:"#8b95a1", ma50:"#c27a00", ma200:"#7654a8" },
+  classic: { background:"#101317", grid:"#28303a", axis:"#697482", candleUp:"#26a69a", candleDown:"#ef5350", volumeUp:"#7d8792", volumeDown:"#7d8792", ma44:"#4dd0e1", ma50:"#f6c85f", ma200:"#b07cff" },
+  light: { background:"#ffffff", grid:"#e5e7eb", axis:"#9ca3af", candleUp:"#168a59", candleDown:"#c93643", volumeUp:"#8b95a1", volumeDown:"#8b95a1", ma44:"#0891b2", ma50:"#c27a00", ma200:"#7654a8" },
 };
 
 const DEFAULT_CHART_SETTINGS: ChartSettings = {
