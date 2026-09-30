@@ -88,6 +88,55 @@ const historyInflight = new Map<string, Promise<KLineData[]>>();
 
 const PIPSGOX_VOLUME_BARS = "PIPSGOX_VOLUME_BARS";
 const PIPSGOX_PIPSCRIPT_EMA = "PIPSGOX_PIPSCRIPT_EMA";
+const PIPSGOX_CORE_MA = "PIPSGOX_CORE_MA";
+
+registerIndicator({
+  name: PIPSGOX_CORE_MA,
+  shortName: "MA",
+  series: "price",
+  calcParams: [44, 50, 200],
+  precision: 2,
+  shouldOhlc: false,
+  figures: [
+    { key: "ma1", title: "MA44: ", type: "line" },
+    { key: "ma2", title: "MA50: ", type: "line" },
+    { key: "ma3", title: "MA200: ", type: "line" },
+  ],
+  regenerateFigures: (calcParams) =>
+    calcParams.map((period, index) => ({
+      key: "ma" + (index + 1),
+      title: "MA" + period + ": ",
+      type: "line",
+    })),
+  calc: (dataList: KLineData[], indicator: any) => {
+    const periods = (indicator.calcParams || [44, 50, 200]).map(Number);
+    const result: Record<number, Record<string, number | null>> = {};
+
+    for (let i = 0; i < dataList.length; i += 1) {
+      const row: Record<string, number | null> = {};
+
+      periods.forEach((period: number, index: number) => {
+        if (!Number.isFinite(period) || period <= 0 || i < period - 1) {
+          row["ma" + (index + 1)] = null;
+          return;
+        }
+
+        let sum = 0;
+        for (let j = i - period + 1; j <= i; j += 1) {
+          sum += Number(dataList[j].close);
+        }
+
+        const value = sum / period;
+        row["ma" + (index + 1)] = Number.isFinite(value) ? value : null;
+      });
+
+      result[dataList[i].timestamp] = row;
+    }
+
+    return result;
+  },
+});
+
 
 const PIPSGOX_DRAWING_GROUP = "pipsgox-drawings";
 
@@ -737,9 +786,9 @@ export function Chart({
         });
       }
 
-      // Core moving averages share one native MA indicator. Keeping 44/50/200
-      // in the same indicator avoids KLineCharts replacing/overwriting a
-      // second MA instance with the same indicator name.
+      // PIPSGOX owns the core MA calculation so MA44 is always an
+      // explicit line and cannot be hidden/replaced by KLineCharts' built-in
+      // MA figure regeneration.
       const maPeriods = showMa44 ? [44, 50, 200] : [50, 200];
       const maLines = showMa44
         ? [
@@ -754,7 +803,7 @@ export function Chart({
 
       chart.createIndicator(
         {
-          name: "MA",
+          name: PIPSGOX_CORE_MA,
           id: "pipsgox-default-ma",
           paneId: "candle_pane",
           series: "price",
