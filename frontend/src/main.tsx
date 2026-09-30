@@ -798,13 +798,16 @@ function App() {
     return () => { cancelled = true; };
   }, [authenticated]);
 
+  const watchPanelRef = useRef<"watchlist" | "44ma" | "movers">("watchlist");
+  const ma44ModeRef = useRef<"live" | "eod">("live");
+
   useEffect(() => {
     if (!authenticated || !selectedAccountId) return;
     let cancelled = false;
     const load = async () => {
-      if (watchPanel !== "44ma") return;
+      if (watchPanelRef.current !== "44ma") return;
       try {
-        const response = await apiFetch(`/api/scanner/44ma?mode=${ma44Mode}`, { cache: "no-store" });
+        const response = await apiFetch(`/api/scanner/44ma?mode=${ma44ModeRef.current}`, { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(String(payload.detail || "44 MA scanner status failed."));
         if (!cancelled) setMa44Scan(payload);
@@ -815,7 +818,7 @@ function App() {
     void load();
     const timer = window.setInterval(load, 10000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [authenticated, selectedAccountId, ma44Mode, watchPanel]);
+  }, [authenticated, selectedAccountId]);
 
   useEffect(() => {
     if (selectedAccountId) localStorage.setItem("pipsgox-selected-account", String(selectedAccountId));
@@ -909,6 +912,8 @@ function App() {
     processed: number; total: number; last_scan: number | null;
     results: Array<{ symbol: string; closed: number; change_percent: number; ma_distance: number; sma44: number; high?: number; low?: number }>;
   } | null>(null);
+  watchPanelRef.current = watchPanel;
+  ma44ModeRef.current = ma44Mode;
   const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
