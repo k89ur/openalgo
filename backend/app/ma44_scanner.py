@@ -329,9 +329,6 @@ class MA44Scanner:
             self._message = f"EOD scan in progress · 0/{len(universe):,}"
             self._error = ""
 
-        # EOD does not need one fresh History API call per stock. The trend
-        # baseline uses completed daily candles; today's OHLC is obtained from
-        # the Quotes API, which supports batches of up to 50 symbols.
         if not metrics:
             with self._lock:
                 self._stage = "BUILDING_TREND"
@@ -345,41 +342,38 @@ class MA44Scanner:
                 self._total = len(universe)
                 self._message = f"EOD scan in progress · 0/{len(universe):,}"
 
-        try:
-            quotes = provider.get_quotes([api for _, api in universe])
-        except Exception as exc:
-            with self._lock:
-                self._stage = "ERROR"
-                self._status = "ERROR"
-                self._error = str(exc)
-                self._message = "EOD quote batch failed."
-            return
+        # EOD source is NSE's official final UDiFF bhavcopy. This avoids
+        # thousands of FYERS quote/history calls and gives the final exchange
+        # OHLC for every equity in one compressed file.
+        from app.nse_bhavcopy import fetch_latest
 
+        bhav_date, bhavcopy = fetch_latest()
         api_to_ticker = {api.upper(): ticker for ticker, api in universe}
+        ticker_to_api = {ticker.upper(): api for ticker, api in universe}
         results: list[dict] = []
-        processed = 0
 
-        for quote in quotes:
+        for processed, (ticker, api) in enumerate(universe, start=1):
             if self._stop.is_set():
                 return
-            ticker = api_to_ticker.get(quote.symbol.upper())
-            metric = metrics.get(ticker or "")
-            if not metric or quote.last is None or quote.high is None or quote.low is None:
+            metric = metrics.get(ticker)
+            row = bhavcopy.get(ticker.upper())
+            if not metric or not row:
                 continue
+
+            today_open = float(row["open"])
+            today_high = float(row["high"])
+            today_low = float(row["low"])
+            today_close = float(row["close"])
+            previous_close = float(row["previous_close"])
 
             tail = metric.get("tail_closes") or []
             if len(tail) < 199:
                 continue
 
-            today_close = float(quote.last)
-            previous_close = float(tail[-1])
             sma44 = (sum(tail[-43:]) + today_close) / 44.0
             sma150 = (sum(tail[-149:]) + today_close) / 150.0
             sma200 = (sum(tail[-199:]) + today_close) / 200.0
 
-            # Stored arrays contain yesterday plus the preceding 20 completed
-            # trading days. Append today's SMA and validate the same 21-point
-            # rising/ordering rule used by the scanner.
             trend44 = (list(metric["trend_ma44"]) + [sma44])[-TREND_POINTS:]
             trend150 = (list(metric["trend_ma150"]) + [sma150])[-TREND_POINTS:]
             trend200 = (list(metric["trend_ma200"]) + [sma200])[-TREND_POINTS:]
@@ -392,38 +386,39 @@ class MA44Scanner:
                 trend44[i] > trend150[i] > trend200[i]
                 for i in range(TREND_POINTS)
             )
-            low_distance = _distance(float(quote.low), sma44)
+
+            low_distance = _distance(today_low, sma44)
             close_distance = _distance(today_close, sma44)
 
-            processed += 1
             if (
                 rising
                 and ordered
-                and today_close > float(quote.open or 0)
+                and today_close > today_open
                 and today_close > sma44
                 and -0.25 <= low_distance <= 2.0
             ):
-                change = ((today_close - previous_close) / previous_close * 100.0) if previous_close else 0.0
+                change = (
+                    (today_close - previous_close) / previous_close * 100.0
+                    if previous_close else 0.0
+                )
                 results.append({
                     "symbol": ticker,
                     "closed": today_close,
                     "change_percent": change,
                     "ma_distance": close_distance,
                     "sma44": sma44,
-                    "low": float(quote.low),
+                    "high": today_high,
+                    "low": today_low,
                     "mode": "eod",
+                    "bhavcopy_date": bhav_date.isoformat(),
                 })
 
             with self._lock:
                 self._processed = processed
                 self._message = (
-                    f"EOD scan in progress · {processed:,}/{len(quotes):,} "
+                    f"EOD scan in progress · {processed:,}/{len(universe):,} "
                     f"· {len(results):,} matches"
                 )
-
-        with self._lock:
-            self._processed = len(universe)
-            self._total = len(universe)
 
         results.sort(key=lambda row: row["symbol"])
         with self._lock:
@@ -432,7 +427,10 @@ class MA44Scanner:
             self._eod_done_date = _now().date().isoformat()
             self._stage = "COMPLETE"
             self._status = "EOD_COMPLETE"
-            self._message = f"EOD scan complete · {len(results):,} matches"
+            self._message = (
+                f"EOD scan complete · {len(results):,} matches · "
+                f"NSE bhavcopy {bhav_date.isoformat()}"
+            )
 
     def _run(self) -> None:
         while not self._stop.is_set():
