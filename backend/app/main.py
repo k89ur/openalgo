@@ -1779,8 +1779,11 @@ def health() -> dict[str, object]:
 
 
 @app.get("/api/scanner/44ma")
-def ma44_scanner_status(mode: Literal["live", "eod"] = "live") -> dict[str, object]:
-    return ma44_scanner.snapshot(mode)
+def ma44_scanner_status(
+    mode: Literal["live", "eod"] = "live",
+    account_id: int | None = Query(default=None, ge=1),
+) -> dict[str, object]:
+    return ma44_scanner.snapshot(mode, account_id=account_id)
 
 
 @app.get("/api/symbols/search", response_model=list[SymbolSearchResult])
