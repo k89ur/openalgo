@@ -257,6 +257,21 @@ button { cursor: pointer; }
 }
 .watch-panel-title strong { color:#ccc; font-size:11px; }
 .watch-panel-title span { color:#555; font-size:9px; }
+.ma44-mode-tabs {
+  height:25px; display:flex; gap:3px; padding:0 8px 4px; background:#0d0d0d;
+}
+.ma44-mode-tabs button {
+  flex:0 0 auto; height:21px; padding:0 9px; border:1px solid #252525;
+  border-radius:3px; background:#121212; color:#626262; font-size:8px; letter-spacing:.04em;
+}
+.ma44-mode-tabs button:hover { color:#aaa; background:#181818; }
+.ma44-mode-tabs button.active { color:#ddd; background:#202020; border-color:#414141; }
+.ma44-status {
+  min-height:23px; display:flex; align-items:center; justify-content:space-between;
+  gap:8px; padding:0 9px; border-bottom:1px solid #202020; color:#777; font-size:8px;
+}
+.ma44-status span { color:#a5a5a5; letter-spacing:.03em; }
+.ma44-status small { color:#555; font-size:8px; }
 .ma44-columns {
   display:grid;
   grid-template-columns:minmax(0,1fr) 72px 68px 68px;
@@ -268,6 +283,15 @@ button { cursor: pointer; }
 }
 .ma44-columns span:nth-child(n+2) { text-align:right; white-space:nowrap; }
 .ma44-items { padding-bottom:36px; }
+.ma44-row {
+  width:100%; min-height:28px; display:grid;
+  grid-template-columns:minmax(0,1fr) 72px 68px 68px; align-items:center;
+  column-gap:2px; padding:0 5px; border:0; border-bottom:1px solid #151515;
+  background:transparent; color:#aaa; text-align:right; cursor:pointer;
+}
+.ma44-row:hover { background:#171717; }
+.ma44-row span:first-child { text-align:left; color:#c7c7c7; font-size:10px; }
+.ma44-row span:not(:first-child) { font-size:9px; }
 .ma44-empty {
   min-height:120px;
   display:flex;
