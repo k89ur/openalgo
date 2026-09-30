@@ -736,33 +736,18 @@ export function Chart({
         });
       }
 
-      // Use separate native MA instances with unique IDs. KLineCharts
-      // indexes indicators by name/id/pane, so unique IDs prevent one MA
-      // from replacing another while keeping the proven native MA engine.
-      const createCoreMa = (id: string, period: number, color: string) => {
-        chart.createIndicator(
-          {
-            name: "MA",
-            id,
-            paneId: "candle_pane",
-            series: "price",
-            calcParams: [period],
-            visible: true,
-            styles: {
-              lines: [{
-                style: "solid",
-                color,
-                size: 1,
-              }],
-            },
-          },
-          true,
-        );
-      };
-
-      if (showMa44) createCoreMa("pipsgox-ma44", 44, chartColors.ma44);
-      createCoreMa("pipsgox-ma50", 50, chartColors.ma50);
-      createCoreMa("pipsgox-ma200", 200, chartColors.ma200);
+      // Keep the core moving averages as one native KLineCharts MA overlay.
+      // This is the documented candle-pane configuration and avoids separate
+      // MA instances replacing each other. MA44 is included by default; the
+      // Indicators switch only controls whether the 44-period line is included.
+      chart.createIndicator(
+        {
+          name: "MA",
+          paneId: "candle_pane",
+          calcParams: showMa44 ? [44, 50, 200] : [50, 200],
+        },
+        true,
+      );
 
       // Volume is a bars-only indicator. No volume MA lines are calculated.
       if (showVolume) {
