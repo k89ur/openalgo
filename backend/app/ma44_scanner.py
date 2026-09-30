@@ -3,12 +3,14 @@ from __future__ import annotations
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, time as dt_time
-from zoneinfo import ZoneInfo
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 
 from app import broker_accounts
 
-IST = ZoneInfo("Asia/Kolkata")
+# Termux installations may not include the system IANA tzdata package.
+# India uses a fixed UTC+05:30 offset year-round, so avoid a ZoneInfo
+# dependency for the scanner's market-session clock.
+IST = timezone(timedelta(hours=5, minutes=30))
 MARKET_OPEN = dt_time(9, 15)
 MARKET_CLOSE = dt_time(15, 30)
 EOD_START = dt_time(15, 35)
