@@ -422,8 +422,6 @@ function loadSavedPipscripts(): SavedPipscript[] {
   return [];
 }
 
-const coreIndicators = ["MA 44", "MA 50", "MA 200"];
-
 type UiIconName = "candle" | "bar" | "line" | "indicator" | "pipscript" | "sun" | "settings" | "add" | "import" | "export" | "new" | "delete" | "hide";
 
 function UiIcon({ name }: { name: UiIconName }) {
