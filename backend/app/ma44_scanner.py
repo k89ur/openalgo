@@ -176,6 +176,9 @@ class MA44Scanner:
             start=None,
             end=date.today(),
         )
+        if not include_last_day:
+            today = _now().date()
+            candles = [candle for candle in candles if datetime.fromtimestamp(candle.time, IST).date() < today]
         return self._metrics_from_candles(candles, include_last_day=include_last_day)
 
     def _load_metrics(self, provider, universe: list[tuple[str, str]], include_last_day: bool) -> None:
@@ -234,9 +237,11 @@ class MA44Scanner:
             return
 
         quotes = provider.get_quotes([api for _, api in universe])
+        api_to_ticker = {api.upper(): ticker for ticker, api in universe}
         results: list[dict] = []
         for quote in quotes:
-            metric = metrics.get(quote.symbol.upper())
+            ticker = api_to_ticker.get(quote.symbol.upper())
+            metric = metrics.get(ticker or "")
             if not metric or quote.high is None:
                 continue
             high_distance = _distance(float(quote.high), metric["sma44"])
@@ -249,7 +254,7 @@ class MA44Scanner:
             if not (0.0 <= high_distance <= 5.0):
                 continue
             results.append({
-                "symbol": quote.symbol,
+                "symbol": ticker,
                 "closed": metric["last_close"],
                 "change_percent": quote.change_percent,
                 "ma_distance": high_distance,
