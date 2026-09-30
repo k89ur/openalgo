@@ -88,56 +88,6 @@ const historyInflight = new Map<string, Promise<KLineData[]>>();
 
 const PIPSGOX_VOLUME_BARS = "PIPSGOX_VOLUME_BARS";
 const PIPSGOX_PIPSCRIPT_EMA = "PIPSGOX_PIPSCRIPT_EMA";
-const PIPSGOX_CORE_MA = "PIPSGOX_CORE_MA";
-
-registerIndicator({
-  name: PIPSGOX_CORE_MA,
-  shortName: "MA",
-  series: "price",
-  calcParams: [44, 50, 200],
-  precision: 2,
-  shouldOhlc: false,
-  figures: [
-    { key: "ma1", title: "MA44: ", type: "line" },
-    { key: "ma2", title: "MA50: ", type: "line" },
-    { key: "ma3", title: "MA200: ", type: "line" },
-  ],
-  regenerateFigures: (calcParams) =>
-    calcParams.map((period, index) => ({
-      key: "ma" + (index + 1),
-      title: "MA" + period + ": ",
-      type: "line",
-    })),
-  calc: (dataList: KLineData[], indicator: any) => {
-    const periods = (indicator.calcParams || [44, 50, 200]).map(Number);
-    const result: Record<number, Record<string, number | null>> = {};
-
-    for (let i = 0; i < dataList.length; i += 1) {
-      const row: Record<string, number | null> = {};
-
-      periods.forEach((period: number, index: number) => {
-        if (!Number.isFinite(period) || period <= 0 || i < period - 1) {
-          row["ma" + (index + 1)] = null;
-          return;
-        }
-
-        let sum = 0;
-        for (let j = i - period + 1; j <= i; j += 1) {
-          sum += Number(dataList[j].close);
-        }
-
-        const value = sum / period;
-        row["ma" + (index + 1)] = Number.isFinite(value) ? value : null;
-      });
-
-      result[dataList[i].timestamp] = row;
-    }
-
-    return result;
-  },
-});
-
-
 const PIPSGOX_DRAWING_GROUP = "pipsgox-drawings";
 
 registerOverlay({
@@ -786,33 +736,33 @@ export function Chart({
         });
       }
 
-      // PIPSGOX owns the core MA calculation so MA44 is always an
-      // explicit line and cannot be hidden/replaced by KLineCharts' built-in
-      // MA figure regeneration.
-      const maPeriods = showMa44 ? [44, 50, 200] : [50, 200];
-      const maLines = showMa44
-        ? [
-            { style: "solid", color: chartColors.ma44, size: 1 },
-            { style: "solid", color: chartColors.ma50, size: 1 },
-            { style: "solid", color: chartColors.ma200, size: 1 },
-          ]
-        : [
-            { style: "solid", color: chartColors.ma50, size: 1 },
-            { style: "solid", color: chartColors.ma200, size: 1 },
-          ];
+      // Use separate native MA instances with unique IDs. KLineCharts
+      // indexes indicators by name/id/pane, so unique IDs prevent one MA
+      // from replacing another while keeping the proven native MA engine.
+      const createCoreMa = (id: string, period: number, color: string) => {
+        chart.createIndicator(
+          {
+            name: "MA",
+            id,
+            paneId: "candle_pane",
+            series: "price",
+            calcParams: [period],
+            visible: true,
+            styles: {
+              lines: [{
+                style: "solid",
+                color,
+                size: 1,
+              }],
+            },
+          },
+          true,
+        );
+      };
 
-      chart.createIndicator(
-        {
-          name: PIPSGOX_CORE_MA,
-          id: "pipsgox-default-ma",
-          paneId: "candle_pane",
-          series: "price",
-          calcParams: maPeriods,
-          visible: true,
-          styles: { lines: maLines },
-        },
-        true,
-      );
+      if (showMa44) createCoreMa("pipsgox-ma44", 44, chartColors.ma44);
+      createCoreMa("pipsgox-ma50", 50, chartColors.ma50);
+      createCoreMa("pipsgox-ma200", 200, chartColors.ma200);
 
       // Volume is a bars-only indicator. No volume MA lines are calculated.
       if (showVolume) {
