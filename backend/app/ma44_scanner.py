@@ -280,7 +280,7 @@ class MA44Scanner:
             if self._stop.is_set():
                 return
             try:
-                candles = provider.get_history(api, "D", HISTORY_LIMIT, start=None, end=date.today())
+                candles = provider.get_history(api, "D", HISTORY_LIMIT, start=None, end=date.today(), force_refresh=True)
                 metric = self._metrics_from_candles(candles, include_last_day=True)
                 if not metric or not candles:
                     continue
@@ -338,7 +338,9 @@ class MA44Scanner:
                         self._eod_done_date = None
 
                 provider = self._provider(account.id)
-                universe = self._load_universe()
+                with self._lock:
+                    cached_universe = list(self._universe)
+                universe = cached_universe or self._load_universe()
                 with self._lock:
                     self._universe = universe
                     self._account_id = account.id
