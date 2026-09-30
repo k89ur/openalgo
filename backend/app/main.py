@@ -1129,7 +1129,12 @@ def _run_startup_checks(account_id: int) -> dict[str, object]:
             api_symbol = resolve_api_symbol(test_symbol)
             if not api_symbol:
                 raise ValueError(f"{test_symbol} could not be resolved.")
-            quote_result = market_provider.get_quote(api_symbol)
+            try:
+                quote_result = market_provider.get_quote(api_symbol)
+            except Exception as exc:
+                raise ValueError(
+                    f"FYERS quote request failed for {api_symbol}: {exc}"
+                ) from exc
             if float(quote_result.last) <= 0:
                 raise ValueError(f"FYERS returned no usable quote for {api_symbol}.")
 
