@@ -66,6 +66,7 @@ class MA44Scanner:
         self._processed = 0
         self._total = 0
         self._account_id: int | None = None
+        self._preferred_account_id: int | None = None
 
     def start(self) -> None:
         with self._lock:
@@ -82,8 +83,23 @@ class MA44Scanner:
     def stop(self) -> None:
         self._stop.set()
 
+    def set_preferred_account(self, account_id: int | None) -> None:
+        with self._lock:
+            self._preferred_account_id = account_id if account_id and account_id > 0 else None
+
     def _connected_fyers_account(self):
         accounts = broker_accounts.list_accounts()
+        with self._lock:
+            preferred_id = self._preferred_account_id
+        if preferred_id is not None:
+            for account in accounts:
+                if (
+                    account.id == preferred_id
+                    and account.broker.lower() == "fyers"
+                    and account.status.lower() == "connected"
+                ):
+                    return account
+            return None
         for account in accounts:
             if account.broker.lower() == "fyers" and account.status.lower() == "connected":
                 return account
@@ -408,7 +424,9 @@ class MA44Scanner:
                     self._message = "44 MA scanner encountered an error; retrying."
                 self._stop.wait(30)
 
-    def snapshot(self, mode: str = "live") -> dict:
+    def snapshot(self, mode: str = "live", account_id: int | None = None) -> dict:
+        if account_id is not None:
+            self.set_preferred_account(account_id)
         mode = "eod" if mode == "eod" else "live"
         with self._lock:
             return {
