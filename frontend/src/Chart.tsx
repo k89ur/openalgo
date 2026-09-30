@@ -24,6 +24,7 @@ export type ChartColors = {
   candleDown: string;
   volumeUp: string;
   volumeDown: string;
+  ma44: string;
   ma50: string;
   ma200: string;
 };
@@ -767,7 +768,7 @@ export function Chart({
             visible: true,
             styles: {
               lines: [
-                { style: "solid", color: chartColors.ma50, size: 1 },
+                { style: "solid", color: chartColors.ma44, size: 1 },
               ],
             },
           },
