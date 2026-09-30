@@ -392,8 +392,6 @@ class MA44Scanner:
         from app.nse_bhavcopy import fetch_latest
 
         bhav_date, bhavcopy = fetch_latest()
-        api_to_ticker = {api.upper(): ticker for ticker, api in universe}
-        ticker_to_api = {ticker.upper(): api for ticker, api in universe}
         results: list[dict] = []
 
         for processed, (ticker, api) in enumerate(universe, start=1):
