@@ -240,10 +240,11 @@ class MA44Scanner:
             if not metric or quote.high is None:
                 continue
             high_distance = _distance(float(quote.high), metric["sma44"])
-            # Intraday: today's HIGH is used for the proximity condition.
-            # The price-vs-MA 0..5% condition uses the current day's high too,
-            # as requested for the live scan (no LTP-based trigger).
-            if not (-0.25 <= high_distance <= 0.20):
+            low_distance = _distance(float(quote.low), metric["sma44"]) if quote.low is not None else None
+            # LIVE changes only the EOD close leg to today's HIGH. The EOD
+            # low-to-44-SMA proximity rule remains unchanged, and LTP is never
+            # used as a trigger.
+            if low_distance is None or not (-0.25 <= low_distance <= 0.20):
                 continue
             if not (0.0 <= high_distance <= 5.0):
                 continue
@@ -252,6 +253,7 @@ class MA44Scanner:
                 "closed": metric["last_close"],
                 "change_percent": quote.change_percent,
                 "ma_distance": high_distance,
+                "low_distance": low_distance,
                 "sma44": metric["sma44"],
                 "high": quote.high,
                 "mode": "live",
