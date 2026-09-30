@@ -799,6 +799,24 @@ function App() {
   }, [authenticated]);
 
   useEffect(() => {
+    if (!authenticated || !selectedAccountId || watchPanel !== "44ma") return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await apiFetch(`/api/scanner/44ma?mode=${ma44Mode}`, { cache: "no-store" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(String(payload.detail || "44 MA scanner status failed."));
+        if (!cancelled) setMa44Scan(payload);
+      } catch (error) {
+        if (!cancelled) console.warn(error);
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 10000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [authenticated, selectedAccountId, watchPanel, ma44Mode]);
+
+  useEffect(() => {
     if (selectedAccountId) localStorage.setItem("pipsgox-selected-account", String(selectedAccountId));
     else localStorage.removeItem("pipsgox-selected-account");
   }, [selectedAccountId]);
@@ -882,6 +900,14 @@ function App() {
   const [watchSearch, setWatchSearch] = useState("");
   const [watchOpen, setWatchOpen] = useState(true);
   const [watchPanel, setWatchPanel] = useState<"watchlist" | "44ma" | "movers">("watchlist");
+  const [ma44Mode, setMa44Mode] = useState<"live" | "eod">("live");
+  const [ma44Search, setMa44Search] = useState("");
+  const [ma44Scan, setMa44Scan] = useState<{
+    status: string; message: string; error: string;
+    universe_count: number; eligible_trend_count: number;
+    processed: number; total: number; last_scan: number | null;
+    results: Array<{ symbol: string; closed: number; change_percent: number; ma_distance: number; sma44: number; high?: number; low?: number }>;
+  } | null>(null);
   const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
@@ -2387,19 +2413,36 @@ json.dumps(_result)`;
               <>
                 <div className="watch-panel-title">
                   <strong>44 MA</strong>
-                  <span>Scan results</span>
+                  <span>{ma44Scan?.message || "Automatic scanner"}</span>
+                </div>
+                <input className="watch-search" placeholder="Search scan results..." value={ma44Search}
+                  onChange={(event) => setMa44Search(event.target.value)} />
+                <div className="ma44-mode-tabs">
+                  <button className={ma44Mode === "live" ? "active" : ""} onClick={() => setMa44Mode("live")}>LIVE SCAN</button>
+                  <button className={ma44Mode === "eod" ? "active" : ""} onClick={() => setMa44Mode("eod")}>EOD SCAN</button>
+                </div>
+                <div className="ma44-status">
+                  <span>{ma44Scan?.status || "CONNECTING"}</span>
+                  <small>{ma44Scan ? `${ma44Scan.results.length} matches · ${ma44Scan.universe_count.toLocaleString("en-IN")} stocks` : "Loading..."}</small>
                 </div>
                 <div className="ma44-columns">
-                  <span>SYMBOL</span>
-                  <span>CLOSED</span>
-                  <span>CHANGE %</span>
-                  <span>44 MA</span>
+                  <span>SYMBOL</span><span>CLOSED</span><span>CHANGE %</span><span>44 MA</span>
                 </div>
                 <div className="watch-items ma44-items">
-                  <div className="ma44-empty">
-                    <span>44 MA scanner</span>
-                    <small>Scan conditions will be configured next.</small>
-                  </div>
+                  {(ma44Scan?.results || []).filter((item) => item.symbol.includes(ma44Search.trim().toUpperCase())).map((item) => (
+                    <button key={item.symbol} className="ma44-row" onClick={() => void selectSymbol(item.symbol)}>
+                      <span>{item.symbol}</span>
+                      <span>{item.closed.toFixed(2)}</span>
+                      <span className={item.change_percent < 0 ? "negative" : "positive"}>{item.change_percent >= 0 ? "+" : ""}{item.change_percent.toFixed(2)}%</span>
+                      <span className={item.ma_distance < 0 ? "negative" : "positive"}>{item.ma_distance >= 0 ? "+" : ""}{item.ma_distance.toFixed(2)}%</span>
+                    </button>
+                  ))}
+                  {!(ma44Scan?.results || []).some((item) => item.symbol.includes(ma44Search.trim().toUpperCase())) && (
+                    <div className="ma44-empty">
+                      <span>{ma44Scan?.status === "LIVE" ? "Scanning..." : "No matching stocks"}</span>
+                      <small>{ma44Scan?.error || ma44Scan?.message || "Results will appear automatically."}</small>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
