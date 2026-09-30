@@ -881,6 +881,7 @@ function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [watchSearch, setWatchSearch] = useState("");
   const [watchOpen, setWatchOpen] = useState(true);
+  const [watchPanel, setWatchPanel] = useState<"watchlist" | "44ma" | "movers">("watchlist");
   const [watchWidth, setWatchWidth] = useState(315);
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
@@ -2297,9 +2298,24 @@ json.dumps(_result)`;
               >
                 {Object.keys(watchlists).map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
-              <button className="active">WATCHLIST</button>
-              <button>MARKET</button>
-              <button>MOVERS</button>
+              <button
+                className={watchPanel === "watchlist" ? "active" : ""}
+                onClick={() => setWatchPanel("watchlist")}
+              >
+                WATCHLIST
+              </button>
+              <button
+                className={watchPanel === "44ma" ? "active" : ""}
+                onClick={() => setWatchPanel("44ma")}
+              >
+                44 MA
+              </button>
+              <button
+                className={watchPanel === "movers" ? "active" : ""}
+                onClick={() => setWatchPanel("movers")}
+              >
+                MOVERS
+              </button>
             </div>
             <div className="watch-header">
               <strong>{activeWatchlistName}</strong>
@@ -2324,12 +2340,14 @@ json.dumps(_result)`;
                 }}
               />
             </div>
-            <input className="watch-search" placeholder="Search symbols..." value={watchSearch}
-              onChange={(event) => setWatchSearch(event.target.value)} />
-            {watchImportMessage && <div className="watch-message">{watchImportMessage}</div>}
-            <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span><span>VOL</span><span>BID / ASK</span><span></span></div>
-            <div className="watch-items">
-              {filteredWatchlist.map((item) => {
+            {watchPanel === "watchlist" ? (
+              <>
+                <input className="watch-search" placeholder="Search symbols..." value={watchSearch}
+                  onChange={(event) => setWatchSearch(event.target.value)} />
+                {watchImportMessage && <div className="watch-message">{watchImportMessage}</div>}
+                <div className="watch-columns"><span>SYMBOL</span><span>LAST</span><span>CHANGE %</span><span>VOL</span><span>BID / ASK</span><span></span></div>
+                <div className="watch-items">
+                  {filteredWatchlist.map((item) => {
                 const liveQuote = liveQuotes[item.symbol];
                 return (
                 <div
@@ -2359,11 +2377,39 @@ json.dumps(_result)`;
                   <button className="watch-remove" onClick={() => removeWatchSymbol(item.symbol)} aria-label={`Remove ${item.symbol}`}>×</button>
                 </div>
                 );
-              })}
-            </div>
-            <div className="watch-footer">
-              {watchlist.length ? "Click a symbol to load chart" : "Watchlist empty — use symbol search or ADD"}
-            </div>
+                  })}
+                </div>
+                <div className="watch-footer">
+                  {watchlist.length ? "Click a symbol to load chart" : "Watchlist empty — use symbol search or ADD"}
+                </div>
+              </>
+            ) : watchPanel === "44ma" ? (
+              <>
+                <div className="watch-panel-title">
+                  <strong>44 MA</strong>
+                  <span>Scan results</span>
+                </div>
+                <div className="ma44-columns">
+                  <span>SYMBOL</span>
+                  <span>CLOSED</span>
+                  <span>CHANGE %</span>
+                  <span>44 MA</span>
+                </div>
+                <div className="watch-items ma44-items">
+                  <div className="ma44-empty">
+                    <span>44 MA scanner</span>
+                    <small>Scan conditions will be configured next.</small>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="watch-items">
+                <div className="ma44-empty">
+                  <span>Movers</span>
+                  <small>Existing movers view will remain available here.</small>
+                </div>
+              </div>
+            )}
           </aside>
         ) : (
           <button className="watch-open" onClick={() => setWatchOpen(true)}>SHOW WATCHLIST</button>
