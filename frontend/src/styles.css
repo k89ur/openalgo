@@ -272,6 +272,45 @@ button { cursor: pointer; }
 }
 .ma44-status span { color:#a5a5a5; letter-spacing:.03em; }
 .ma44-status small { color:#555; font-size:8px; }
+.ma44-loader {
+  margin:7px 8px 8px;
+  padding:8px 9px;
+  border:1px solid #252525;
+  border-radius:3px;
+  background:#101010;
+}
+.ma44-loader-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:#9b9b9b;
+  font-size:8px;
+  letter-spacing:.05em;
+  margin-bottom:6px;
+}
+.ma44-loader-head span { color:#bdbdbd; }
+.ma44-progress-track {
+  height:4px;
+  overflow:hidden;
+  border-radius:2px;
+  background:#252525;
+}
+.ma44-progress-fill {
+  height:100%;
+  background:#777;
+  transition:width .25s ease;
+}
+.ma44-loader-message {
+  margin-top:6px;
+  color:#777;
+  font-size:8px;
+  line-height:1.4;
+}
+.ma44-loader-count {
+  margin-top:3px;
+  color:#555;
+  font-size:8px;
+}
 .ma44-columns {
   display:grid;
   grid-template-columns:minmax(0,1fr) 72px 68px 68px;
