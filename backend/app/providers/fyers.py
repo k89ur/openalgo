@@ -312,6 +312,7 @@ class FyersMarketDataProvider:
         limit: int,
         start: date | None = None,
         end: date | None = None,
+        force_refresh: bool = False,
     ) -> list[Candle]:
         client = self._require_client()
         info = self.symbol_info(symbol)
@@ -352,7 +353,7 @@ class FyersMarketDataProvider:
             if cached:
                 cached_at, cached_start, cached_end, cached_bars = cached
                 covers_request = cached_start <= start and cached_end >= end
-                if covers_request:
+                if covers_request and not force_refresh:
                     result = list(cached_bars[-limit:])
                     if time.monotonic() - cached_at < self._history_cache_ttl_seconds:
                         return result
