@@ -60,6 +60,7 @@ class MA44Scanner:
         self._last_live_scan: float | None = None
         self._last_eod_scan: float | None = None
         self._status = "IDLE"
+        self._stage = "WAITING"
         self._message = "44 MA scanner waiting for a connected FYERS account."
         self._error = ""
         self._processed = 0
@@ -188,7 +189,8 @@ class MA44Scanner:
             self._processed = 0
             self._total = len(universe)
             self._status = "PREPARING"
-            self._message = "Building 44/150/200 SMA trend data..."
+            self._stage = "BUILDING_TREND"
+            self._message = f"Building 44/150/200 SMA trend data · 0/{len(universe):,}"
             self._error = ""
 
         fresh: dict[str, dict] = {}
@@ -211,10 +213,15 @@ class MA44Scanner:
                     fresh[ticker] = metric
                 with self._lock:
                     self._processed += 1
+                    self._message = (
+                        f"Building 44/150/200 SMA trend data · "
+                        f"{self._processed:,}/{self._total:,}"
+                    )
 
         with self._lock:
             self._metrics = fresh
-            self._message = f"Trend data ready for {len(fresh):,} stocks."
+            self._stage = "READY"
+            self._message = f"Trend data ready · {len(fresh):,} stocks passed the 20-day trend filter."
             self._status = "READY"
 
     def _provider(self, account_id: int):
@@ -276,6 +283,12 @@ class MA44Scanner:
     def _scan_eod(self, provider) -> None:
         with self._lock:
             universe = list(self._universe)
+            self._processed = 0
+            self._total = len(universe)
+            self._status = "SCANNING"
+            self._stage = "SCANNING_EOD"
+            self._message = f"EOD scan in progress · 0/{len(universe):,}"
+            self._error = ""
 
         results: list[dict] = []
         for ticker, api in universe:
@@ -309,14 +322,19 @@ class MA44Scanner:
                 continue
             with self._lock:
                 self._processed += 1
+                self._message = (
+                    f"EOD scan in progress · {self._processed:,}/{self._total:,} "
+                    f"· {len(results):,} matches"
+                )
 
         results.sort(key=lambda row: row["symbol"])
         with self._lock:
             self._results["eod"] = results
             self._last_eod_scan = time.time()
             self._eod_done_date = _now().date().isoformat()
+            self._stage = "COMPLETE"
             self._status = "EOD_COMPLETE"
-            self._message = f"EOD scan complete · {len(results)} matches"
+            self._message = f"EOD scan complete · {len(results):,} matches"
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -326,6 +344,7 @@ class MA44Scanner:
                 if not account:
                     with self._lock:
                         self._status = "WAITING"
+                        self._stage = "WAITING_FOR_BROKER"
                         self._message = "Waiting for a connected FYERS account."
                         self._account_id = None
                     self._stop.wait(15)
@@ -342,10 +361,19 @@ class MA44Scanner:
                 provider = self._provider(account.id)
                 with self._lock:
                     cached_universe = list(self._universe)
-                universe = cached_universe or self._load_universe()
+                if cached_universe:
+                    universe = cached_universe
+                else:
+                    with self._lock:
+                        self._status = "PREPARING"
+                        self._stage = "LOADING_UNIVERSE"
+                        self._message = "Loading NSE stock universe..."
+                    universe = self._load_universe()
                 with self._lock:
                     self._universe = universe
                     self._account_id = account.id
+                    if self._stage == "LOADING_UNIVERSE":
+                        self._message = f"NSE universe loaded · {len(universe):,} stocks"
 
                 if _market_open(now):
                     if not self._metrics:
@@ -361,18 +389,21 @@ class MA44Scanner:
                         self._scan_eod(provider)
                     else:
                         with self._lock:
-                            self._status = "EOD_COMPLETE"
+                            self._stage = "COMPLETE"
+                    self._status = "EOD_COMPLETE"
                     # EOD is intentionally one run per day.
                     self._stop.wait(30)
                     continue
 
                 with self._lock:
                     self._status = "WAITING"
+                    self._stage = "WAITING_FOR_MARKET"
                     self._message = "Waiting for NSE market session..."
                 self._stop.wait(30)
             except Exception as exc:
                 with self._lock:
                     self._status = "ERROR"
+                    self._stage = "ERROR"
                     self._error = str(exc)
                     self._message = "44 MA scanner encountered an error; retrying."
                 self._stop.wait(30)
@@ -383,7 +414,12 @@ class MA44Scanner:
             return {
                 "mode": mode,
                 "status": self._status,
+                "stage": self._stage,
                 "message": self._message,
+                "progress": (
+                    round((self._processed / self._total) * 100, 1)
+                    if self._total else 0
+                ),
                 "error": self._error,
                 "account_id": self._account_id,
                 "universe_count": len(self._universe),
