@@ -59,6 +59,7 @@ type Props = {
   showGrid: boolean;
   showCrosshair: boolean;
   showVolume: boolean;
+  showMa44: boolean;
   showVwap: boolean;
   show52WeekHigh: boolean;
   show52WeekLow: boolean;
@@ -409,6 +410,7 @@ export function Chart({
   showGrid,
   showCrosshair,
   showVolume,
+  showMa44,
   showVwap,
   show52WeekHigh,
   show52WeekLow,
@@ -734,7 +736,8 @@ export function Chart({
         });
       }
 
-      // Base indicators: native MA stays on the candle pane.
+      // Base indicators: 50/200 MA remain core; 44 SMA is an always-on
+      // core overlay by default but can be disabled by the user.
       chart.createIndicator(
         {
           name: "MA",
@@ -752,6 +755,25 @@ export function Chart({
         },
         true,
       );
+
+      if (showMa44) {
+        chart.createIndicator(
+          {
+            name: "MA",
+            id: "pipsgox-ma44",
+            paneId: "candle_pane",
+            series: "price",
+            calcParams: [44],
+            visible: true,
+            styles: {
+              lines: [
+                { style: "solid", color: chartColors.ma50, size: 1 },
+              ],
+            },
+          },
+          true,
+        );
+      }
 
       // Volume is a bars-only indicator. No volume MA lines are calculated.
       if (showVolume) {
@@ -919,6 +941,7 @@ export function Chart({
     showGrid,
     showCrosshair,
     showVolume,
+    showMa44,
     showVwap,
     show52WeekHigh,
     show52WeekLow,
