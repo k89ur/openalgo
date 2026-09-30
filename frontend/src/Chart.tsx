@@ -737,44 +737,33 @@ export function Chart({
         });
       }
 
-      // Base indicators: 50/200 MA remain core; 44 SMA is an always-on
-      // core overlay by default but can be disabled by the user.
+      // Core moving averages share one native MA indicator. Keeping 44/50/200
+      // in the same indicator avoids KLineCharts replacing/overwriting a
+      // second MA instance with the same indicator name.
+      const maPeriods = showMa44 ? [44, 50, 200] : [50, 200];
+      const maLines = showMa44
+        ? [
+            { style: "solid", color: chartColors.ma44, size: 1 },
+            { style: "solid", color: chartColors.ma50, size: 1 },
+            { style: "solid", color: chartColors.ma200, size: 1 },
+          ]
+        : [
+            { style: "solid", color: chartColors.ma50, size: 1 },
+            { style: "solid", color: chartColors.ma200, size: 1 },
+          ];
+
       chart.createIndicator(
         {
           name: "MA",
           id: "pipsgox-default-ma",
           paneId: "candle_pane",
           series: "price",
-          calcParams: [50, 200],
+          calcParams: maPeriods,
           visible: true,
-          styles: {
-            lines: [
-              { style: "solid", color: chartColors.ma50, size: 1 },
-              { style: "solid", color: chartColors.ma200, size: 1 },
-            ],
-          },
+          styles: { lines: maLines },
         },
         true,
       );
-
-      if (showMa44) {
-        chart.createIndicator(
-          {
-            name: "MA",
-            id: "pipsgox-ma44",
-            paneId: "candle_pane",
-            series: "price",
-            calcParams: [44],
-            visible: true,
-            styles: {
-              lines: [
-                { style: "solid", color: chartColors.ma44, size: 1 },
-              ],
-            },
-          },
-          true,
-        );
-      }
 
       // Volume is a bars-only indicator. No volume MA lines are calculated.
       if (showVolume) {
