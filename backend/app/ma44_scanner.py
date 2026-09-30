@@ -93,15 +93,20 @@ class MA44Scanner:
             preferred_id = self._preferred_account_id
         if preferred_id is not None:
             for account in accounts:
-                if (
-                    account.id == preferred_id
-                    and account.broker.lower() == "fyers"
-                    and account.status.lower() == "connected"
-                ):
+                if account.id != preferred_id or account.broker.lower() != "fyers":
+                    continue
+                # The UI's CONNECTED state is normally authoritative, but the
+                # persisted status can briefly lag the access-token state after
+                # a fresh FYERS login. A usable token is sufficient for the
+                # scanner to attempt the provider connection; provider errors
+                # are then surfaced instead of leaving the scanner in WAITING.
+                if account.status.lower() == "connected" or broker_accounts.get_access_token(account.id):
                     return account
             return None
         for account in accounts:
-            if account.broker.lower() == "fyers" and account.status.lower() == "connected":
+            if account.broker.lower() != "fyers":
+                continue
+            if account.status.lower() == "connected" or broker_accounts.get_access_token(account.id):
                 return account
         return None
 
