@@ -807,7 +807,10 @@ function App() {
     const load = async () => {
       if (watchPanelRef.current !== "44ma") return;
       try {
-        const response = await apiFetch(`/api/scanner/44ma?mode=${ma44ModeRef.current}`, { cache: "no-store" });
+        const response = await apiFetch(
+          `/api/scanner/44ma?mode=${ma44ModeRef.current}&account_id=${selectedAccountId}`,
+          { cache: "no-store" },
+        );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(String(payload.detail || "44 MA scanner status failed."));
         if (!cancelled) setMa44Scan(payload);
