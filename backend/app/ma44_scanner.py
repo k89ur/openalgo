@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, time as dt_time, timedelta, timezone
+from pathlib import Path
 
 from app import broker_accounts
 
@@ -67,6 +69,47 @@ class MA44Scanner:
         self._total = 0
         self._account_id: int | None = None
         self._preferred_account_id: int | None = None
+
+
+    @staticmethod
+    def _metrics_cache_path() -> Path:
+        return Path(__file__).resolve().parent / "ma44_metrics_cache.json"
+
+    def _load_metrics_cache(self, current_date: date) -> dict[str, dict]:
+        path = self._metrics_cache_path()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            cached_date = date.fromisoformat(str(payload.get("as_of", "")))
+            metrics = payload.get("metrics")
+            if cached_date >= current_date or not isinstance(metrics, dict):
+                return {}
+            clean: dict[str, dict] = {}
+            for ticker, metric in metrics.items():
+                if not isinstance(metric, dict):
+                    continue
+                if (
+                    len(metric.get("tail_closes") or []) >= 199
+                    and len(metric.get("trend_ma44") or []) == TREND_POINTS
+                    and len(metric.get("trend_ma150") or []) == TREND_POINTS
+                    and len(metric.get("trend_ma200") or []) == TREND_POINTS
+                ):
+                    clean[str(ticker).upper()] = metric
+            return clean
+        except Exception:
+            return {}
+
+    def _save_metrics_cache(self, metrics: dict[str, dict]) -> None:
+        path = self._metrics_cache_path()
+        tmp = path.with_suffix(".tmp")
+        payload = {
+            "as_of": (_now().date() - timedelta(days=1)).isoformat(),
+            "metrics": metrics,
+        }
+        try:
+            tmp.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+            tmp.replace(path)
+        except Exception:
+            pass
 
     def start(self) -> None:
         with self._lock:
@@ -228,7 +271,7 @@ class MA44Scanner:
             except Exception as exc:
                 return ticker, None, str(exc)
 
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="ma44-history") as pool:
+        with ThreadPoolExecutor(max_workers=8, thread_name_prefix="ma44-history") as pool:
             futures = [pool.submit(one, item) for item in universe]
             for future in as_completed(futures):
                 if self._stop.is_set():
@@ -243,6 +286,7 @@ class MA44Scanner:
                         f"{self._processed:,}/{self._total:,}"
                     )
 
+        self._save_metrics_cache(fresh)
         with self._lock:
             self._metrics = fresh
             self._stage = "READY"
@@ -449,7 +493,7 @@ class MA44Scanner:
                 with self._lock:
                     if self._last_date != now.date().isoformat():
                         self._last_date = now.date().isoformat()
-                        self._metrics = {}
+                        self._metrics = self._load_metrics_cache(now.date())
                         self._results["live"] = []
                         self._results["eod"] = []
                         self._eod_done_date = None
