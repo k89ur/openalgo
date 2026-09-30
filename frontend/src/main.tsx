@@ -187,6 +187,7 @@ type ChartSettings = {
   showGrid: boolean;
   showCrosshair: boolean;
   showVolume: boolean;
+  showMa44: boolean;
   showVwap: boolean;
   show52WeekHigh: boolean;
   show52WeekLow: boolean;
@@ -212,6 +213,7 @@ const DEFAULT_CHART_SETTINGS: ChartSettings = {
   showGrid: true,
   showCrosshair: true,
   showVolume: true,
+  showMa44: true,
   showVwap: false,
   show52WeekHigh: false,
   show52WeekLow: false,
@@ -420,7 +422,7 @@ function loadSavedPipscripts(): SavedPipscript[] {
   return [];
 }
 
-const coreIndicators = ["MA 50", "MA 200"];
+const coreIndicators = ["MA 44", "MA 50", "MA 200"];
 
 type UiIconName = "candle" | "bar" | "line" | "indicator" | "pipscript" | "sun" | "settings" | "add" | "import" | "export" | "new" | "delete" | "hide";
 
@@ -2763,11 +2765,21 @@ json.dumps(_result)`;
                 <p>Select technical studies and optional overlays for the active chart.</p>
 
                 <div className="indicator-section-title">CORE CHART INDICATORS</div>
-                {coreIndicators.map((item) => (
-                  <div key={item} className="indicator-row indicator-row-static">
-                    <span>{item}</span><span>ON</span>
-                  </div>
-                ))}
+                <label className="indicator-toggle-row">
+                  <span>MA 44 <small>core</small></span>
+                  <input
+                    type="checkbox"
+                    checked={chartSettings.showMa44}
+                    onChange={(event) => updateChartSettings({ showMa44: event.target.checked })}
+                  />
+                  <i />
+                </label>
+                <div className="indicator-row indicator-row-static">
+                  <span>MA 50</span><span>ON</span>
+                </div>
+                <div className="indicator-row indicator-row-static">
+                  <span>MA 200</span><span>ON</span>
+                </div>
                 <label className="indicator-toggle-row">
                   <span>Volume</span>
                   <input
