@@ -799,9 +799,10 @@ function App() {
   }, [authenticated]);
 
   useEffect(() => {
-    if (!authenticated || !selectedAccountId || watchPanel !== "44ma") return;
+    if (!authenticated || !selectedAccountId) return;
     let cancelled = false;
     const load = async () => {
+      if (watchPanel !== "44ma") return;
       try {
         const response = await apiFetch(`/api/scanner/44ma?mode=${ma44Mode}`, { cache: "no-store" });
         const payload = await response.json().catch(() => ({}));
@@ -814,7 +815,7 @@ function App() {
     void load();
     const timer = window.setInterval(load, 10000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [authenticated, selectedAccountId, watchPanel, ma44Mode]);
+  }, [authenticated, selectedAccountId, ma44Mode, watchPanel]);
 
   useEffect(() => {
     if (selectedAccountId) localStorage.setItem("pipsgox-selected-account", String(selectedAccountId));
