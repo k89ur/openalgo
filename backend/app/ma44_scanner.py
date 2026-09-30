@@ -188,6 +188,10 @@ class MA44Scanner:
             "sma44": last44[-1],
             "sma150": last150[-1],
             "sma200": last200[-1],
+            "trend_ma44": last44,
+            "trend_ma150": last150,
+            "trend_ma200": last200,
+            "tail_closes": closes[-199:],
             "trend_valid": True,
             "last_close": closes[-1],
         }
@@ -304,6 +308,7 @@ class MA44Scanner:
     def _scan_eod(self, provider) -> None:
         with self._lock:
             universe = list(self._universe)
+            metrics = dict(self._metrics)
             self._processed = 0
             self._total = len(universe)
             self._status = "SCANNING"
@@ -311,42 +316,100 @@ class MA44Scanner:
             self._message = f"EOD scan in progress · 0/{len(universe):,}"
             self._error = ""
 
+        # EOD does not need one fresh History API call per stock. The trend
+        # baseline uses completed daily candles; today's OHLC is obtained from
+        # the Quotes API, which supports batches of up to 50 symbols.
+        if not metrics:
+            with self._lock:
+                self._stage = "BUILDING_TREND"
+                self._message = "Preparing EOD trend data from completed daily candles..."
+            self._load_metrics(provider, universe, include_last_day=False)
+            with self._lock:
+                metrics = dict(self._metrics)
+                self._stage = "SCANNING_EOD"
+                self._status = "SCANNING"
+                self._processed = 0
+                self._total = len(universe)
+                self._message = f"EOD scan in progress · 0/{len(universe):,}"
+
+        try:
+            quotes = provider.get_quotes([api for _, api in universe])
+        except Exception as exc:
+            with self._lock:
+                self._stage = "ERROR"
+                self._status = "ERROR"
+                self._error = str(exc)
+                self._message = "EOD quote batch failed."
+            return
+
+        api_to_ticker = {api.upper(): ticker for ticker, api in universe}
         results: list[dict] = []
-        for ticker, api in universe:
+        processed = 0
+
+        for quote in quotes:
             if self._stop.is_set():
                 return
-            try:
-                candles = provider.get_history(api, "D", HISTORY_LIMIT, start=None, end=date.today(), force_refresh=True)
-                metric = self._metrics_from_candles(candles, include_last_day=True)
-                if not metric or not candles:
-                    continue
-                last = sorted(candles, key=lambda item: item.time)[-1]
-                low_distance = _distance(float(last.low), metric["sma44"])
-                close_distance = _distance(float(last.close), metric["sma44"])
-                if not (-0.25 <= low_distance <= 0.20):
-                    continue
-                if not (0.0 <= close_distance <= 5.0):
-                    continue
-                ordered = sorted(candles, key=lambda item: item.time)
-                previous = ordered[-2].close if len(ordered) >= 2 else last.close
-                change = ((last.close - previous) / previous * 100.0) if previous else 0.0
+            ticker = api_to_ticker.get(quote.symbol.upper())
+            metric = metrics.get(ticker or "")
+            if not metric or quote.last is None or quote.high is None or quote.low is None:
+                continue
+
+            tail = metric.get("tail_closes") or []
+            if len(tail) < 199:
+                continue
+
+            today_close = float(quote.last)
+            previous_close = float(tail[-1])
+            sma44 = (sum(tail[-43:]) + today_close) / 44.0
+            sma150 = (sum(tail[-149:]) + today_close) / 150.0
+            sma200 = (sum(tail[-199:]) + today_close) / 200.0
+
+            # Stored arrays contain yesterday plus the preceding 20 completed
+            # trading days. Append today's SMA and validate the same 21-point
+            # rising/ordering rule used by the scanner.
+            trend44 = (list(metric["trend_ma44"]) + [sma44])[-TREND_POINTS:]
+            trend150 = (list(metric["trend_ma150"]) + [sma150])[-TREND_POINTS:]
+            trend200 = (list(metric["trend_ma200"]) + [sma200])[-TREND_POINTS:]
+            rising = (
+                all(trend44[i] > trend44[i - 1] for i in range(1, TREND_POINTS))
+                and all(trend150[i] > trend150[i - 1] for i in range(1, TREND_POINTS))
+                and all(trend200[i] > trend200[i - 1] for i in range(1, TREND_POINTS))
+            )
+            ordered = all(
+                trend44[i] > trend150[i] > trend200[i]
+                for i in range(TREND_POINTS)
+            )
+            low_distance = _distance(float(quote.low), sma44)
+            close_distance = _distance(today_close, sma44)
+
+            processed += 1
+            if (
+                rising
+                and ordered
+                and -0.25 <= low_distance <= 0.20
+                and 0.0 <= close_distance <= 5.0
+            ):
+                change = ((today_close - previous_close) / previous_close * 100.0) if previous_close else 0.0
                 results.append({
                     "symbol": ticker,
-                    "closed": float(last.close),
+                    "closed": today_close,
                     "change_percent": change,
                     "ma_distance": close_distance,
-                    "sma44": metric["sma44"],
-                    "low": float(last.low),
+                    "sma44": sma44,
+                    "low": float(quote.low),
                     "mode": "eod",
                 })
-            except Exception:
-                continue
+
             with self._lock:
-                self._processed += 1
+                self._processed = processed
                 self._message = (
-                    f"EOD scan in progress · {self._processed:,}/{self._total:,} "
+                    f"EOD scan in progress · {processed:,}/{len(quotes):,} "
                     f"· {len(results):,} matches"
                 )
+
+        with self._lock:
+            self._processed = len(universe)
+            self._total = len(universe)
 
         results.sort(key=lambda row: row["symbol"])
         with self._lock:
