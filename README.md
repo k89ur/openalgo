@@ -8,7 +8,7 @@ A lightweight web charting and custom-indicator application.
 - Moving Average and Volume
 - Custom Python/JavaScript indicators
 - Indicator plots, markers, values, and tables
-- One watchlist with up to 250 stocks
+- One watchlist with up to 1000 stocks
 - Pluggable market-data providers
 - Broker/API independent architecture
 
