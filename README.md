@@ -1,4 +1,4 @@
-# ChartLab
+# pipsgox
 
 A lightweight web charting and custom-indicator application.
 
