@@ -8,3 +8,4 @@ cryptography
 SQLAlchemy>=2.0,<3.0
 psycopg>=3.2,<4.0
 alembic>=1.16,<2.0
+Authlib>=1.6,<2.0
