@@ -116,6 +116,40 @@ def create_initial_user(username: str, password: str) -> None:
         db.commit()
 
 
+def create_session_for_user(
+    user_id: int,
+    *,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> str:
+    """Create a server-side session for an already authenticated user."""
+    now = datetime.now(timezone.utc)
+    raw_token = secrets.token_urlsafe(48)
+    expires_at = now + timedelta(seconds=SESSION_TTL_SECONDS)
+
+    with _require_db()() as db:
+        if db.get(User, user_id) is None:
+            raise ValueError("User does not exist.")
+        db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(last_login_at=now)
+        )
+        db.add(
+            Session(
+                user_id=user_id,
+                session_token_hash=_token_hash(raw_token),
+                expires_at=expires_at,
+                last_seen_at=now,
+                ip_hash=_metadata_hash(ip_address),
+                user_agent=(user_agent or "")[:1024] or None,
+            )
+        )
+        db.commit()
+
+    return raw_token
+
+
 def authenticate(
     username: str,
     password: str,
