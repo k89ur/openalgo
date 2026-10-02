@@ -2,51 +2,23 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 import secrets
-import sqlite3
-import threading
 import time
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from app.db.database import SessionLocal
-from app.db.models import PasswordCredential, User
+from app.db.models import PasswordCredential, Session, User
 
-_DB_LOCK = threading.Lock()
-_DEFAULT_DB = Path(__file__).resolve().parents[2] / ".pipsgox" / "auth.db"
 SESSION_COOKIE = "pipsgox_session"
 SESSION_TTL_SECONDS = 60 * 60 * 12
 
 
-def _db_path() -> Path:
-    return Path(os.getenv("PIPSGOX_AUTH_DB", str(_DEFAULT_DB))).expanduser()
-
-
-def _connect() -> sqlite3.Connection:
-    """Temporary SQLite store for sessions during the auth migration.
-
-    User accounts and password hashes now live in PostgreSQL. Sessions will
-    move to PostgreSQL in the dedicated sessions phase.
-    """
-    path = _db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(path)
-    connection.row_factory = sqlite3.Row
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS auth_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            token_hash TEXT NOT NULL UNIQUE,
-            expires_at INTEGER NOT NULL,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    connection.commit()
-    return connection
+def _require_db():
+    if SessionLocal is None:
+        raise RuntimeError("PostgreSQL is not configured. Set DATABASE_URL first.")
+    return SessionLocal
 
 
 def _password_hash(password: str, salt: bytes | None = None) -> str:
@@ -82,25 +54,23 @@ def _verify_password(password: str, encoded: str) -> bool:
         return False
 
 
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def initialize() -> None:
-    if SessionLocal is None:
-        raise RuntimeError("PostgreSQL is not configured. Set DATABASE_URL first.")
-    with _DB_LOCK:
-        connection = _connect()
-        connection.close()
+    _require_db()
 
 
 def has_user() -> bool:
-    if SessionLocal is None:
-        raise RuntimeError("PostgreSQL is not configured. Set DATABASE_URL first.")
-    with SessionLocal() as db:
+    with _require_db()() as db:
         return db.scalar(select(User.id).limit(1)) is not None
 
 
 def verify_user_password(user_id: int, password: str) -> bool:
-    if not password or SessionLocal is None:
+    if not password:
         return False
-    with SessionLocal() as db:
+    with _require_db()() as db:
         password_hash = db.scalar(
             select(PasswordCredential.password_hash).where(
                 PasswordCredential.user_id == user_id
@@ -110,28 +80,20 @@ def verify_user_password(user_id: int, password: str) -> bool:
 
 
 def delete_all_users() -> int:
-    """Delete all PostgreSQL users and their password credentials.
-
-    Session rows are cleared as part of the transitional SQLite session store.
-    """
-    if SessionLocal is None:
-        raise RuntimeError("PostgreSQL is not configured. Set DATABASE_URL first.")
-    with SessionLocal() as db:
-        count = db.query(User).delete()
+    """Delete all PostgreSQL users and their dependent credentials/sessions."""
+    with _require_db()() as db:
+        result = db.execute(delete(User))
         db.commit()
-    revoke_all_sessions()
-    return int(count)
+        return int(result.rowcount or 0)
 
 
 def create_initial_user(username: str, password: str) -> None:
-    if SessionLocal is None:
-        raise RuntimeError("PostgreSQL is not configured. Set DATABASE_URL first.")
     username = username.strip()
     if not username:
         raise ValueError("Username is required.")
     encoded = _password_hash(password)
 
-    with SessionLocal() as db:
+    with _require_db()() as db:
         existing = db.scalar(select(User.id).where(User.username == username))
         if existing is not None:
             raise ValueError("Username already exists.")
@@ -140,20 +102,22 @@ def create_initial_user(username: str, password: str) -> None:
         db.add(user)
         db.flush()
 
-        credential = PasswordCredential(
-            user_id=user.id,
-            password_hash=encoded,
+        db.add(
+            PasswordCredential(
+                user_id=user.id,
+                password_hash=encoded,
+            )
         )
-        db.add(credential)
         db.commit()
 
 
 def authenticate(username: str, password: str) -> str | None:
-    if SessionLocal is None:
-        raise RuntimeError("PostgreSQL is not configured. Set DATABASE_URL first.")
-
     username = username.strip()
-    with SessionLocal() as db:
+    if not username or not password:
+        return None
+
+    SessionLocalFactory = _require_db()
+    with SessionLocalFactory() as db:
         row = db.execute(
             select(User.id, User.username, PasswordCredential.password_hash)
             .join(
@@ -167,29 +131,26 @@ def authenticate(username: str, password: str) -> str | None:
             return None
 
         user_id = int(row.id)
+        now = datetime.now(timezone.utc)
         db.execute(
             update(User)
             .where(User.id == user_id)
-            .values(last_login_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc))
+            .values(last_login_at=now)
+        )
+
+        raw_token = secrets.token_urlsafe(48)
+        expires_at = now + timedelta(seconds=SESSION_TTL_SECONDS)
+
+        db.add(
+            Session(
+                user_id=user_id,
+                session_token_hash=_token_hash(raw_token),
+                expires_at=expires_at,
+                last_seen_at=now,
+            )
         )
         db.commit()
 
-    raw_token = secrets.token_urlsafe(48)
-    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-    expires_at = int(time.time()) + SESSION_TTL_SECONDS
-
-    with _DB_LOCK:
-        connection = _connect()
-        connection.execute(
-            "DELETE FROM auth_sessions WHERE expires_at <= ?",
-            (int(time.time()),),
-        )
-        connection.execute(
-            "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
-            (user_id, token_hash, expires_at),
-        )
-        connection.commit()
-        connection.close()
     return raw_token
 
 
@@ -197,68 +158,77 @@ def get_user(token: str | None) -> dict[str, object] | None:
     if not token:
         return None
 
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    now = int(time.time())
+    now = datetime.now(timezone.utc)
+    token_hash = _token_hash(token)
 
-    with _DB_LOCK:
-        connection = _connect()
-        row = connection.execute(
-            """
-            SELECT user_id, expires_at
-            FROM auth_sessions
-            WHERE token_hash = ? AND expires_at > ?
-            """,
-            (token_hash, now),
-        ).fetchone()
-        connection.close()
+    with _require_db()() as db:
+        row = db.execute(
+            select(
+                Session.user_id,
+                Session.expires_at,
+                User.username,
+                User.email,
+                User.display_name,
+            )
+            .join(User, User.id == Session.user_id)
+            .where(
+                Session.session_token_hash == token_hash,
+                Session.expires_at > now,
+                Session.revoked_at.is_(None),
+            )
+        ).first()
 
-    if row is None or SessionLocal is None:
-        return None
+        if row is None:
+            return None
 
-    with SessionLocal() as db:
-        user = db.scalar(select(User).where(User.id == int(row["user_id"])))
-
-    if user is None:
-        revoke(token)
-        return None
+        db.execute(
+            update(Session)
+            .where(Session.session_token_hash == token_hash)
+            .values(last_seen_at=now)
+        )
+        db.commit()
 
     return {
-        "id": int(user.id),
-        "username": str(user.username or ""),
-        "email": user.email,
-        "display_name": user.display_name,
-        "expires_at": int(row["expires_at"]),
+        "id": int(row.user_id),
+        "username": str(row.username or ""),
+        "email": row.email,
+        "display_name": row.display_name,
+        "expires_at": int(row.expires_at.timestamp()),
     }
 
 
 def revoke(token: str | None) -> None:
     if not token:
         return
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    with _DB_LOCK:
-        connection = _connect()
-        connection.execute(
-            "DELETE FROM auth_sessions WHERE token_hash = ?",
-            (token_hash,),
+
+    with _require_db()() as db:
+        db.execute(
+            delete(Session).where(
+                Session.session_token_hash == _token_hash(token)
+            )
         )
-        connection.commit()
-        connection.close()
+        db.commit()
 
 
 def revoke_all_sessions(user_id: int | None = None) -> int:
-    with _DB_LOCK:
-        connection = _connect()
-        if user_id is None:
-            cursor = connection.execute("DELETE FROM auth_sessions")
-        else:
-            cursor = connection.execute(
-                "DELETE FROM auth_sessions WHERE user_id = ?",
-                (user_id,),
-            )
-        connection.commit()
-        connection.close()
-    return cursor.rowcount
+    with _require_db()() as db:
+        statement = delete(Session)
+        if user_id is not None:
+            statement = statement.where(Session.user_id == user_id)
+        result = db.execute(statement)
+        db.commit()
+        return int(result.rowcount or 0)
 
 
 def revoke_all(user_id: int) -> int:
     return revoke_all_sessions(user_id)
+
+
+def cleanup_expired_sessions() -> int:
+    """Remove expired sessions from PostgreSQL."""
+    with _require_db()() as db:
+        result = db.execute(
+            delete(Session).where(Session.expires_at <= datetime.now(timezone.utc))
+        )
+        db.commit()
+        return int(result.rowcount or 0)
