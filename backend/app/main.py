@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, broker_accounts, security_audit, diagnostics, oidc
+from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service
 from app.broker_manager import BrokerManager
 from app.ma44_scanner import scanner as ma44_scanner
 
@@ -314,6 +314,129 @@ def auth_me(request: Request) -> dict[str, object]:
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     return user
+
+
+class PasskeyCredentialPayload(BaseModel):
+    credential: dict[str, object]
+
+
+class PasskeyDeletePayload(BaseModel):
+    passkey_id: int
+
+
+@app.post("/api/auth/passkey/register/options")
+def passkey_register_options(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        return passkey_service.registration_options(int(user["id"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/passkey/register/verify")
+def passkey_register_verify(
+    payload: PasskeyCredentialPayload,
+    request: Request,
+) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        result = passkey_service.verify_registration(
+            int(user["id"]),
+            payload.credential,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    security_audit.record(
+        "passkey_register",
+        username=str(user["username"]),
+        success=True,
+    )
+    return result
+
+
+@app.post("/api/auth/passkey/login/options")
+def passkey_login_options() -> dict[str, object]:
+    try:
+        return passkey_service.authentication_options()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/passkey/login/verify")
+def passkey_login_verify(
+    payload: PasskeyCredentialPayload,
+    request: Request,
+    response: Response,
+) -> dict[str, object]:
+    now = time.monotonic()
+    ip = request.client.host if request.client else "unknown"
+    attempts, started = _LOGIN_ATTEMPTS.get(ip, (0, now))
+    if now - started >= _LOGIN_WINDOW_SECONDS:
+        attempts, started = 0, now
+    if attempts >= _LOGIN_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
+    try:
+        user_id, user = passkey_service.verify_authentication(payload.credential)
+        token = auth.create_session_for_user(
+            user_id,
+            ip_address=ip,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except ValueError as exc:
+        _LOGIN_ATTEMPTS[ip] = (attempts + 1, started)
+        security_audit.record("passkey_login", success=False)
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    _LOGIN_ATTEMPTS.pop(ip, None)
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        token,
+        httponly=True,
+        secure=SESSION_COOKIE_SECURE,
+        samesite="lax",
+        max_age=auth.SESSION_TTL_SECONDS,
+        path="/",
+    )
+    security_audit.record(
+        "passkey_login",
+        username=str(user["username"]),
+        success=True,
+    )
+    return {"authenticated": True, **user}
+
+
+@app.get("/api/auth/passkeys")
+def passkey_list(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return {"passkeys": passkey_service.list_passkeys(int(user["id"]))}
+
+
+@app.delete("/api/auth/passkeys/{passkey_id}")
+def passkey_delete(passkey_id: int, request: Request) -> dict[str, bool]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not passkey_service.delete_passkey(int(user["id"]), passkey_id):
+        raise HTTPException(status_code=404, detail="Passkey not found.")
+    security_audit.record(
+        "passkey_delete",
+        username=str(user["username"]),
+        success=True,
+    )
+    return {"deleted": True}
 
 
 @app.post("/api/security/disconnect-all")
