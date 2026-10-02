@@ -186,7 +186,7 @@ def auth_status(request: Request) -> dict[str, object]:
 
 
 @app.post("/api/auth/setup")
-def auth_setup(payload: AuthCredentials, response: Response) -> dict[str, object]:
+def auth_setup(payload: AuthCredentials, request: Request, response: Response) -> dict[str, object]:
     if auth.has_user():
         raise HTTPException(status_code=409, detail="Initial account is already configured.")
     try:
