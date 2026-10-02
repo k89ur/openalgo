@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Identity, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Identity, LargeBinary, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -60,6 +60,11 @@ class User(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+    webauthn_user_id: Mapped[bytes | None] = mapped_column(
+        LargeBinary(64),
+        unique=True,
+        nullable=True,
     )
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
