@@ -192,7 +192,11 @@ def auth_setup(payload: AuthCredentials, request: Request, response: Response) -
     try:
         auth.create_initial_user(payload.username, payload.password)
         token = auth.authenticate(
-            payload.username,\n            payload.password,\n            ip_address=request.client.host if request.client else None,\n            user_agent=request.headers.get("user-agent"),\n        )
+            payload.username,
+            payload.password,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not token:
@@ -215,7 +219,11 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
     if attempts >= _LOGIN_MAX_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
     token = auth.authenticate(
-        payload.username,\n        payload.password,\n        ip_address=ip,\n        user_agent=request.headers.get("user-agent"),\n    )
+        payload.username,
+        payload.password,
+        ip_address=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
     if not token:
         _LOGIN_ATTEMPTS[ip] = (attempts + 1, started)
         security_audit.record("login", username=payload.username.strip(), success=False)
