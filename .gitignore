@@ -9,3 +9,7 @@ __pycache__/
 .pipsgox/
 backend/*.log
 frontend/*.log
+*.pem
+*.key
+secrets/
+credentials/
