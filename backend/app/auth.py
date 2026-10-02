@@ -214,7 +214,7 @@ def revoke(token: str | None) -> None:
     if not token:
         return
 
-    with _require_db() as db:
+    with _require_db()() as db:
         db.execute(
             delete(Session).where(
                 Session.session_token_hash == _token_hash(token)
@@ -224,7 +224,7 @@ def revoke(token: str | None) -> None:
 
 
 def revoke_all_sessions(user_id: int | None = None) -> int:
-    with _require_db() as db:
+    with _require_db()() as db:
         statement = delete(Session)
         if user_id is not None:
             statement = statement.where(Session.user_id == user_id)
@@ -239,7 +239,7 @@ def revoke_all(user_id: int) -> int:
 
 def cleanup_expired_sessions() -> int:
     """Remove expired sessions from PostgreSQL."""
-    with _require_db() as db:
+    with _require_db()() as db:
         result = db.execute(
             delete(Session).where(Session.expires_at <= datetime.now(timezone.utc))
         )
