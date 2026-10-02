@@ -280,6 +280,8 @@ def complete_callback(
     state: str,
     code: str,
     session_token: str | None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
     error: str | None = None,
 ) -> str:
     if error:
@@ -304,6 +306,6 @@ def complete_callback(
     user_id = _upsert_user(provider, claims)
     return auth.create_session_for_user(
         user_id,
-        ip_address=None,
-        user_agent=None,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
