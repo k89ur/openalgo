@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-import time
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select, update
@@ -56,6 +55,12 @@ def _verify_password(password: str, encoded: str) -> bool:
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _metadata_hash(value: str | None) -> str | None:
+    if not value:
+        return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def initialize() -> None:
@@ -111,7 +116,13 @@ def create_initial_user(username: str, password: str) -> None:
         db.commit()
 
 
-def authenticate(username: str, password: str) -> str | None:
+def authenticate(
+    username: str,
+    password: str,
+    *,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> str | None:
     username = username.strip()
     if not username or not password:
         return None
@@ -147,6 +158,8 @@ def authenticate(username: str, password: str) -> str | None:
                 session_token_hash=_token_hash(raw_token),
                 expires_at=expires_at,
                 last_seen_at=now,
+                ip_hash=_metadata_hash(ip_address),
+                user_agent=(user_agent or "")[:1024] or None,
             )
         )
         db.commit()
@@ -201,7 +214,7 @@ def revoke(token: str | None) -> None:
     if not token:
         return
 
-    with _require_db()() as db:
+    with _require_db() as db:
         db.execute(
             delete(Session).where(
                 Session.session_token_hash == _token_hash(token)
@@ -211,7 +224,7 @@ def revoke(token: str | None) -> None:
 
 
 def revoke_all_sessions(user_id: int | None = None) -> int:
-    with _require_db()() as db:
+    with _require_db() as db:
         statement = delete(Session)
         if user_id is not None:
             statement = statement.where(Session.user_id == user_id)
@@ -226,7 +239,7 @@ def revoke_all(user_id: int) -> int:
 
 def cleanup_expired_sessions() -> int:
     """Remove expired sessions from PostgreSQL."""
-    with _require_db()() as db:
+    with _require_db() as db:
         result = db.execute(
             delete(Session).where(Session.expires_at <= datetime.now(timezone.utc))
         )
