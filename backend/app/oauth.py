@@ -72,7 +72,12 @@ def create_authorization_state(
         )
         db.commit()
 
-    return state, nonce, code_verifier
+    code_challenge = (
+        _base64url(hashlib.sha256(code_verifier.encode("ascii")).digest())
+        if code_verifier
+        else None
+    )
+    return state, nonce, code_verifier, code_challenge
 
 
 def consume_authorization_state(
