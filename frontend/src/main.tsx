@@ -5,7 +5,6 @@ import { Chart, type ChartType, type Timeframe, type ChartRange, type DrawingToo
 import "./styles.css";
 import { DevConsole } from "./DevConsole";
 import { BrokerConnections } from "./BrokerConnections";
-import { StartupGate } from "./StartupGate";
 import { StatusCenter } from "./StatusCenter";
 
 type WatchItem = { symbol: string; price: string; change: string; apiSymbol?: string };
@@ -585,13 +584,6 @@ function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-  const [setupBroker, setSetupBroker] = useState<"fyers" | "dhan">("fyers");
-  const [setupAccountName, setSetupAccountName] = useState("");
-  const [setupClientId, setSetupClientId] = useState("");
-  const [setupApiKey, setSetupApiKey] = useState("");
-  const [setupApiSecret, setSetupApiSecret] = useState("");
-  const [setupStatus, setSetupStatus] = useState("");
-  const [setupStatusType, setSetupStatusType] = useState<"info" | "success" | "error">("info");
 
   useEffect(() => {
     let cancelled = false;
@@ -635,18 +627,6 @@ function App() {
         return;
       }
 
-      if (!setupAccountName.trim()) throw new Error("Trading account name is required.");
-      if (!setupApiSecret.trim()) throw new Error("API secret is required.");
-      if (setupBroker === "fyers" && !setupApiKey.trim()) {
-        throw new Error("FYERS App ID / API ID is required.");
-      }
-      if (setupBroker === "dhan" && (!setupClientId.trim() || !setupApiKey.trim())) {
-        throw new Error("Dhan Client ID and API key are required.");
-      }
-
-      setSetupStatus("Creating your private PIPSGOX account...");
-      setSetupStatusType("info");
-
       const authResponse = await apiFetch("/api/auth/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -655,46 +635,10 @@ function App() {
       const authPayload = await authResponse.json().catch(() => ({}));
       if (!authResponse.ok) throw new Error(authPayload?.detail || "Could not create the PIPSGOX account.");
 
-      setSetupStatus("Account created. Encrypting broker credentials...");
-      const brokerResponse = await apiFetch("/api/broker/accounts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          broker: setupBroker,
-          account_name: setupAccountName.trim(),
-          client_id: setupClientId.trim(),
-          api_secret: setupApiSecret,
-          api_key: setupApiKey,
-        }),
-      });
-      const brokerPayload = await brokerResponse.json().catch(() => ({}));
-      if (!brokerResponse.ok) {
-        setAuthenticated(true);
-        setSetupRequired(false);
-        setAuthPassword("");
-        throw new Error(brokerPayload?.detail || "PIPSGOX account was created, but broker credentials could not be saved.");
-      }
-
+      // Broker connection is optional and is configured from inside the app.
       setAuthenticated(true);
       setSetupRequired(false);
       setAuthPassword("");
-      setSetupApiSecret("");
-      setSetupApiKey("");
-      setSetupStatus("Credentials saved securely. Starting broker authorization...");
-
-      const connectResponse = await apiFetch("/api/broker/accounts/" + brokerPayload.id + "/connect");
-      const connectPayload = await connectResponse.json().catch(() => ({}));
-      if (!connectResponse.ok) {
-        setSetupStatusType("error");
-        throw new Error(connectPayload?.detail || "Credentials were saved, but broker authorization could not be started.");
-      }
-
-      if (!connectPayload.authorization_url) {
-        setSetupStatusType("success");
-        throw new Error("Broker did not return an authorization URL.");
-      }
-
-      window.location.assign(connectPayload.authorization_url);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Setup failed.");
       setSetupStatusType("error");
@@ -775,8 +719,11 @@ function App() {
       setAppReady(false);
       return;
     }
+    // Authentication alone is sufficient to open PIPSGOX.
+    // Broker accounts are optional and must never block application startup.
+    setAppReady(true);
+
     let cancelled = false;
-    setAppReady(false);
     apiFetch("/api/broker/accounts")
       .then(async (response) => {
         const payload = await response.json().catch(() => []);
@@ -1978,81 +1925,26 @@ json.dumps(_result)`;
       <main className="auth-screen">
         <form className={setupRequired ? "auth-card setup-card" : "auth-card"} onSubmit={submitAuth}>
           <div className="auth-brand">PIPSGOX</div>
-          <div className="auth-title">{setupRequired ? "Secure terminal setup" : "Sign in to PIPSGOX"}</div>
+          <div className="auth-title">{setupRequired ? "Create your PIPSGOX account" : "Sign in to PIPSGOX"}</div>
           <div className="auth-subtitle">
             {setupRequired
-              ? "Create your private owner account and configure your first trading broker. Credentials are encrypted on the server."
-              : "Your broker accounts and trading data are protected behind this login."}
+              ? "Create your PIPSGOX account. Broker connection is optional and can be added later from inside the app."
+              : "Sign in to PIPSGOX. Broker connections are optional and are used only for trading."}
           </div>
 
-          {setupRequired ? (
-            <>
-              <div className="setup-step">
-                <div className="setup-step-number">1</div>
-                <div className="setup-step-content">
-                  <div className="setup-step-title">PIPSGOX owner account</div>
-                  <div className="setup-step-subtitle">This password protects the entire terminal.</div>
-                  <label>Username<input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" required /></label>
-                  <label>Password<input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete="new-password" minLength={12} required /></label>
-                  <div className="auth-note">Use a strong password of at least 12 characters. Never share it or your broker secrets.</div>
-                </div>
-              </div>
-
-              <div className="setup-divider" />
-
-              <div className="setup-step">
-                <div className="setup-step-number">2</div>
-                <div className="setup-step-content">
-                  <div className="setup-step-title">First trading broker</div>
-                  <div className="setup-step-subtitle">Choose the broker you want PIPSGOX to connect to.</div>
-                  <div className="broker-choice-grid">
-                    <button type="button" className={setupBroker === "fyers" ? "broker-choice active" : "broker-choice"} onClick={() => setSetupBroker("fyers")}>
-                      <strong>FYERS</strong><span>OAuth connection</span>
-                    </button>
-                    <button type="button" className={setupBroker === "dhan" ? "broker-choice active" : "broker-choice"} onClick={() => setSetupBroker("dhan")}>
-                      <strong>Dhan</strong><span>Consent connection</span>
-                    </button>
-                  </div>
-
-                  <div className="setup-fields">
-                    <label>Account name<input value={setupAccountName} onChange={(e) => setSetupAccountName(e.target.value)} placeholder="e.g. Main Trading" autoComplete="off" required /></label>
-                    <label>
-                      {setupBroker === "fyers" ? "Trading Client ID (optional)" : "Client ID"}
-                      <input value={setupClientId} onChange={(e) => setSetupClientId(e.target.value)} placeholder={setupBroker === "fyers" ? "Optional trading client ID" : "Dhan client ID"} autoComplete="off" required={setupBroker === "dhan"} />
-                    </label>
-                    <label>
-                      {setupBroker === "fyers" ? "FYERS App ID / API ID" : "API Key / App ID"}
-                      <input value={setupApiKey} onChange={(e) => setSetupApiKey(e.target.value)} placeholder={setupBroker === "fyers" ? "FYERS App ID (API ID)" : "Dhan App ID"} autoComplete="off" required />
-                    </label>
-                    <label>API Secret<input type="password" value={setupApiSecret} onChange={(e) => setSetupApiSecret(e.target.value)} placeholder="Stored encrypted on the server" autoComplete="new-password" required /></label>
-                  </div>
-                </div>
-              </div>
-
-              {setupStatus && <div className={setupStatusType === "error" ? "setup-status error" : setupStatusType === "success" ? "setup-status success" : "setup-status"}>{setupStatus}</div>}
-              {authError && <div className="auth-error">{authError}</div>}
-
-              <button className="auth-submit setup-submit" type="submit" disabled={!authReady || authBusy}>
-                {authBusy ? "SETTING UP..." : "Save & Connect Broker"}
-              </button>
-              <div className="setup-security-note">API secrets and broker access tokens stay on the server and are encrypted at rest. They are never returned to this page.</div>
-            </>
-          ) : (
-            <>
-              <label>Username<input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" required /></label>
-              <label>Password<input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete="current-password" minLength={12} required /></label>
-              {authError && <div className="auth-error">{authError}</div>}
-              <button className="auth-submit" type="submit" disabled={!authReady || authBusy}>{authBusy ? "SIGNING IN..." : "Sign In"}</button>
-            </>
-          )}
+          <label>Username<input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" required /></label>
+          <label>Password<input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete={setupRequired ? "new-password" : "current-password"} minLength={12} required /></label>
+          {setupRequired && <div className="auth-note">Use a strong password of at least 12 characters. You can connect a trading broker later from Account.</div>}
+          {authError && <div className="auth-error">{authError}</div>}
+          <button className="auth-submit" type="submit" disabled={!authReady || authBusy}>
+            {authBusy ? (setupRequired ? "CREATING ACCOUNT..." : "SIGNING IN...") : (setupRequired ? "Create Account" : "Sign In")}
+          </button>
         </form>
       </main>
     );
   }
 
-  if (!appReady) {
-    const selected = brokerAccounts.find((account) => account.id === selectedAccountId);
-    return (
+  return (
       <StartupGate
         accountId={selectedAccountId}
         accountName={selected?.account_name || "No connected account"}
