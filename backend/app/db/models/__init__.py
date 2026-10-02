@@ -2,8 +2,10 @@
 
 from .oauth_account import OAuthAccount
 from .oauth_state import OAuthState
+from .passkey import Passkey
+from .passkey_challenge import PasskeyChallenge
 from .password_credential import PasswordCredential
 from .session import Session
 from .user import User
 
-__all__ = ["OAuthAccount", "OAuthState", "PasswordCredential", "Session", "User"]
+__all__ = ["OAuthAccount", "OAuthState", "PasswordCredential", "Passkey", "PasskeyChallenge", "Session", "User"]
