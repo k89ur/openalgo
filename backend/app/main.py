@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, broker_accounts, security_audit, diagnostics
+from app import auth, broker_accounts, security_audit, diagnostics, oidc
 from app.broker_manager import BrokerManager
 from app.ma44_scanner import scanner as ma44_scanner
 
@@ -235,6 +235,68 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
         samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
     )
     return {"authenticated": True, "username": payload.username.strip()}
+
+
+@app.get("/api/auth/oauth/{provider}/start")
+def oauth_start(provider: str, request: Request):
+    provider = provider.lower()
+    if provider not in {"google", "apple"}:
+        raise HTTPException(status_code=404, detail="Unsupported OAuth provider.")
+    try:
+        url = oidc.build_authorization_url(
+            provider,
+            request.cookies.get(auth.SESSION_COOKIE),
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return RedirectResponse(url=url, status_code=302)
+
+
+@app.get("/api/auth/oauth/{provider}/callback")
+def oauth_callback(
+    provider: str,
+    request: Request,
+    response: Response,
+    state: str = "",
+    code: str = "",
+    error: str | None = None,
+):
+    provider = provider.lower()
+    if provider not in {"google", "apple"}:
+        raise HTTPException(status_code=404, detail="Unsupported OAuth provider.")
+
+    try:
+        token = oidc.complete_callback(
+            provider=provider,
+            state=state,
+            code=code,
+            session_token=request.cookies.get(auth.SESSION_COOKIE),
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            error=error,
+        )
+    except Exception:
+        # Do not expose provider responses, tokens, claims, or validation
+        # details to the browser. The frontend receives a generic error.
+        return RedirectResponse(
+            url=f"{PIPSGOX_WEB_URL}/?oauth_error=oauth_failed",
+            status_code=303,
+        )
+
+    response = RedirectResponse(
+        url=f"{PIPSGOX_WEB_URL}/?oauth=success",
+        status_code=303,
+    )
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        token,
+        httponly=True,
+        secure=SESSION_COOKIE_SECURE,
+        samesite="lax",
+        max_age=auth.SESSION_TTL_SECONDS,
+        path="/",
+    )
+    return response
 
 
 @app.post("/api/auth/logout")
