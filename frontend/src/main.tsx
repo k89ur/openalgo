@@ -611,7 +611,6 @@ function App() {
     event.preventDefault();
     setAuthBusy(true);
     setAuthError("");
-    setSetupStatus("");
 
     try {
       if (!setupRequired) {
@@ -641,7 +640,6 @@ function App() {
       setAuthPassword("");
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Setup failed.");
-      setSetupStatusType("error");
       setAuthBusy(false);
       return;
     }
@@ -1941,17 +1939,6 @@ json.dumps(_result)`;
           </button>
         </form>
       </main>
-    );
-  }
-
-  return (
-      <StartupGate
-        accountId={selectedAccountId}
-        accountName={selected?.account_name || "No connected account"}
-        broker={selected?.broker || "broker"}
-        onReady={() => setAppReady(true)}
-        onLogout={() => void logout()}
-      />
     );
   }
 
