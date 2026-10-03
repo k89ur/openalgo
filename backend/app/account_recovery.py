@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 
 from app import auth
 from app.db.database import SessionLocal
-from app.db.models import PasswordCredential, PasswordResetToken, User
+from app.db.models import PasswordCredential, PasswordResetToken, Session, User
 from app.email_service import send_password_reset_email
 
 TOKEN_TTL_MINUTES = 30
@@ -110,7 +110,6 @@ def confirm_reset(token: str, new_password: str) -> dict[str, object]:
     if not token or len(token) > 256:
         raise ValueError("Invalid password reset link.")
 
-    encoded_password = auth._password_hash(new_password)
     token_hash = _hash_token(token)
     now = datetime.now(timezone.utc)
 
@@ -130,6 +129,8 @@ def confirm_reset(token: str, new_password: str) -> dict[str, object]:
 
         if reset.used_at is not None or reset.expires_at <= now or user.status != "active":
             raise ValueError("This password reset link is invalid or has expired.")
+
+        encoded_password = auth._password_hash(new_password)
 
         credential = db.scalar(
             select(PasswordCredential)
@@ -156,7 +157,7 @@ def confirm_reset(token: str, new_password: str) -> dict[str, object]:
         )
 
         db.execute(
-            delete(auth.Session).where(auth.Session.user_id == int(user.id))
+            delete(Session).where(Session.user_id == int(user.id))
         )
         db.commit()
 
