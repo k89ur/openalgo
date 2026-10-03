@@ -323,22 +323,12 @@ def _complete_totp_protected_login(
                 code,
             )
         else:
-            # Recovery-code verification binds the code to the user stored in
-            # the short-lived login challenge. It is single-use and does not
-            # reveal whether a particular recovery code exists.
-            challenge_user_id = totp_service.challenge_user_id(challenge_id)
-            if challenge_user_id is None:
-                raise ValueError("Authentication challenge expired. Sign in again.")
-            user_result = recovery_codes.verify_login_code(
+            # Recovery-code verification binds the code to the short-lived
+            # password+TOTP challenge and consumes both atomically.
+            user_id, user = recovery_codes.verify_login_code(
                 challenge_id,
                 code,
-                challenge_user_id=challenge_user_id,
-                attempts=attempts,
-                now=datetime.now(timezone.utc),
             )
-            if user_result is None:
-                raise ValueError("Invalid recovery code.")
-            user_id, user = user_result
 
         token = auth.create_session_for_user(
             user_id,
@@ -548,7 +538,7 @@ def totp_disable(payload: TotpCodePayload, request: Request) -> dict[str, bool]:
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
         totp_service.disable(int(user["id"]), payload.code)
-        recovery_codes.mark_all_unused_used(int(user["id"]))
+        recovery_codes.invalidate_all(int(user["id"]))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
