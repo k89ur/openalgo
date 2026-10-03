@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "0010_create_email_verification"
-down_revision: Union[str, Sequence[str], None] = "0009_create_recovery_codes"
+down_revision: Union[str, Sequence[str], None] = "0008_create_recovery_codes"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
