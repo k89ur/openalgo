@@ -152,6 +152,41 @@ def _send(
     raise EmailDeliveryUnavailable("Email delivery is not configured.")
 
 
+def send_password_reset_email(*, email: str, token: str) -> None:
+    web_url = os.getenv("PIPSGOX_WEB_URL", "http://localhost:3001").rstrip("/")
+    link = f"{web_url}/?reset_token={quote(token, safe='')}"
+    from_email = _required("PIPSGOX_EMAIL_FROM")
+    safe_link = html.escape(link, quote=True)
+
+    text_body = (
+        "Reset your PIPSGOX password by opening this link:\n\n"
+        f"{link}\n\n"
+        "This link expires in 30 minutes and can only be used once.\n"
+        "After resetting your password, you will need to sign in again.\n"
+        "If you did not request this, you can ignore this email."
+    )
+    html_body = (
+        "<!doctype html><html><body>"
+        "<h2>Reset your PIPSGOX password</h2>"
+        "<p>Click the button below to choose a new password.</p>"
+        f'<p><a href="{safe_link}" '
+        'style="display:inline-block;padding:12px 18px;background:#2f6f9f;color:#fff;'
+        'text-decoration:none;border-radius:6px;font-weight:600;">Reset password</a></p>'
+        "<p>This link expires in 30 minutes and can only be used once.</p>"
+        "<p>After resetting your password, you will need to sign in again.</p>"
+        "<p>If you did not request this, you can ignore this email.</p>"
+        "</body></html>"
+    )
+
+    _send(
+        to_email=email,
+        from_email=from_email,
+        subject="Reset your PIPSGOX password",
+        text_body=text_body,
+        html_body=html_body,
+    )
+
+
 def send_verification_email(*, email: str, token: str) -> None:
     web_url = os.getenv("PIPSGOX_WEB_URL", "http://localhost:3001").rstrip("/")
     link = f"{web_url}/api/auth/email/verify?token={quote(token, safe='')}"
