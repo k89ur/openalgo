@@ -589,8 +589,36 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [totpChallengeId, setTotpChallengeId] = useState("");
   const [totpChallengeExpiresAt, setTotpChallengeExpiresAt] = useState<number | null>(null);
+  const [totpChallengeSecondsLeft, setTotpChallengeSecondsLeft] = useState<number | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpUsingRecoveryCode, setTotpUsingRecoveryCode] = useState(false);
+
+  useEffect(() => {
+    if (!totpChallengeId || !totpChallengeExpiresAt) {
+      setTotpChallengeSecondsLeft(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const secondsLeft = Math.max(
+        0,
+        Math.ceil((totpChallengeExpiresAt * 1000 - Date.now()) / 1000),
+      );
+      setTotpChallengeSecondsLeft(secondsLeft);
+
+      if (secondsLeft === 0) {
+        setTotpChallengeId("");
+        setTotpChallengeExpiresAt(null);
+        setTotpCode("");
+        setTotpUsingRecoveryCode(false);
+        setAuthError("Verification session expired. Please sign in again.");
+      }
+    };
+
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [totpChallengeId, totpChallengeExpiresAt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -704,11 +732,20 @@ function App() {
       setTotpCode("");
       setTotpUsingRecoveryCode(false);
     } catch (error) {
-      setAuthError(
-        error instanceof Error
-          ? error.message
-          : (totpUsingRecoveryCode ? "Recovery code verification failed." : "Authenticator verification failed.")
-      );
+      const message = error instanceof Error
+        ? error.message
+        : (totpUsingRecoveryCode ? "Recovery code verification failed." : "Authenticator verification failed.");
+
+      if (/authentication challenge expired|verification session expired/i.test(message)) {
+        setTotpChallengeId("");
+        setTotpChallengeExpiresAt(null);
+        setTotpChallengeSecondsLeft(null);
+        setTotpCode("");
+        setTotpUsingRecoveryCode(false);
+        setAuthError("Verification session expired. Please sign in again.");
+      } else {
+        setAuthError(message);
+      }
     } finally {
       setAuthBusy(false);
     }
@@ -2083,8 +2120,8 @@ json.dumps(_result)`;
                 {totpUsingRecoveryCode
                   ? "Enter one unused recovery code from the set you saved when you enabled the authenticator."
                   : "Enter the 6-digit code from your authenticator app."}
-                {totpChallengeExpiresAt
-                  ? ` Challenge expires in about ${Math.max(0, Math.ceil((totpChallengeExpiresAt * 1000 - Date.now()) / 60000))} minute(s).`
+                {totpChallengeSecondsLeft !== null
+                  ? ` Verification session expires in ${Math.floor(totpChallengeSecondsLeft / 60)}:${String(totpChallengeSecondsLeft % 60).padStart(2, "0")}.`
                   : ""}
               </div>
               <label>
