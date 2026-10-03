@@ -582,6 +582,7 @@ function App() {
   const [setupRequired, setSetupRequired] = useState(false);
   const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
 
@@ -613,6 +614,10 @@ function App() {
     setAuthError("");
 
     try {
+      if (setupRequired && authPassword !== authConfirmPassword) {
+        throw new Error("Passwords do not match.");
+      }
+
       if (!setupRequired) {
         const response = await apiFetch("/api/auth/login", {
           method: "POST",
@@ -623,6 +628,7 @@ function App() {
         if (!response.ok) throw new Error(payload?.detail || "Authentication failed.");
         setAuthenticated(true);
         setAuthPassword("");
+        setAuthConfirmPassword("");
         return;
       }
 
@@ -638,8 +644,9 @@ function App() {
       setAuthenticated(true);
       setSetupRequired(false);
       setAuthPassword("");
+      setAuthConfirmPassword("");
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Setup failed.");
+      setAuthError(error instanceof Error ? error.message : (setupRequired ? "Could not create the PIPSGOX account." : "Authentication failed."));
       setAuthBusy(false);
       return;
     }
@@ -651,6 +658,7 @@ function App() {
     try { await apiFetch("/api/auth/logout", { method: "POST" }); } finally {
       setAuthenticated(false);
       setAuthPassword("");
+      setAuthConfirmPassword("");
       setAuthError("");
     }
   };
@@ -1930,9 +1938,21 @@ json.dumps(_result)`;
               : "Sign in to PIPSGOX. Broker connections are optional and are used only for trading."}
           </div>
 
-          <label>Username<input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" required /></label>
-          <label>Password<input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete={setupRequired ? "new-password" : "current-password"} minLength={12} required /></label>
-          {setupRequired && <div className="auth-note">Use a strong password of at least 12 characters. You can connect a trading broker later from Account.</div>}
+          <label>
+            Username
+            <input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={64} required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete={setupRequired ? "new-password" : "current-password"} minLength={12} required />
+          </label>
+          {setupRequired && (
+            <label>
+              Confirm password
+              <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} autoComplete="new-password" minLength={12} required />
+            </label>
+          )}
+          {setupRequired && <div className="auth-note">Use a strong password of at least 12 characters. Broker connection is optional and can be added later from Account.</div>}
           {authError && <div className="auth-error">{authError}</div>}
           <button className="auth-submit" type="submit" disabled={!authReady || authBusy}>
             {authBusy ? (setupRequired ? "CREATING ACCOUNT..." : "SIGNING IN...") : (setupRequired ? "Create Account" : "Sign In")}
