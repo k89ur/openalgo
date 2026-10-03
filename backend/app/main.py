@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service, totp_service, recovery_codes, email_verification
+from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service, totp_service, recovery_codes, email_verification, account_recovery
 from app.broker_manager import BrokerManager
 from app.ma44_scanner import scanner as ma44_scanner
 
@@ -87,6 +87,9 @@ FYERS_REDIRECT_URI = os.getenv(
 _LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
 _LOGIN_MAX_ATTEMPTS = 5
 _LOGIN_WINDOW_SECONDS = 300
+_PASSWORD_RESET_ATTEMPTS: dict[str, tuple[int, float]] = {}
+_PASSWORD_RESET_MAX_ATTEMPTS = 5
+_PASSWORD_RESET_WINDOW_SECONDS = 900
 _order_idempotency_lock = threading.Lock()
 
 app.add_middleware(
@@ -259,6 +262,19 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
 
 
 class EmailPayload(BaseModel):
+    email: str
+
+
+class PasswordResetRequestPayload(BaseModel):
+    email: str
+
+
+class PasswordResetConfirmPayload(BaseModel):
+    token: str
+    password: str
+
+
+class PasswordResetDevPayload(BaseModel):
     email: str
 
 
@@ -494,6 +510,67 @@ def recovery_codes_generate(
         success=True,
     )
     return {"generated": True, "codes": codes, "count": len(codes)}
+
+
+@app.post("/api/auth/password-reset/request")
+def password_reset_request(payload: PasswordResetRequestPayload, request: Request) -> dict[str, str]:
+    # Always return the same response for valid and unknown addresses.
+    # Rate limiting is intentionally silent to avoid becoming an account oracle.
+    now = time.monotonic()
+    ip = request.client.host if request.client else "unknown"
+    attempts, started = _PASSWORD_RESET_ATTEMPTS.get(ip, (0, now))
+    if now - started >= _PASSWORD_RESET_WINDOW_SECONDS:
+        attempts, started = 0, now
+    if attempts < _PASSWORD_RESET_MAX_ATTEMPTS:
+        _PASSWORD_RESET_ATTEMPTS[ip] = (attempts + 1, started)
+        try:
+            account_recovery.request_reset(payload.email)
+        except ValueError:
+            # Invalid input receives the same generic response as an unknown
+            # account. Do not expose account existence through this endpoint.
+            pass
+        except Exception:
+            logger.exception("Password reset delivery failed.")
+    else:
+        _PASSWORD_RESET_ATTEMPTS[ip] = (attempts, started)
+
+    return {
+        "message": "If an account exists for that email, password reset instructions will be sent."
+    }
+
+
+@app.post("/api/auth/password-reset/confirm")
+def password_reset_confirm(payload: PasswordResetConfirmPayload) -> dict[str, object]:
+    try:
+        result = account_recovery.confirm_reset(payload.token, payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    security_audit.record(
+        "password_reset_completed",
+        username=str(result.get("username") or ""),
+        success=True,
+    )
+    return {"reset": True}
+
+
+def _password_reset_dev_enabled() -> bool:
+    if os.getenv("PIPSGOX_DEV_PASSWORD_RESET", "0").strip().lower() not in {"1", "true", "yes"}:
+        return False
+    return PIPSGOX_WEB_URL.lower().startswith(("http://localhost:", "http://127.0.0.1:"))
+
+
+@app.post("/api/auth/password-reset/dev-token")
+def password_reset_dev_token(payload: PasswordResetDevPayload) -> dict[str, str]:
+    if not _password_reset_dev_enabled():
+        raise HTTPException(status_code=404, detail="Not found.")
+    try:
+        token = account_recovery.create_dev_token(payload.email)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"token": token}
 
 
 @app.get("/api/auth/email")
