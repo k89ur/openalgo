@@ -2019,7 +2019,7 @@ json.dumps(_result)`;
     const signingUp = authMode === "signup";
     return (
       <main className="auth-screen">
-        <form className="auth-card" onSubmit={submitAuth}>
+        <form className="auth-card" onSubmit={totpChallengeId && !signingUp ? submitTotpLogin : submitAuth}>
           <div className="auth-brand">PIPSGOX</div>
           <div className="auth-title">{signingUp ? "Create your PIPSGOX account" : "Sign in to PIPSGOX"}</div>
           <div className="auth-subtitle">
