@@ -579,7 +579,7 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [appReady, setAppReady] = useState(false);
-  const [setupRequired, setSetupRequired] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirmPassword, setAuthConfirmPassword] = useState("");
@@ -596,7 +596,6 @@ function App() {
       })
       .then((payload) => {
         if (cancelled) return;
-        setSetupRequired(Boolean(payload.setup_required));
         setAuthenticated(Boolean(payload.authenticated));
         setAuthReady(true);
       })
@@ -614,68 +613,63 @@ function App() {
     setAuthError("");
 
     try {
-      if (setupRequired && authPassword !== authConfirmPassword) {
+      if (authMode === "signup" && authPassword !== authConfirmPassword) {
         throw new Error("Passwords do not match.");
       }
 
-      if (!setupRequired) {
-        const response = await apiFetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: authUsername.trim(), password: authPassword }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload?.detail || "Authentication failed.");
-        setAuthenticated(true);
-        setAuthPassword("");
-        setAuthConfirmPassword("");
-        return;
-      }
-
-      const authResponse = await apiFetch("/api/auth/setup", {
+      const endpoint = authMode === "signup" ? "/api/auth/signup" : "/api/auth/login";
+      const response = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: authUsername.trim(), password: authPassword }),
       });
-      const authPayload = await authResponse.json().catch(() => ({}));
-      if (!authResponse.ok) throw new Error(authPayload?.detail || "Could not create the PIPSGOX account.");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          payload?.detail ||
+          (authMode === "signup" ? "Could not create the PIPSGOX account." : "Authentication failed.")
+        );
+      }
 
-      // Broker connection is optional and is configured from inside the app.
       setAuthenticated(true);
-      setSetupRequired(false);
+      setAppReady(false);
       setAuthPassword("");
       setAuthConfirmPassword("");
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : (setupRequired ? "Could not create the PIPSGOX account." : "Authentication failed."));
+      setAuthError(
+        error instanceof Error
+          ? error.message
+          : (authMode === "signup" ? "Could not create the PIPSGOX account." : "Authentication failed.")
+      );
+    } finally {
       setAuthBusy(false);
-      return;
     }
-
-    setAuthBusy(false);
   };
 
   const logout = async () => {
     setAuthBusy(true);
+    setAuthError("");
+
     try {
       const response = await apiFetch("/api/auth/logout", { method: "POST" });
-      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.detail || "Could not sign out.");
       }
     } catch (error) {
+      // Even if the network/API request fails, clear the local UI session so
+      // a stale terminal cannot remain visible. The next auth check will
+      // require a valid server session before reopening the terminal.
       setAuthError(error instanceof Error ? error.message : "Could not sign out.");
-      return;
     } finally {
+      setAuthenticated(false);
+      setAppReady(false);
+      setBrokerAccounts([]);
+      setSelectedAccountId(null);
+      setAuthPassword("");
+      setAuthConfirmPassword("");
       setAuthBusy(false);
     }
-
-    setAuthenticated(false);
-    setAppReady(false);
-    setBrokerAccounts([]);
-    setSelectedAccountId(null);
-    setAuthPassword("");
-    setAuthConfirmPassword("");
-    setAuthError("");
   };
 
   const disconnectAllBrokers = async () => {
@@ -1942,15 +1936,35 @@ json.dumps(_result)`;
   };
 
   if (!authReady || !authenticated) {
+    const signingUp = authMode === "signup";
     return (
       <main className="auth-screen">
-        <form className={setupRequired ? "auth-card setup-card" : "auth-card"} onSubmit={submitAuth}>
+        <form className="auth-card" onSubmit={submitAuth}>
           <div className="auth-brand">PIPSGOX</div>
-          <div className="auth-title">{setupRequired ? "Create your PIPSGOX account" : "Sign in to PIPSGOX"}</div>
+          <div className="auth-title">{signingUp ? "Create your PIPSGOX account" : "Sign in to PIPSGOX"}</div>
           <div className="auth-subtitle">
-            {setupRequired
-              ? "Create your PIPSGOX account. Broker connection is optional and can be added later from inside the app."
+            {signingUp
+              ? "Create your PIPSGOX account. Broker connections are optional and can be added later from inside the app."
               : "Sign in to PIPSGOX. Broker connections are optional and are used only for trading."}
+          </div>
+
+          <div className="auth-mode-switch" role="tablist" aria-label="Authentication mode">
+            <button
+              type="button"
+              className={authMode === "login" ? "active" : ""}
+              onClick={() => { setAuthMode("login"); setAuthError(""); }}
+              disabled={authBusy}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              className={authMode === "signup" ? "active" : ""}
+              onClick={() => { setAuthMode("signup"); setAuthError(""); }}
+              disabled={authBusy}
+            >
+              Create Account
+            </button>
           </div>
 
           <label>
@@ -1959,18 +1973,27 @@ json.dumps(_result)`;
           </label>
           <label>
             Password
-            <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete={setupRequired ? "new-password" : "current-password"} minLength={12} required />
+            <input
+              type="password"
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              autoComplete={signingUp ? "new-password" : "current-password"}
+              minLength={12}
+              required
+            />
           </label>
-          {setupRequired && (
+          {signingUp && (
             <label>
               Confirm password
               <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} autoComplete="new-password" minLength={12} required />
             </label>
           )}
-          {setupRequired && <div className="auth-note">Use a strong password of at least 12 characters. Broker connection is optional and can be added later from Account.</div>}
+          {signingUp && <div className="auth-note">Use a strong password of at least 12 characters. Broker connection is optional and can be added later from Account.</div>}
           {authError && <div className="auth-error">{authError}</div>}
           <button className="auth-submit" type="submit" disabled={!authReady || authBusy}>
-            {authBusy ? (setupRequired ? "CREATING ACCOUNT..." : "SIGNING IN...") : (setupRequired ? "Create Account" : "Sign In")}
+            {authBusy
+              ? (signingUp ? "CREATING ACCOUNT..." : "SIGNING IN...")
+              : (signingUp ? "Create Account" : "Sign In")}
           </button>
         </form>
       </main>
