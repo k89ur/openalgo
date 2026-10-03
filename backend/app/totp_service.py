@@ -287,10 +287,12 @@ def create_login_challenge(user_id: int) -> tuple[str, int]:
     expires_at = now + timedelta(seconds=TOTP_LOGIN_TTL_SECONDS)
 
     with _require_db()() as db:
+        # Remove only expired challenges here. Do not invalidate another
+        # still-valid challenge for the same user: a second browser tab or a
+        # repeated sign-in must not silently break an earlier verification flow.
         db.execute(
             delete(TotpLoginChallenge).where(
-                (TotpLoginChallenge.expires_at <= now)
-                | (TotpLoginChallenge.user_id == int(user_id))
+                TotpLoginChallenge.expires_at <= now
             )
         )
         db.add(
