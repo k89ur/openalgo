@@ -503,8 +503,8 @@ def email_status(request: Request) -> dict[str, object]:
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
         return email_verification.status(int(user["id"]))
-    except (RuntimeError, ValueError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/auth/email")
@@ -516,10 +516,19 @@ def email_set(request: Request, payload: EmailPayload) -> dict[str, object]:
         result = email_verification.set_email_and_send(int(user["id"]), payload.email)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError:
+        # Email provider configuration is a server-side concern. Never expose
+        # SMTP/provider names, credentials, or configuration details to users.
+        raise HTTPException(
+            status_code=503,
+            detail="Email delivery is temporarily unavailable. Please try again later.",
+        )
     except Exception:
-        raise HTTPException(status_code=503, detail="Email delivery is currently unavailable.")
+        logger.exception("Email verification delivery failed.")
+        raise HTTPException(
+            status_code=503,
+            detail="Email delivery is temporarily unavailable. Please try again later.",
+        )
     security_audit.record("email_verification_sent", username=str(user["username"]), success=True)
     return result
 
