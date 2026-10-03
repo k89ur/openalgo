@@ -1666,6 +1666,10 @@ button { cursor: pointer; }
 .auth-card { width: min(420px, 100%); padding: 32px; border: 1px solid #242a32; border-radius: 16px; background: #0d1117; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
 .auth-brand { font-size: 18px; font-weight: 800; letter-spacing: .14em; margin-bottom: 24px; }
 .auth-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+.auth-mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0 0 18px; padding: 4px; border: 1px solid #242a32; border-radius: 10px; background: #080b0f; }
+.auth-mode-switch button { border: 0; border-radius: 7px; padding: 9px 10px; background: transparent; color: #8f99a6; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.auth-mode-switch button.active { background: #e8edf2; color: #080a0d; }
+.auth-mode-switch button:disabled { opacity: .55; cursor: wait; }
 .auth-subtitle, .auth-note { color: #8f99a6; font-size: 13px; line-height: 1.5; margin-bottom: 20px; }
 .auth-card label { display: block; margin: 14px 0; color: #aeb7c2; font-size: 12px; }
 .auth-card input { width: 100%; box-sizing: border-box; margin-top: 7px; padding: 11px 12px; border: 1px solid #2a313b; border-radius: 8px; background: #080b0f; color: #f3f5f7; outline: none; }
