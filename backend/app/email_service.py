@@ -154,7 +154,9 @@ def _send(
 
 def send_password_reset_email(*, email: str, token: str) -> None:
     web_url = os.getenv("PIPSGOX_WEB_URL", "http://localhost:3001").rstrip("/")
-    link = f"{web_url}/?reset_token={quote(token, safe='')}"
+    # Keep the reset token in the URL fragment so browsers do not send it in
+    # HTTP requests, access logs, or Referer headers.
+    link = f"{web_url}/#reset_token={quote(token, safe='')}"
     from_email = _required("PIPSGOX_EMAIL_FROM")
     safe_link = html.escape(link, quote=True)
 
