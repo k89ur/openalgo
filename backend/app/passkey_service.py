@@ -46,7 +46,7 @@ def _web_origin() -> str:
     domain = _env("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN") or "app.github.dev"
     if codespace:
         return f"https://{codespace}-3001.{domain}"
-    return "http://127.0.0.1:3001"
+    # Keep the local WebAuthn origin on localhost. Do not use a loopback IP\n    # as the RP ID because browsers may reject IP-based RP IDs.\n    return "http://localhost:3001"
 
 
 def rp_id() -> str:
