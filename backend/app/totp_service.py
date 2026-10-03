@@ -135,6 +135,16 @@ def current_code(secret: str, for_time: float | None = None) -> str:
     return _hotp(secret, counter)
 
 
+def verify_user_code(user_id: int, code: str) -> bool:
+    """Verify the current TOTP code for an enabled user account."""
+    with _require_db()() as db:
+        credential = _secret_exists(db, user_id)
+        if credential is None or not credential.enabled:
+            return False
+        secret = _decrypt_secret(str(credential.secret_encrypted))
+        return verify_code(secret, code)
+
+
 def verify_code(
     secret: str,
     code: str,
