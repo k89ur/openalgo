@@ -656,18 +656,25 @@ function App() {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.detail || "Could not sign out.");
       }
-    } catch (error) {
-      // Even if the network/API request fails, clear the local UI session so
-      // a stale terminal cannot remain visible. The next auth check will
-      // require a valid server session before reopening the terminal.
-      setAuthError(error instanceof Error ? error.message : "Could not sign out.");
-    } finally {
+
+      // The server has revoked the session and cleared the HttpOnly cookie.
+      // Reset the UI immediately without requiring a browser refresh.
       setAuthenticated(false);
       setAppReady(false);
       setBrokerAccounts([]);
       setSelectedAccountId(null);
+      setAuthUsername("");
       setAuthPassword("");
       setAuthConfirmPassword("");
+    } catch (error) {
+      // Keep the terminal closed even if the request itself fails; the
+      // timeout prevents an indefinite "logging out" state.
+      setAuthenticated(false);
+      setAppReady(false);
+      setBrokerAccounts([]);
+      setSelectedAccountId(null);
+      setAuthError(error instanceof Error ? error.message : "Could not sign out.");
+    } finally {
       setAuthBusy(false);
     }
   };
