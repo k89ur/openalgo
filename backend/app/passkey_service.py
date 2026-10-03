@@ -52,7 +52,25 @@ def _web_origin() -> str:
 def rp_id() -> str:
     configured = _env("WEBAUTHN_RP_ID")
     if configured:
-        return configured
+        # RP IDs are hostnames, not URLs and must never include a port.
+        # Be forgiving of a local development value such as
+        # "localhost:3001" while still producing the browser-valid RP ID
+        # "localhost".
+        candidate = configured
+        if "://" in candidate:
+            parsed = urlparse(candidate)
+            candidate = parsed.hostname or ""
+        else:
+            candidate = candidate.split("/", 1)[0]
+            if candidate.startswith("[") and "]" in candidate:
+                candidate = candidate[1:candidate.index("]")]
+            elif candidate.count(":") == 1:
+                candidate = candidate.rsplit(":", 1)[0]
+        candidate = candidate.strip().rstrip(".")
+        if not candidate:
+            raise RuntimeError("WEBAUTHN_RP_ID is configured but empty or invalid.")
+        return candidate
+
     hostname = urlparse(_web_origin()).hostname
     if not hostname:
         raise RuntimeError("Could not determine the WebAuthn RP ID.")
