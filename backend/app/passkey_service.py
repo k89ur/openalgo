@@ -49,27 +49,34 @@ def _web_origin() -> str:
     # Keep the local WebAuthn origin on localhost. Do not use a loopback IP\n    # as the RP ID because browsers may reject IP-based RP IDs.\n    return "http://localhost:3001"
 
 
-def rp_id() -> str:
+def _normalize_rp_id(value: str) -> str:
+    candidate = value.strip()
+    if "://" in candidate:
+        candidate = urlparse(candidate).hostname or ""
+    else:
+        candidate = candidate.split("/", 1)[0]
+        if candidate.startswith("[") and "]" in candidate:
+            candidate = candidate[1:candidate.index("]")]
+        elif candidate.count(":") == 1:
+            candidate = candidate.rsplit(":", 1)[0]
+    candidate = candidate.strip().rstrip(".")
+    if not candidate:
+        raise RuntimeError("WebAuthn RP ID is empty or invalid.")
+    return candidate
+
+
+def rp_id(origin: str | None = None) -> str:
+    # For local development and reverse proxies, derive the RP ID from the
+    # browser's actual origin. This prevents a backend-side localhost/port
+    # assumption from producing a browser-invalid RP ID.
+    if origin:
+        hostname = urlparse(origin).hostname
+        if hostname:
+            return hostname
+
     configured = _env("WEBAUTHN_RP_ID")
     if configured:
-        # RP IDs are hostnames, not URLs and must never include a port.
-        # Be forgiving of a local development value such as
-        # "localhost:3001" while still producing the browser-valid RP ID
-        # "localhost".
-        candidate = configured
-        if "://" in candidate:
-            parsed = urlparse(candidate)
-            candidate = parsed.hostname or ""
-        else:
-            candidate = candidate.split("/", 1)[0]
-            if candidate.startswith("[") and "]" in candidate:
-                candidate = candidate[1:candidate.index("]")]
-            elif candidate.count(":") == 1:
-                candidate = candidate.rsplit(":", 1)[0]
-        candidate = candidate.strip().rstrip(".")
-        if not candidate:
-            raise RuntimeError("WEBAUTHN_RP_ID is configured but empty or invalid.")
-        return candidate
+        return _normalize_rp_id(configured)
 
     hostname = urlparse(_web_origin()).hostname
     if not hostname:
@@ -157,7 +164,7 @@ def _consume_challenge(
         return True
 
 
-def registration_options(user_id: int) -> dict[str, object]:
+def registration_options(user_id: int, origin: str | None = None) -> dict[str, object]:
     SessionLocalFactory = _require_db()
     with SessionLocalFactory() as db:
         _cleanup_expired_challenges(db)
@@ -180,7 +187,7 @@ def registration_options(user_id: int) -> dict[str, object]:
         ]
 
         options = generate_registration_options(
-            rp_id=rp_id(),
+            rp_id=rp_id(origin),
             rp_name=rp_name(),
             user_id=user_handle,
             user_name=username,
@@ -203,7 +210,7 @@ def registration_options(user_id: int) -> dict[str, object]:
         return json.loads(options_to_json(options))
 
 
-def verify_registration(user_id: int, credential: dict[str, object]) -> dict[str, object]:
+def verify_registration(user_id: int, credential: dict[str, object], origin: str | None = None) -> dict[str, object]:
     if not isinstance(credential, dict):
         raise ValueError("Invalid passkey credential.")
 
@@ -225,8 +232,8 @@ def verify_registration(user_id: int, credential: dict[str, object]) -> dict[str
         verification = verify_registration_response(
             credential=credential,
             expected_challenge=challenge,
-            expected_origin=_web_origin(),
-            expected_rp_id=rp_id(),
+            expected_origin=origin or _web_origin(),
+            expected_rp_id=rp_id(origin),
             require_user_verification=True,
         )
     except Exception as exc:
@@ -267,12 +274,12 @@ def verify_registration(user_id: int, credential: dict[str, object]) -> dict[str
     }
 
 
-def authentication_options() -> dict[str, object]:
+def authentication_options(origin: str | None = None) -> dict[str, object]:
     SessionLocalFactory = _require_db()
     with SessionLocalFactory() as db:
         _cleanup_expired_challenges(db)
         options = generate_authentication_options(
-            rp_id=rp_id(),
+            rp_id=rp_id(origin),
             timeout=WEBAUTHN_TIMEOUT_MS,
             user_verification=UserVerificationRequirement.REQUIRED,
         )
@@ -286,7 +293,7 @@ def authentication_options() -> dict[str, object]:
         return json.loads(options_to_json(options))
 
 
-def verify_authentication(credential: dict[str, object]) -> tuple[int, dict[str, object]]:
+def verify_authentication(credential: dict[str, object], origin: str | None = None) -> tuple[int, dict[str, object]]:
     if not isinstance(credential, dict):
         raise ValueError("Invalid passkey credential.")
 
@@ -319,8 +326,8 @@ def verify_authentication(credential: dict[str, object]) -> tuple[int, dict[str,
             verification = verify_authentication_response(
                 credential=credential,
                 expected_challenge=challenge,
-                expected_origin=_web_origin(),
-                expected_rp_id=rp_id(),
+                expected_origin=origin or _web_origin(),
+                expected_rp_id=rp_id(origin),
                 credential_public_key=bytes(passkey.public_key),
                 credential_current_sign_count=int(passkey.sign_count),
                 require_user_verification=True,
