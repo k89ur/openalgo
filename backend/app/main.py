@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service, totp_service, recovery_codes
+from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service, totp_service, recovery_codes, email_verification
 from app.broker_manager import BrokerManager
 from app.ma44_scanner import scanner as ma44_scanner
 
@@ -256,6 +256,10 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
     )
     _ensure_background_scanners()
     return {"authenticated": True, "username": payload.username.strip()}
+
+
+class EmailPayload(BaseModel):
+    email: str
 
 
 class TotpCodePayload(BaseModel):
@@ -490,6 +494,67 @@ def recovery_codes_generate(
         success=True,
     )
     return {"generated": True, "codes": codes, "count": len(codes)}
+
+
+@app.get("/api/auth/email")
+def email_status(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        return email_verification.status(int(user["id"]))
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/email")
+def email_set(request: Request, payload: EmailPayload) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        result = email_verification.set_email_and_send(int(user["id"]), payload.email)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=503, detail="Email delivery is currently unavailable.")
+    security_audit.record("email_verification_sent", username=str(user["username"]), success=True)
+    return result
+
+
+@app.post("/api/auth/email/resend")
+def email_resend(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        result = email_verification.resend(int(user["id"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=503, detail="Email delivery is currently unavailable.")
+    if result.get("sent"):
+        security_audit.record("email_verification_sent", username=str(user["username"]), success=True)
+    return result
+
+
+@app.get("/api/auth/email/verify")
+def email_verify(token: str = Query(default="")) -> Response:
+    try:
+        email_verification.verify(token)
+    except ValueError:
+        return RedirectResponse(
+            url=f"{PIPSGOX_WEB_URL}/?email_verified=failed",
+            status_code=303,
+        )
+    return RedirectResponse(
+        url=f"{PIPSGOX_WEB_URL}/?email_verified=success",
+        status_code=303,
+    )
 
 
 @app.get("/api/auth/totp")
