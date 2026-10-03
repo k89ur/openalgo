@@ -542,10 +542,17 @@ def email_resend(request: Request) -> dict[str, object]:
         result = email_verification.resend(int(user["id"]))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="Email delivery is temporarily unavailable. Please try again later.",
+        )
     except Exception:
-        raise HTTPException(status_code=503, detail="Email delivery is currently unavailable.")
+        logger.exception("Email verification resend failed.")
+        raise HTTPException(
+            status_code=503,
+            detail="Email delivery is temporarily unavailable. Please try again later.",
+        )
     if result.get("sent"):
         security_audit.record("email_verification_sent", username=str(user["username"]), success=True)
     return result
