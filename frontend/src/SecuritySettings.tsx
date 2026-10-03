@@ -363,6 +363,10 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
             </span>
           </div>
 
+          <div className="security-note">
+            PIPSGOX sends the verification email for you. Email delivery settings are managed by the PIPSGOX server and are never entered here.
+          </div>
+
           <div className="security-code-row">
             <input
               type="email"
