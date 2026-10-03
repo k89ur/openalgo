@@ -14,6 +14,11 @@ type TotpStatus = {
   configured: boolean;
 };
 
+type EmailStatus = {
+  email: string | null;
+  verified: boolean;
+};
+
 type TotpSetup = {
   secret: string;
   otpauth_uri: string;
@@ -28,6 +33,9 @@ type SecuritySettingsProps = {
 export function SecuritySettings({ onClose }: SecuritySettingsProps) {
   const [passkeys, setPasskeys] = useState<PasskeyItem[]>([]);
   const [totp, setTotp] = useState<TotpStatus>({ enabled: false, configured: false });
+  const [emailStatus, setEmailStatus] = useState<EmailStatus>({ email: null, verified: false });
+  const [emailInput, setEmailInput] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
   const [recoveryRemaining, setRecoveryRemaining] = useState(0);
   const [totpSetup, setTotpSetup] = useState<TotpSetup | null>(null);
   const [totpCode, setTotpCode] = useState("");
@@ -46,23 +54,32 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
     setLoading(true);
     setError("");
     try {
-      const [passkeyResponse, totpResponse, recoveryResponse] = await Promise.all([
+      const [passkeyResponse, totpResponse, recoveryResponse, emailResponse] = await Promise.all([
         apiFetch("/api/auth/passkeys", { cache: "no-store" }),
         apiFetch("/api/auth/totp", { cache: "no-store" }),
         apiFetch("/api/auth/recovery-codes", { cache: "no-store" }),
+        apiFetch("/api/auth/email", { cache: "no-store" }),
       ]);
       const passkeyPayload = await passkeyResponse.json().catch(() => ({}));
       const totpPayload = await totpResponse.json().catch(() => ({}));
       const recoveryPayload = await recoveryResponse.json().catch(() => ({}));
+      const emailPayload = await emailResponse.json().catch(() => ({}));
       if (!passkeyResponse.ok) throw new Error(String(passkeyPayload?.detail || "Could not load passkeys."));
       if (!totpResponse.ok) throw new Error(String(totpPayload?.detail || "Could not load authenticator status."));
       if (!recoveryResponse.ok) throw new Error(String(recoveryPayload?.detail || "Could not load recovery code status."));
+      if (!emailResponse.ok) throw new Error(String(emailPayload?.detail || "Could not load email status."));
       setPasskeys(Array.isArray(passkeyPayload.passkeys) ? passkeyPayload.passkeys : []);
       setTotp({
         enabled: Boolean(totpPayload.enabled),
         configured: Boolean(totpPayload.configured),
       });
       setRecoveryRemaining(Number(recoveryPayload.remaining || 0));
+      const nextEmail = {
+        email: emailPayload?.email ? String(emailPayload.email) : null,
+        verified: Boolean(emailPayload?.verified),
+      };
+      setEmailStatus(nextEmail);
+      setEmailInput(nextEmail.email || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load security settings.");
     } finally {
@@ -73,6 +90,49 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
   useEffect(() => {
     void loadSecurityData();
   }, []);
+
+  const saveEmail = async () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+
+    setEmailBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await apiFetch("/api/auth/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.detail || "Could not send verification email."));
+      setEmailStatus({ email: String(payload.email || email), verified: false });
+      setMessage("Verification email sent. Open the link in your email to verify this address.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send verification email.");
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
+  const resendEmail = async () => {
+    setEmailBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await apiFetch("/api/auth/email/resend", { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.detail || "Could not resend verification email."));
+      setMessage("Verification email sent again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resend verification email.");
+    } finally {
+      setEmailBusy(false);
+    }
+  };
 
   const addPasskey = async () => {
     setBusy(true);
@@ -288,6 +348,44 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
           <div className="security-note">
             PIPSGOX never receives or stores your fingerprint, face data, or device PIN. Your device/authenticator performs that verification locally.
           </div>
+
+          <div className="security-divider" />
+
+          <div className="security-heading">
+            <div>
+              <div className="security-title">Email Address</div>
+              <div className="security-description">
+                Add an email address for account verification and future password recovery.
+              </div>
+            </div>
+            <span className={emailStatus.verified ? "security-status enabled" : "security-status"}>
+              {emailStatus.verified ? "VERIFIED" : emailStatus.email ? "UNVERIFIED" : "NOT SET"}
+            </span>
+          </div>
+
+          <div className="security-code-row">
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(event) => setEmailInput(event.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              disabled={emailBusy}
+              aria-label="Email address"
+            />
+            <button disabled={emailBusy} onClick={() => void saveEmail()}>
+              {emailBusy ? "SENDING..." : emailStatus.email ? "VERIFY EMAIL" : "ADD EMAIL"}
+            </button>
+          </div>
+
+          {emailStatus.email && !emailStatus.verified && (
+            <div className="security-recovery-generate">
+              <span>Verification is required before this address can be used for account recovery.</span>
+              <button className="security-link-button" disabled={emailBusy} onClick={() => void resendEmail()}>
+                RESEND VERIFICATION EMAIL
+              </button>
+            </div>
+          )}
 
           <div className="security-divider" />
 
