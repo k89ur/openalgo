@@ -592,6 +592,16 @@ function App() {
   const [totpChallengeSecondsLeft, setTotpChallengeSecondsLeft] = useState<number | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpUsingRecoveryCode, setTotpUsingRecoveryCode] = useState(false);
+  const [passwordResetMode, setPasswordResetMode] = useState<"request" | "sent" | "reset">(
+    () => new URLSearchParams(window.location.search).get("reset_token") ? "reset" : "request",
+  );
+  const [passwordResetEmail, setPasswordResetEmail] = useState("");
+  const [passwordResetToken, setPasswordResetToken] = useState(
+    () => new URLSearchParams(window.location.search).get("reset_token") || "",
+  );
+  const [passwordResetPassword, setPasswordResetPassword] = useState("");
+  const [passwordResetConfirmPassword, setPasswordResetConfirmPassword] = useState("");
+  const [passwordResetMessage, setPasswordResetMessage] = useState("");
 
   useEffect(() => {
     if (!totpChallengeId || !totpChallengeExpiresAt) {
@@ -689,6 +699,88 @@ function App() {
     } finally {
       setAuthBusy(false);
     }
+  };
+
+  const requestPasswordReset = async (event: FormEvent) => {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError("");
+    setPasswordResetMessage("");
+
+    try {
+      const response = await apiFetch("/api/auth/password-reset/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: passwordResetEmail.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail || "Could not start password reset.");
+      }
+      setPasswordResetMode("sent");
+      setPasswordResetMessage(
+        "If an account exists for that email, password reset instructions will be sent. Check your inbox.",
+      );
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not start password reset.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const confirmPasswordReset = async (event: FormEvent) => {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError("");
+    setPasswordResetMessage("");
+
+    try {
+      if (passwordResetPassword !== passwordResetConfirmPassword) {
+        throw new Error("Passwords do not match.");
+      }
+      if (passwordResetPassword.length < 12) {
+        throw new Error("Password must be at least 12 characters.");
+      }
+      if (!passwordResetToken) {
+        throw new Error("Password reset link is missing. Request a new link.");
+      }
+
+      const response = await apiFetch("/api/auth/password-reset/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: passwordResetToken,
+          password: passwordResetPassword,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail || "Could not reset the password.");
+      }
+
+      setPasswordResetPassword("");
+      setPasswordResetConfirmPassword("");
+      setPasswordResetToken("");
+      setPasswordResetMode("sent");
+      setPasswordResetMessage("Your password was reset successfully. Sign in with your new password.");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not reset the password.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const returnToSignIn = () => {
+    setPasswordResetMode("request");
+    setPasswordResetEmail("");
+    setPasswordResetToken("");
+    setPasswordResetPassword("");
+    setPasswordResetConfirmPassword("");
+    setPasswordResetMessage("");
+    setAuthError("");
+    setAuthMode("login");
+    window.history.replaceState({}, document.title, window.location.pathname);
   };
 
   const submitTotpLogin = async (event: FormEvent) => {
@@ -2067,8 +2159,93 @@ json.dumps(_result)`;
 
   if (!authReady || !authenticated) {
     const signingUp = authMode === "signup";
+
+    if (passwordResetMode !== "request" || passwordResetToken) {
+      return (
+        <main className="auth-screen">
+          <form
+            className="auth-card"
+            onSubmit={passwordResetMode === "request" ? requestPasswordReset : passwordResetMode === "reset" ? confirmPasswordReset : undefined}
+          >
+            <div className="auth-brand">PIPSGOX</div>
+            <div className="auth-title">
+              {passwordResetMode === "reset" ? "Set a new password" : "Check your inbox"}
+            </div>
+            <div className="auth-subtitle">
+              {passwordResetMode === "reset"
+                ? "Choose a new password for your PIPSGOX account."
+                : "If the email address belongs to an account, password reset instructions will be sent to it."}
+            </div>
+
+            {passwordResetMode === "request" ? (
+              <>
+                <label>
+                  Email address
+                  <input
+                    type="email"
+                    value={passwordResetEmail}
+                    onChange={(e) => setPasswordResetEmail(e.target.value)}
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    required
+                    autoFocus
+                  />
+                </label>
+                <div className="auth-note">For security, PIPSGOX uses the same response whether or not an account exists for the email address.</div>
+                {authError && <div className="auth-error">{authError}</div>}
+                <button className="auth-submit" type="submit" disabled={authBusy}>
+                  {authBusy ? "SENDING..." : "Send Reset Instructions"}
+                </button>
+              </>
+            ) : passwordResetMode === "reset" ? (
+              <>
+                <label>
+                  New password
+                  <input
+                    type="password"
+                    value={passwordResetPassword}
+                    onChange={(e) => setPasswordResetPassword(e.target.value)}
+                    autoComplete="new-password"
+                    minLength={12}
+                    required
+                    autoFocus
+                  />
+                </label>
+                <label>
+                  Confirm new password
+                  <input
+                    type="password"
+                    value={passwordResetConfirmPassword}
+                    onChange={(e) => setPasswordResetConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                    minLength={12}
+                    required
+                  />
+                </label>
+                <div className="auth-note">Use a strong password of at least 12 characters. All existing PIPSGOX sessions will be signed out after the reset.</div>
+                {authError && <div className="auth-error">{authError}</div>}
+                <button className="auth-submit" type="submit" disabled={authBusy}>
+                  {authBusy ? "RESETTING..." : "Reset Password"}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="auth-note">{passwordResetMessage}</div>
+                {authError && <div className="auth-error">{authError}</div>}
+              </>
+            )}
+
+            <button className="auth-secondary-button" type="button" disabled={authBusy} onClick={returnToSignIn}>
+              Back to Sign In
+            </button>
+          </form>
+        </main>
+      );
+    }
+
     return (
       <main className="auth-screen">
+        <form className="auth-card" onSubmit={totpChallengeId && !signingUp ? submitTotpLogin : submitAuth}>
         <form className="auth-card" onSubmit={totpChallengeId && !signingUp ? submitTotpLogin : submitAuth}>
           <div className="auth-brand">PIPSGOX</div>
           <div className="auth-title">{signingUp ? "Create your PIPSGOX account" : "Sign in to PIPSGOX"}</div>
@@ -2203,6 +2380,22 @@ json.dumps(_result)`;
                   ? (signingUp ? "CREATING ACCOUNT..." : "SIGNING IN...")
                   : (signingUp ? "Create Account" : "Sign In")}
               </button>
+              {!signingUp && (
+                <button
+                  className="auth-secondary-button"
+                  type="button"
+                  disabled={authBusy}
+                  onClick={() => {
+                    setPasswordResetMode("request");
+                    setPasswordResetToken("");
+                    setPasswordResetMessage("");
+                    setPasswordResetEmail("");
+                    setAuthError("");
+                  }}
+                >
+                  Forgot Password?
+                </button>
+              )}
               {!signingUp && (
                 <button
                   className="auth-passkey-button"
