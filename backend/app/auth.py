@@ -92,10 +92,15 @@ def delete_all_users() -> int:
         return int(result.rowcount or 0)
 
 
-def create_initial_user(username: str, password: str) -> None:
+def create_user(username: str, password: str) -> int:
+    """Create a normal PIPSGOX user and return the new user id."""
     username = username.strip()
     if not username:
         raise ValueError("Username is required.")
+    if len(username) < 3:
+        raise ValueError("Username must be at least 3 characters.")
+    if len(username) > 64:
+        raise ValueError("Username must be at most 64 characters.")
     encoded = _password_hash(password)
 
     with _require_db()() as db:
@@ -114,6 +119,12 @@ def create_initial_user(username: str, password: str) -> None:
             )
         )
         db.commit()
+        return int(user.id)
+
+
+def create_initial_user(username: str, password: str) -> None:
+    """Backward-compatible wrapper for older scripts."""
+    create_user(username, password)
 
 
 def create_session_for_user(
