@@ -67,7 +67,9 @@ def generate(user_id: int, totp_code: str, totp_verifier) -> list[str]:
     """
     with _require_db()() as db:
         if not _totp_enabled(db, user_id):
-            raise ValueError("Enable the authenticator app before generating recovery codes.")
+            raise ValueError(
+                "Enable the authenticator app before generating recovery codes."
+            )
 
         if not totp_verifier(int(user_id), totp_code):
             raise ValueError("Invalid authenticator code.")
@@ -92,7 +94,7 @@ def verify_login_code(
     challenge: str,
     code: str,
 ) -> tuple[int, dict[str, object]]:
-    """Verify and consume a recovery code and its login challenge atomically."""
+    """Verify and consume a recovery code and its password-login challenge atomically."""
     if not challenge or len(challenge) > 128:
         raise ValueError("Invalid authentication challenge.")
 
@@ -104,10 +106,56 @@ def verify_login_code(
     code_hash = _hash(normalized)
 
     with _require_db()() as db:
-        # Resolve the recovery code first. If the browser sends a stale
-        # challenge id, we can safely bind the code to the newest valid
-        # challenge belonging to the same user. A password login is still
-        # required because this function never creates a challenge.
+        row = db.execute(
+            select(
+                TotpLoginChallenge,
+                User.id,
+                User.username,
+                User.email,
+                User.display_name,
+            )
+            .join(User, User.id == TotpLoginChallenge.user_id)
+            .where(TotpLoginChallenge.challenge_hash == _hash(challenge))
+            .with_for_update()
+        ).first()
+
+        if row is None:
+            raise ValueError("Authentication challenge expired. Sign in again.")
+
+        login_challenge = row[0]
+
+        if login_challenge.expires_at <= now:
+            db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Authentication challenge expired. Sign in again.")
+
+        if login_challenge.attempts >= RECOVERY_CODE_ATTEMPTS:
+            db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Too many recovery attempts. Sign in again.")
+
+        if not _totp_enabled(db, int(login_challenge.user_id)):
+            db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Authenticator setup is no longer enabled.")
+
+        recovery = db.scalar(
+            select(RecoveryCode)
+            .where(
+                RecoveryCode.user_id == int(login_challenge.user_id),
+                RecoveryCode.code_hash == code_hash,
+                RecoveryCode.used_at.is_(None),
+            )
+            .with_for_update()
+        )
+
+        if recovery is None:
+            login_challenge.attempts = int(login_challenge.attempts) + 1
+            if login_challenge.attempts >= RECOVERY_CODE_ATTEMPTS:
+                db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Invalid recovery code.")
+
         recovery.used_at = now
         db.delete(login_challenge)
         db.commit()
