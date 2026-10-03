@@ -34,9 +34,10 @@ load_dotenv()
 app = FastAPI(title="PIPSGOX API", version="0.5.0")
 
 
-@app.on_event("startup")
-def start_background_scanners() -> None:
-    # LIVE runs during market hours; EOD runs once after the market closes.
+def _ensure_background_scanners() -> None:
+    # The scanner can perform hundreds of network requests when it starts.
+    # Do not launch that workload before authentication; otherwise a fresh
+    # login can compete with the scanner for CPU/network resources.
     ma44_scanner.start()
 logger = logging.getLogger("pipsgox.market_data")
 
@@ -178,6 +179,8 @@ class AuthCredentials(BaseModel):
 @app.get("/api/auth/status")
 def auth_status(request: Request) -> dict[str, object]:
     user = _request_user(request)
+    if user is not None:
+        _ensure_background_scanners()
     return {
         "authenticated": user is not None,
         "username": user["username"] if user else None,
@@ -205,6 +208,7 @@ def auth_signup(payload: AuthCredentials, request: Request, response: Response) 
         auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
         samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
     )
+    _ensure_background_scanners()
     security_audit.record("signup", username=payload.username.strip(), success=True)
     return {"authenticated": True, "username": payload.username.strip()}
 
@@ -234,6 +238,7 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
         auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
         samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
     )
+    _ensure_background_scanners()
     return {"authenticated": True, "username": payload.username.strip()}
 
 
