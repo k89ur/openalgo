@@ -379,7 +379,7 @@ def passkey_register_verify(
 
 
 @app.post("/api/auth/passkey/login/options")
-def passkey_login_options() -> dict[str, object]:
+def passkey_login_options(request: Request) -> dict[str, object]:
     try:
         return passkey_service.authentication_options(request.headers.get("origin"))
     except RuntimeError as exc:
