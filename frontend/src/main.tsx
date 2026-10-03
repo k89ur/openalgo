@@ -592,8 +592,8 @@ function App() {
   const [totpChallengeSecondsLeft, setTotpChallengeSecondsLeft] = useState<number | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpUsingRecoveryCode, setTotpUsingRecoveryCode] = useState(false);
-  const [passwordResetMode, setPasswordResetMode] = useState<"request" | "sent" | "reset">(
-    () => new URLSearchParams(window.location.search).get("reset_token") ? "reset" : "request",
+  const [passwordResetMode, setPasswordResetMode] = useState<"login" | "request" | "sent" | "reset">(
+    () => new URLSearchParams(window.location.search).get("reset_token") ? "reset" : "login",
   );
   const [passwordResetEmail, setPasswordResetEmail] = useState("");
   const [passwordResetToken, setPasswordResetToken] = useState(
@@ -2160,7 +2160,7 @@ json.dumps(_result)`;
   if (!authReady || !authenticated) {
     const signingUp = authMode === "signup";
 
-    if (passwordResetMode !== "request" || passwordResetToken) {
+    if (passwordResetMode !== "login" || passwordResetToken) {
       return (
         <main className="auth-screen">
           <form
