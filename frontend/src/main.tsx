@@ -590,6 +590,7 @@ function App() {
   const [totpChallengeId, setTotpChallengeId] = useState("");
   const [totpChallengeExpiresAt, setTotpChallengeExpiresAt] = useState<number | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const [totpUsingRecoveryCode, setTotpUsingRecoveryCode] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -670,22 +671,29 @@ function App() {
     }
 
     const code = totpCode.replace(/\s+/g, "");
-    if (!/^\d{6}$/.test(code)) {
-      setAuthError("Enter the current 6-digit authenticator code.");
+    if (totpUsingRecoveryCode ? !/^[A-Za-z0-9-]{8,20}$/.test(code) : !/^\d{6}$/.test(code)) {
+      setAuthError(totpUsingRecoveryCode ? "Enter a valid recovery code." : "Enter the current 6-digit authenticator code.");
       return;
     }
 
     setAuthBusy(true);
     setAuthError("");
     try {
-      const response = await apiFetch("/api/auth/login/totp", {
+      const endpoint = totpUsingRecoveryCode
+        ? "/api/auth/login/recovery"
+        : "/api/auth/login/totp";
+      const response = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ challenge_id: totpChallengeId, code }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(payload?.detail || "Authenticator verification failed."));
-      if (!payload?.authenticated) throw new Error("Authenticator verification did not establish a session.");
+      if (!response.ok) {
+        throw new Error(
+          String(payload?.detail || (totpUsingRecoveryCode ? "Recovery code verification failed." : "Authenticator verification failed."))
+        );
+      }
+      if (!payload?.authenticated) throw new Error("Verification did not establish a session.");
 
       setAuthenticated(true);
       setAppReady(false);
@@ -694,8 +702,13 @@ function App() {
       setTotpChallengeId("");
       setTotpChallengeExpiresAt(null);
       setTotpCode("");
+      setTotpUsingRecoveryCode(false);
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Authenticator verification failed.");
+      setAuthError(
+        error instanceof Error
+          ? error.message
+          : (totpUsingRecoveryCode ? "Recovery code verification failed." : "Authenticator verification failed.")
+      );
     } finally {
       setAuthBusy(false);
     }
@@ -2038,6 +2051,7 @@ json.dumps(_result)`;
                 setTotpChallengeId("");
                 setTotpChallengeExpiresAt(null);
                 setTotpCode("");
+                setTotpUsingRecoveryCode(false);
               }}
               disabled={authBusy}
             >
@@ -2061,30 +2075,50 @@ json.dumps(_result)`;
 
           {totpChallengeId && !signingUp ? (
             <>
-              <div className="auth-totp-title">Two-step verification</div>
+              <div className="auth-totp-title">
+                {totpUsingRecoveryCode ? "Recovery code" : "Two-step verification"}
+              </div>
               <div className="auth-totp-note">
-                Enter the 6-digit code from your authenticator app.
+                {totpUsingRecoveryCode
+                  ? "Enter one unused recovery code from the set you saved when you enabled the authenticator."
+                  : "Enter the 6-digit code from your authenticator app."}
                 {totpChallengeExpiresAt
                   ? ` Challenge expires in about ${Math.max(0, Math.ceil((totpChallengeExpiresAt * 1000 - Date.now()) / 60000))} minute(s).`
                   : ""}
               </div>
               <label>
-                Authenticator code
+                {totpUsingRecoveryCode ? "Recovery code" : "Authenticator code"}
                 <input
                   type="text"
                   value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="000000"
+                  onChange={(e) => setTotpCode(
+                    totpUsingRecoveryCode
+                      ? e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 20)
+                      : e.target.value.replace(/\D/g, "").slice(0, 6)
+                  )}
+                  inputMode={totpUsingRecoveryCode ? "text" : "numeric"}
+                  autoComplete={totpUsingRecoveryCode ? "off" : "one-time-code"}
+                  maxLength={totpUsingRecoveryCode ? 20 : 6}
+                  placeholder={totpUsingRecoveryCode ? "XXXX-XXXX-XXXX" : "000000"}
                   autoFocus
                   required
                 />
               </label>
               {authError && <div className="auth-error">{authError}</div>}
               <button className="auth-submit" type="submit" disabled={authBusy}>
-                {authBusy ? "VERIFYING..." : "Verify Code"}
+                {authBusy ? "VERIFYING..." : (totpUsingRecoveryCode ? "Use Recovery Code" : "Verify Code")}
+              </button>
+              <button
+                className="auth-secondary-button"
+                type="button"
+                disabled={authBusy}
+                onClick={() => {
+                  setTotpUsingRecoveryCode((value) => !value);
+                  setTotpCode("");
+                  setAuthError("");
+                }}
+              >
+                {totpUsingRecoveryCode ? "Use Authenticator Code" : "Use a Recovery Code"}
               </button>
               <button
                 className="auth-secondary-button"
@@ -2094,6 +2128,7 @@ json.dumps(_result)`;
                   setTotpChallengeId("");
                   setTotpChallengeExpiresAt(null);
                   setTotpCode("");
+                  setTotpUsingRecoveryCode(false);
                   setAuthError("");
                 }}
               >
