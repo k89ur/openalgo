@@ -165,6 +165,34 @@ def create_session_for_user(
     return raw_token
 
 
+def verify_credentials(username: str, password: str) -> int | None:
+    """Verify a password without creating a session.
+
+    This is used when an additional authentication factor must be completed
+    before a full application session is issued.
+    """
+    username = username.strip()
+    if not username or not password:
+        return None
+
+    SessionLocalFactory = _require_db()
+    with SessionLocalFactory() as db:
+        row = db.execute(
+            select(User.id, PasswordCredential.password_hash)
+            .join(
+                PasswordCredential,
+                PasswordCredential.user_id == User.id,
+            )
+            .where(User.username == username)
+        ).first()
+
+        if row is None:
+            return None
+        if not _verify_password(password, str(row.password_hash)):
+            return None
+        return int(row.id)
+
+
 def authenticate(
     username: str,
     password: str,
