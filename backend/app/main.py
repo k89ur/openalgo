@@ -304,7 +304,15 @@ def auth_logout(request: Request, response: Response) -> dict[str, bool]:
     user = _request_user(request)
     auth.revoke(request.cookies.get(auth.SESSION_COOKIE))
     security_audit.record("logout", username=str(user["username"]) if user else "", success=True)
-    response.delete_cookie(auth.SESSION_COOKIE, path="/")
+    # Match the session cookie attributes used by login/setup so browsers
+    # reliably remove the cookie on every supported deployment.
+    response.delete_cookie(
+        auth.SESSION_COOKIE,
+        path="/",
+        secure=SESSION_COOKIE_SECURE,
+        httponly=True,
+        samesite="lax",
+    )
     return {"authenticated": False}
 
 
