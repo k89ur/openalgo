@@ -9,34 +9,60 @@ type PasskeyItem = {
   last_used_at: string | null;
 };
 
+type TotpStatus = {
+  enabled: boolean;
+  configured: boolean;
+};
+
+type TotpSetup = {
+  secret: string;
+  otpauth_uri: string;
+  qr_code: string | null;
+  expires_at: number;
+};
+
 type SecuritySettingsProps = {
   onClose: () => void;
 };
 
 export function SecuritySettings({ onClose }: SecuritySettingsProps) {
   const [passkeys, setPasskeys] = useState<PasskeyItem[]>([]);
+  const [totp, setTotp] = useState<TotpStatus>({ enabled: false, configured: false });
+  const [totpSetup, setTotpSetup] = useState<TotpSetup | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [totpDisableCode, setTotpDisableCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [totpBusy, setTotpBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const loadPasskeys = async () => {
+  const loadSecurityData = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await apiFetch("/api/auth/passkeys", { cache: "no-store" });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(payload?.detail || "Could not load passkeys."));
-      setPasskeys(Array.isArray(payload.passkeys) ? payload.passkeys : []);
+      const [passkeyResponse, totpResponse] = await Promise.all([
+        apiFetch("/api/auth/passkeys", { cache: "no-store" }),
+        apiFetch("/api/auth/totp", { cache: "no-store" }),
+      ]);
+      const passkeyPayload = await passkeyResponse.json().catch(() => ({}));
+      const totpPayload = await totpResponse.json().catch(() => ({}));
+      if (!passkeyResponse.ok) throw new Error(String(passkeyPayload?.detail || "Could not load passkeys."));
+      if (!totpResponse.ok) throw new Error(String(totpPayload?.detail || "Could not load authenticator status."));
+      setPasskeys(Array.isArray(passkeyPayload.passkeys) ? passkeyPayload.passkeys : []);
+      setTotp({
+        enabled: Boolean(totpPayload.enabled),
+        configured: Boolean(totpPayload.configured),
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load passkeys.");
+      setError(err instanceof Error ? err.message : "Could not load security settings.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadPasskeys();
+    void loadSecurityData();
   }, []);
 
   const addPasskey = async () => {
@@ -46,7 +72,7 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
     try {
       await registerPasskey();
       setMessage("Passkey added successfully. You can now sign in with your device biometric, PIN, or security key.");
-      await loadPasskeys();
+      await loadSecurityData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add passkey.");
     } finally {
@@ -72,6 +98,91 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
     }
   };
 
+  const startTotpSetup = async () => {
+    setTotpBusy(true);
+    setError("");
+    setMessage("");
+    setTotpSetup(null);
+    setTotpCode("");
+    try {
+      const response = await apiFetch("/api/auth/totp/setup", { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.detail || "Could not start authenticator setup."));
+      setTotpSetup(payload as TotpSetup);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start authenticator setup.");
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const confirmTotpSetup = async () => {
+    const code = totpCode.replace(/\s+/g, "");
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the current 6-digit authenticator code.");
+      return;
+    }
+
+    setTotpBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await apiFetch("/api/auth/totp/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.detail || "Could not confirm authenticator setup."));
+      setTotp({ enabled: true, configured: true });
+      setTotpSetup(null);
+      setTotpCode("");
+      setMessage("Authenticator app enabled. Password sign-in will now require your 6-digit code.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not confirm authenticator setup.");
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const disableTotp = async () => {
+    const code = totpDisableCode.replace(/\s+/g, "");
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the current 6-digit authenticator code.");
+      return;
+    }
+    if (!window.confirm("Disable the authenticator app? Password sign-in will no longer require a TOTP code.")) return;
+
+    setTotpBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await apiFetch("/api/auth/totp/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.detail || "Could not disable authenticator."));
+      setTotp({ enabled: false, configured: false });
+      setTotpDisableCode("");
+      setMessage("Authenticator app disabled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not disable authenticator.");
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const copyText = async (value: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage(successMessage);
+    } catch {
+      setError("Could not copy to clipboard. You can select and copy the value manually.");
+    }
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal security-modal" onClick={(event) => event.stopPropagation()}>
@@ -79,6 +190,7 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
           <strong>SECURITY</strong>
           <button onClick={onClose}>CLOSE</button>
         </div>
+
         <div className="security-panel">
           <div className="security-heading">
             <div>
@@ -126,6 +238,100 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
           <div className="security-note">
             PIPSGOX never receives or stores your fingerprint, face data, or device PIN. Your device/authenticator performs that verification locally.
           </div>
+
+          <div className="security-divider" />
+
+          <div className="security-heading">
+            <div>
+              <div className="security-title">Authenticator App</div>
+              <div className="security-description">
+                Add a TOTP authenticator as an optional second factor for password sign-in. Codes change every 30 seconds.
+              </div>
+            </div>
+            <span className={totp.enabled ? "security-status enabled" : "security-status"}>
+              {totp.enabled ? "ENABLED" : "OFF"}
+            </span>
+          </div>
+
+          {!totp.enabled && !totpSetup && (
+            <button className="security-secondary" disabled={totpBusy} onClick={() => void startTotpSetup()}>
+              {totpBusy ? "PREPARING..." : "SET UP AUTHENTICATOR"}
+            </button>
+          )}
+
+          {totpSetup && (
+            <div className="security-totp-setup">
+              <div className="security-totp-step">
+                <strong>1. Add PIPSGOX to your authenticator app</strong>
+                <span>Scan the QR code, or enter the setup key manually.</span>
+              </div>
+
+              {totpSetup.qr_code && (
+                <div className="security-qr-wrap">
+                  <img src={totpSetup.qr_code} alt="PIPSGOX authenticator setup QR code" />
+                </div>
+              )}
+
+              <div className="security-secret-wrap">
+                <span>SETUP KEY</span>
+                <code>{totpSetup.secret}</code>
+                <button onClick={() => void copyText(totpSetup.secret, "Setup key copied.")}>COPY KEY</button>
+              </div>
+
+              <div className="security-totp-step">
+                <strong>2. Verify the current 6-digit code</strong>
+                <span>After adding the account, enter the code shown by your authenticator.</span>
+              </div>
+
+              <div className="security-code-row">
+                <input
+                  value={totpCode}
+                  onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="000000"
+                  aria-label="Authenticator code"
+                />
+                <button disabled={totpBusy} onClick={() => void confirmTotpSetup()}>
+                  {totpBusy ? "VERIFYING..." : "VERIFY & ENABLE"}
+                </button>
+              </div>
+
+              <button className="security-link-button" disabled={totpBusy} onClick={() => { setTotpSetup(null); setTotpCode(""); }}>
+                Cancel setup
+              </button>
+            </div>
+          )}
+
+          {totp.enabled && (
+            <div className="security-totp-enabled">
+              <div className="security-enabled-copy">
+                <strong>Authenticator protection is active.</strong>
+                <span>Password sign-in requires your current 6-digit authenticator code.</span>
+              </div>
+              <div className="security-code-row">
+                <input
+                  value={totpDisableCode}
+                  onChange={(event) => setTotpDisableCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="Current code"
+                  aria-label="Current authenticator code"
+                />
+                <button className="security-danger" disabled={totpBusy} onClick={() => void disableTotp()}>
+                  {totpBusy ? "WORKING..." : "DISABLE"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!totp.enabled && !totpSetup && (
+            <div className="security-note">
+              Optional. Passkeys remain a separate passwordless sign-in method and are not stored as TOTP secrets.
+            </div>
+          )}
         </div>
       </section>
     </div>
