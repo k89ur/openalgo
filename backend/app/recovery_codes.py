@@ -80,9 +80,7 @@ def generate(user_id: int, totp_code: str, totp_verifier) -> list[str]:
         if credential is None:
             raise ValueError("Enable the authenticator app before generating recovery codes.")
 
-        from app.totp_service import _decrypt_secret  # local import avoids module-cycle coupling
-        secret = _decrypt_secret(str(credential.secret_encrypted))
-        if not totp_verifier(secret, totp_code):
+        if not totp_verifier(int(user_id), totp_code):
             raise ValueError("Invalid authenticator code.")
 
         db.execute(delete(RecoveryCode).where(RecoveryCode.user_id == int(user_id)))
