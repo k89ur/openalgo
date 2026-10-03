@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service
+from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service, totp_service
 from app.broker_manager import BrokerManager
 from app.ma44_scanner import scanner as ma44_scanner
 
@@ -222,16 +222,32 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
         attempts, started = 0, now
     if attempts >= _LOGIN_MAX_ATTEMPTS:
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
-    token = auth.authenticate(
-        payload.username,
-        payload.password,
-        ip_address=ip,
-        user_agent=request.headers.get("user-agent"),
-    )
-    if not token:
+
+    user_id = auth.verify_credentials(payload.username, payload.password)
+    if user_id is None:
         _LOGIN_ATTEMPTS[ip] = (attempts + 1, started)
         security_audit.record("login", username=payload.username.strip(), success=False)
         raise HTTPException(status_code=401, detail="Invalid username or password.")
+
+    if totp_service.status(user_id)["enabled"]:
+        challenge, expires_at = totp_service.create_login_challenge(user_id)
+        security_audit.record(
+            "login_password_verified_totp_required",
+            username=payload.username.strip(),
+            success=True,
+        )
+        return {
+            "authenticated": False,
+            "totp_required": True,
+            "challenge_id": challenge,
+            "challenge_expires_at": expires_at,
+        }
+
+    token = auth.create_session_for_user(
+        user_id,
+        ip_address=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
     _LOGIN_ATTEMPTS.pop(ip, None)
     security_audit.record("login", username=payload.username.strip(), success=True)
     response.set_cookie(
@@ -240,6 +256,65 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
     )
     _ensure_background_scanners()
     return {"authenticated": True, "username": payload.username.strip()}
+
+
+class TotpCodePayload(BaseModel):
+    code: str = Query(..., min_length=6, max_length=6)
+
+
+class TotpLoginPayload(BaseModel):
+    challenge_id: str
+    code: str = Query(..., min_length=6, max_length=6)
+
+
+@app.post("/api/auth/login/totp")
+def auth_login_totp(
+    payload: TotpLoginPayload,
+    request: Request,
+    response: Response,
+) -> dict[str, object]:
+    now = time.monotonic()
+    ip = request.client.host if request.client else "unknown"
+    attempts, started = _LOGIN_ATTEMPTS.get(ip, (0, now))
+    if now - started >= _LOGIN_WINDOW_SECONDS:
+        attempts, started = 0, now
+    if attempts >= _LOGIN_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
+    try:
+        user_id, user = totp_service.verify_login_challenge(
+            payload.challenge_id,
+            payload.code,
+        )
+        token = auth.create_session_for_user(
+            user_id,
+            ip_address=ip,
+            user_agent=request.headers.get("user-agent"),
+        )
+    except ValueError as exc:
+        _LOGIN_ATTEMPTS[ip] = (attempts + 1, started)
+        security_audit.record("totp_login", success=False)
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    _LOGIN_ATTEMPTS.pop(ip, None)
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        token,
+        httponly=True,
+        secure=SESSION_COOKIE_SECURE,
+        samesite="lax",
+        max_age=auth.SESSION_TTL_SECONDS,
+        path="/",
+    )
+    security_audit.record(
+        "totp_login",
+        username=str(user["username"]),
+        success=True,
+    )
+    _ensure_background_scanners()
+    return {"authenticated": True, **user}
 
 
 @app.get("/api/auth/oauth/{provider}/start")
@@ -329,6 +404,60 @@ def auth_me(request: Request) -> dict[str, object]:
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     return user
+
+
+@app.get("/api/auth/totp")
+def totp_status(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        return totp_service.status(int(user["id"]))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/totp/setup")
+def totp_setup(request: Request) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        return totp_service.setup(int(user["id"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/totp/confirm")
+def totp_confirm(payload: TotpCodePayload, request: Request) -> dict[str, bool]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        totp_service.confirm_setup(int(user["id"]), payload.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    security_audit.record("totp_enable", username=str(user["username"]), success=True)
+    return {"enabled": True}
+
+
+@app.post("/api/auth/totp/disable")
+def totp_disable(payload: TotpCodePayload, request: Request) -> dict[str, bool]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        totp_service.disable(int(user["id"]), payload.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    security_audit.record("totp_disable", username=str(user["username"]), success=True)
+    return {"enabled": False}
 
 
 class PasskeyCredentialPayload(BaseModel):
