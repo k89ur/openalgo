@@ -179,18 +179,16 @@ class AuthCredentials(BaseModel):
 def auth_status(request: Request) -> dict[str, object]:
     user = _request_user(request)
     return {
-        "setup_required": not auth.has_user(),
         "authenticated": user is not None,
         "username": user["username"] if user else None,
+        "registration_enabled": True,
     }
 
 
-@app.post("/api/auth/setup")
-def auth_setup(payload: AuthCredentials, request: Request, response: Response) -> dict[str, object]:
-    if auth.has_user():
-        raise HTTPException(status_code=409, detail="Initial account is already configured.")
+@app.post("/api/auth/signup")
+def auth_signup(payload: AuthCredentials, request: Request, response: Response) -> dict[str, object]:
     try:
-        auth.create_initial_user(payload.username, payload.password)
+        auth.create_user(payload.username, payload.password)
         token = auth.authenticate(
             payload.username,
             payload.password,
@@ -199,13 +197,15 @@ def auth_setup(payload: AuthCredentials, request: Request, response: Response) -
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if not token:
-        raise HTTPException(status_code=500, detail="Could not create the initial session.")
+        raise HTTPException(status_code=500, detail="Account was created but the session could not be established.")
+
     response.set_cookie(
         auth.SESSION_COOKIE, token, httponly=True, secure=SESSION_COOKIE_SECURE,
         samesite="lax", max_age=auth.SESSION_TTL_SECONDS, path="/",
     )
-    security_audit.record("initial_setup", username=payload.username.strip(), success=True)
+    security_audit.record("signup", username=payload.username.strip(), success=True)
     return {"authenticated": True, "username": payload.username.strip()}
 
 
