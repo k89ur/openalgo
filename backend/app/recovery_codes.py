@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import secrets
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal
-from app.db.models import RecoveryCode, TotpCredential, User
+from app.db.models import RecoveryCode, TotpCredential, TotpLoginChallenge, User
 
 
 RECOVERY_CODE_COUNT = 10
@@ -40,7 +38,7 @@ def _generate_code() -> str:
     return raw[:4] + "-" + raw[4:8] + "-" + raw[8:]
 
 
-def _totp_enabled(db: Session, user_id: int) -> bool:
+def _totp_enabled(db, user_id: int) -> bool:
     return bool(
         db.scalar(
             select(TotpCredential.id).where(
@@ -71,15 +69,6 @@ def generate(user_id: int, totp_code: str, totp_verifier) -> list[str]:
         if not _totp_enabled(db, user_id):
             raise ValueError("Enable the authenticator app before generating recovery codes.")
 
-        credential = db.scalar(
-            select(TotpCredential).where(
-                TotpCredential.user_id == int(user_id),
-                TotpCredential.enabled.is_(True),
-            )
-        )
-        if credential is None:
-            raise ValueError("Enable the authenticator app before generating recovery codes.")
-
         if not totp_verifier(int(user_id), totp_code):
             raise ValueError("Invalid authenticator code.")
 
@@ -102,53 +91,81 @@ def generate(user_id: int, totp_code: str, totp_verifier) -> list[str]:
 def verify_login_code(
     challenge: str,
     code: str,
-    *,
-    challenge_user_id: int,
-    attempts: int,
-    now: datetime | None = None,
-) -> tuple[int, dict[str, object]] | None:
-    """Consume one recovery code for a TOTP login challenge.
+) -> tuple[int, dict[str, object]]:
+    """Verify and consume a recovery code and its login challenge atomically."""
+    if not challenge or len(challenge) > 128:
+        raise ValueError("Invalid authentication challenge.")
 
-    Returns None when the code does not match. The caller owns challenge
-    attempt counting so TOTP and recovery-code paths share one limit.
-    """
     normalized = _normalize(code)
     if len(normalized) != RECOVERY_CODE_LENGTH:
-        return None
+        raise ValueError("Invalid recovery code.")
 
-    now = now or datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     code_hash = _hash(normalized)
 
     with _require_db()() as db:
         row = db.execute(
-            select(RecoveryCode, User.username, User.email, User.display_name)
-            .join(User, User.id == RecoveryCode.user_id)
+            select(
+                TotpLoginChallenge,
+                User.id,
+                User.username,
+                User.email,
+                User.display_name,
+            )
+            .join(User, User.id == TotpLoginChallenge.user_id)
+            .where(TotpLoginChallenge.challenge_hash == _hash(challenge))
+            .with_for_update()
+        ).first()
+
+        if row is None:
+            raise ValueError("Authentication challenge expired. Sign in again.")
+
+        login_challenge = row[0]
+        if login_challenge.expires_at <= now:
+            db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Authentication challenge expired. Sign in again.")
+
+        if login_challenge.attempts >= RECOVERY_CODE_ATTEMPTS:
+            db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Too many recovery attempts. Sign in again.")
+
+        if not _totp_enabled(db, int(login_challenge.user_id)):
+            db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Authenticator setup is no longer enabled.")
+
+        recovery = db.scalar(
+            select(RecoveryCode)
             .where(
-                RecoveryCode.user_id == int(challenge_user_id),
+                RecoveryCode.user_id == int(login_challenge.user_id),
                 RecoveryCode.code_hash == code_hash,
                 RecoveryCode.used_at.is_(None),
             )
             .with_for_update()
-        ).first()
-        if row is None:
-            return None
+        )
 
-        recovery = row[0]
-        if not hmac.compare_digest(str(recovery.code_hash), code_hash):
-            return None
+        if recovery is None:
+            login_challenge.attempts = int(login_challenge.attempts) + 1
+            if login_challenge.attempts >= RECOVERY_CODE_ATTEMPTS:
+                db.delete(login_challenge)
+            db.commit()
+            raise ValueError("Invalid recovery code.")
 
         recovery.used_at = now
+        db.delete(login_challenge)
         db.commit()
 
-        return int(challenge_user_id), {
-            "id": int(challenge_user_id),
+        return int(row.id), {
+            "id": int(row.id),
             "username": str(row.username or ""),
             "email": row.email,
             "display_name": row.display_name,
         }
 
 
-def mark_all_unused_used(user_id: int) -> int:
+def invalidate_all(user_id: int) -> int:
     """Invalidate existing recovery codes, e.g. when TOTP is disabled."""
     with _require_db()() as db:
         result = db.execute(
