@@ -2021,3 +2021,184 @@ button { cursor: pointer; }
   .security-recommended { align-self: flex-start; }
   .security-passkey { align-items: flex-start; }
 }
+
+.security-secondary {
+  min-height: 38px;
+  border: 1px solid #33404a;
+  border-radius: 6px;
+  background: #151a1e;
+  color: #cbd2d7;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.security-secondary:hover:not(:disabled) { background: #1c242a; }
+.security-secondary:disabled { opacity: .5; cursor: wait; }
+.security-status {
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  border: 1px solid #3a4248;
+  border-radius: 4px;
+  color: #7e8991;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.security-status.enabled {
+  border-color: #24533e;
+  color: #82c7a8;
+  background: #0c1712;
+}
+.security-divider {
+  height: 1px;
+  margin: 5px 0;
+  background: #242a2f;
+}
+.security-totp-setup,
+.security-totp-enabled {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #252d33;
+  background: #0d1012;
+}
+.security-totp-step {
+  display: grid;
+  gap: 4px;
+}
+.security-totp-step strong {
+  color: #cbd2d7;
+  font-size: 10px;
+}
+.security-totp-step span {
+  color: #69747d;
+  font-size: 8px;
+  line-height: 1.5;
+}
+.security-qr-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: #fff;
+  border-radius: 6px;
+}
+.security-qr-wrap img {
+  width: min(190px, 60vw);
+  height: auto;
+  display: block;
+}
+.security-secret-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+.security-secret-wrap > span {
+  grid-column: 1 / -1;
+  color: #67727a;
+  font-size: 8px;
+  letter-spacing: .08em;
+}
+.security-secret-wrap code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 9px 10px;
+  border: 1px solid #293139;
+  background: #111518;
+  color: #c8d0d5;
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+.security-secret-wrap button,
+.security-code-row button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #315c79;
+  border-radius: 5px;
+  background: #173449;
+  color: #cfe7f7;
+  font-size: 8px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.security-secret-wrap button:hover:not(:disabled),
+.security-code-row button:hover:not(:disabled) { background: #204964; }
+.security-code-row {
+  display: flex;
+  gap: 7px;
+}
+.security-code-row input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 36px;
+  border: 1px solid #333c44;
+  border-radius: 5px;
+  background: #090c0e;
+  color: #e1e5e8;
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  letter-spacing: .18em;
+  text-align: center;
+}
+.security-code-row input:focus { outline: none; border-color: #4b6a7f; }
+.security-code-row button:disabled { opacity: .5; cursor: wait; }
+.security-danger {
+  border-color: #533237 !important;
+  background: #1b1113 !important;
+  color: #e58b92 !important;
+}
+.security-danger:hover:not(:disabled) { background: #291519 !important; }
+.security-enabled-copy {
+  display: grid;
+  gap: 4px;
+}
+.security-enabled-copy strong {
+  color: #9cd8bc;
+  font-size: 10px;
+}
+.security-enabled-copy span {
+  color: #69747d;
+  font-size: 8px;
+  line-height: 1.5;
+}
+.security-link-button {
+  border: 0;
+  background: transparent;
+  color: #7d9bb1;
+  font-size: 9px;
+  cursor: pointer;
+  justify-self: start;
+  padding: 2px 0;
+}
+.security-link-button:hover:not(:disabled) { color: #a6c5d9; }
+.security-link-button:disabled { opacity: .5; cursor: wait; }
+
+.auth-totp-title {
+  font-size: 15px;
+  font-weight: 750;
+  color: #d8dde1;
+}
+.auth-totp-note {
+  color: #808a93;
+  font-size: 9px;
+  line-height: 1.55;
+}
+.auth-secondary-button {
+  min-height: 36px;
+  border: 1px solid #313940;
+  border-radius: 6px;
+  background: #14181b;
+  color: #aeb7bd;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-secondary-button:hover:not(:disabled) { background: #1c2227; }
+.auth-secondary-button:disabled { opacity: .5; cursor: wait; }
+
+.security-panel {
+  max-height: min(78vh, 720px);
+  overflow-y: auto;
+}
