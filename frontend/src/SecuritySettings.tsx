@@ -28,12 +28,17 @@ type SecuritySettingsProps = {
 export function SecuritySettings({ onClose }: SecuritySettingsProps) {
   const [passkeys, setPasskeys] = useState<PasskeyItem[]>([]);
   const [totp, setTotp] = useState<TotpStatus>({ enabled: false, configured: false });
+  const [recoveryRemaining, setRecoveryRemaining] = useState(0);
   const [totpSetup, setTotpSetup] = useState<TotpSetup | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpDisableCode, setTotpDisableCode] = useState("");
+  const [recoveryTotpCode, setRecoveryTotpCode] = useState("");
+  const [generatedRecoveryCodes, setGeneratedRecoveryCodes] = useState<string[]>([]);
+  const [showRecoveryGenerate, setShowRecoveryGenerate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [totpBusy, setTotpBusy] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -41,19 +46,23 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
     setLoading(true);
     setError("");
     try {
-      const [passkeyResponse, totpResponse] = await Promise.all([
+      const [passkeyResponse, totpResponse, recoveryResponse] = await Promise.all([
         apiFetch("/api/auth/passkeys", { cache: "no-store" }),
         apiFetch("/api/auth/totp", { cache: "no-store" }),
+        apiFetch("/api/auth/recovery-codes", { cache: "no-store" }),
       ]);
       const passkeyPayload = await passkeyResponse.json().catch(() => ({}));
       const totpPayload = await totpResponse.json().catch(() => ({}));
+      const recoveryPayload = await recoveryResponse.json().catch(() => ({}));
       if (!passkeyResponse.ok) throw new Error(String(passkeyPayload?.detail || "Could not load passkeys."));
       if (!totpResponse.ok) throw new Error(String(totpPayload?.detail || "Could not load authenticator status."));
+      if (!recoveryResponse.ok) throw new Error(String(recoveryPayload?.detail || "Could not load recovery code status."));
       setPasskeys(Array.isArray(passkeyPayload.passkeys) ? passkeyPayload.passkeys : []);
       setTotp({
         enabled: Boolean(totpPayload.enabled),
         configured: Boolean(totpPayload.configured),
       });
+      setRecoveryRemaining(Number(recoveryPayload.remaining || 0));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load security settings.");
     } finally {
@@ -137,11 +146,45 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
       setTotp({ enabled: true, configured: true });
       setTotpSetup(null);
       setTotpCode("");
-      setMessage("Authenticator app enabled. Password sign-in will now require your 6-digit code.");
+      setRecoveryRemaining(0);
+      setShowRecoveryGenerate(true);
+      setMessage("Authenticator app enabled. Generate your recovery codes and store them somewhere safe.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not confirm authenticator setup.");
     } finally {
       setTotpBusy(false);
+    }
+  };
+
+  const generateRecoveryCodes = async () => {
+    const code = recoveryTotpCode.replace(/\s+/g, "");
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the current 6-digit authenticator code.");
+      return;
+    }
+
+    setRecoveryBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await apiFetch("/api/auth/recovery-codes/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.detail || "Could not generate recovery codes."));
+      const codes = Array.isArray(payload.codes) ? payload.codes.map(String) : [];
+      if (codes.length !== 10) throw new Error("The server did not return the expected recovery code set.");
+      setGeneratedRecoveryCodes(codes);
+      setRecoveryRemaining(codes.length);
+      setRecoveryTotpCode("");
+      setShowRecoveryGenerate(false);
+      setMessage("New recovery codes generated. The previous recovery codes are now invalid.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate recovery codes.");
+    } finally {
+      setRecoveryBusy(false);
     }
   };
 
@@ -151,7 +194,7 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
       setError("Enter the current 6-digit authenticator code.");
       return;
     }
-    if (!window.confirm("Disable the authenticator app? Password sign-in will no longer require a TOTP code.")) return;
+    if (!window.confirm("Disable the authenticator app? Existing recovery codes will also be invalidated.")) return;
 
     setTotpBusy(true);
     setError("");
@@ -165,8 +208,11 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(payload?.detail || "Could not disable authenticator."));
       setTotp({ enabled: false, configured: false });
+      setRecoveryRemaining(0);
       setTotpDisableCode("");
-      setMessage("Authenticator app disabled.");
+      setGeneratedRecoveryCodes([]);
+      setShowRecoveryGenerate(false);
+      setMessage("Authenticator app disabled and recovery codes invalidated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not disable authenticator.");
     } finally {
@@ -181,6 +227,10 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
     } catch {
       setError("Could not copy to clipboard. You can select and copy the value manually.");
     }
+  };
+
+  const copyRecoveryCodes = async () => {
+    await copyText(generatedRecoveryCodes.join("\n"), "All recovery codes copied.");
   };
 
   return (
@@ -305,26 +355,78 @@ export function SecuritySettings({ onClose }: SecuritySettingsProps) {
           )}
 
           {totp.enabled && (
-            <div className="security-totp-enabled">
-              <div className="security-enabled-copy">
-                <strong>Authenticator protection is active.</strong>
-                <span>Password sign-in requires your current 6-digit authenticator code.</span>
-              </div>
-              <div className="security-code-row">
-                <input
-                  value={totpDisableCode}
-                  onChange={(event) => setTotpDisableCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="Current code"
-                  aria-label="Current authenticator code"
-                />
-                <button className="security-danger" disabled={totpBusy} onClick={() => void disableTotp()}>
-                  {totpBusy ? "WORKING..." : "DISABLE"}
+            <>
+              <div className="security-totp-enabled">
+                <div className="security-enabled-copy">
+                  <strong>Authenticator protection is active.</strong>
+                  <span>Password sign-in requires your current 6-digit authenticator code. Passkey sign-in remains available separately.</span>
+                </div>
+                <div className="security-recovery-summary">
+                  <span>RECOVERY CODES</span>
+                  <strong>{recoveryRemaining} remaining</strong>
+                </div>
+                {recoveryRemaining === 0 && (
+                  <div className="security-warning">
+                    No unused recovery codes are available. Generate a new recovery code set before you need one.
+                  </div>
+                )}
+                <button className="security-secondary" disabled={recoveryBusy} onClick={() => { setShowRecoveryGenerate(true); setRecoveryTotpCode(""); setError(""); }}>
+                  {recoveryRemaining > 0 ? "GENERATE NEW RECOVERY CODES" : "GENERATE RECOVERY CODES"}
                 </button>
+                {showRecoveryGenerate && (
+                  <div className="security-recovery-generate">
+                    <span>Confirm with your current authenticator code to replace the existing recovery codes.</span>
+                    <div className="security-code-row">
+                      <input
+                        value={recoveryTotpCode}
+                        onChange={(event) => setRecoveryTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        placeholder="000000"
+                        aria-label="Current authenticator code"
+                      />
+                      <button disabled={recoveryBusy} onClick={() => void generateRecoveryCodes()}>
+                        {recoveryBusy ? "GENERATING..." : "GENERATE"}
+                      </button>
+                    </div>
+                    <button className="security-link-button" disabled={recoveryBusy} onClick={() => { setShowRecoveryGenerate(false); setRecoveryTotpCode(""); }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                <div className="security-code-row">
+                  <input
+                    value={totpDisableCode}
+                    onChange={(event) => setTotpDisableCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="Current code"
+                    aria-label="Current authenticator code"
+                  />
+                  <button className="security-danger" disabled={totpBusy} onClick={() => void disableTotp()}>
+                    {totpBusy ? "WORKING..." : "DISABLE"}
+                  </button>
+                </div>
               </div>
-            </div>
+
+              {generatedRecoveryCodes.length > 0 && (
+                <div className="security-recovery-display">
+                  <div className="security-recovery-title">
+                    <strong>Save these recovery codes</strong>
+                    <span>They are shown once. Each code can be used once. Regenerating replaces this entire set.</span>
+                  </div>
+                  <div className="security-recovery-grid">
+                    {generatedRecoveryCodes.map((code) => <code key={code}>{code}</code>)}
+                  </div>
+                  <button className="security-primary" onClick={() => void copyRecoveryCodes()}>
+                    COPY ALL CODES
+                  </button>
+                  <div className="security-note">Store them offline or in a trusted password manager. Do not share them.</div>
+                </div>
+              )}
+            </>
           )}
 
           {!totp.enabled && !totpSetup && (
