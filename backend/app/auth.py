@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select, update
 
 from app.db.database import SessionLocal
 from app.db.models import PasswordCredential, Session, User
+
+logger = logging.getLogger("pipsgox.auth")
 
 SESSION_COOKIE = "pipsgox_session"
 SESSION_TTL_SECONDS = 60 * 60 * 12
@@ -172,7 +176,9 @@ def authenticate(
     if not username or not password:
         return None
 
+    started = time.perf_counter()
     SessionLocalFactory = _require_db()
+    db_opened = time.perf_counter()
     with SessionLocalFactory() as db:
         row = db.execute(
             select(User.id, User.username, PasswordCredential.password_hash)
@@ -182,8 +188,29 @@ def authenticate(
             )
             .where(User.username == username)
         ).first()
+        query_done = time.perf_counter()
 
-        if row is None or not _verify_password(password, str(row.password_hash)):
+        if row is None:
+            logger.info(
+                "login timing username=%s result=unknown-user total=%.3fs db_open=%.3fs query=%.3fs",
+                username,
+                time.perf_counter() - started,
+                db_opened - started,
+                query_done - db_opened,
+            )
+            return None
+
+        password_ok = _verify_password(password, str(row.password_hash))
+        password_done = time.perf_counter()
+        if not password_ok:
+            logger.info(
+                "login timing username=%s result=bad-password total=%.3fs db_open=%.3fs query=%.3fs password=%.3fs",
+                username,
+                time.perf_counter() - started,
+                db_opened - started,
+                query_done - db_opened,
+                password_done - query_done,
+            )
             return None
 
         user_id = int(row.id)
@@ -193,6 +220,7 @@ def authenticate(
             .where(User.id == user_id)
             .values(last_login_at=now)
         )
+        update_done = time.perf_counter()
 
         raw_token = secrets.token_urlsafe(48)
         expires_at = now + timedelta(seconds=SESSION_TTL_SECONDS)
@@ -208,7 +236,18 @@ def authenticate(
             )
         )
         db.commit()
+        commit_done = time.perf_counter()
 
+    logger.info(
+        "login timing username=%s result=success total=%.3fs db_open=%.3fs query=%.3fs password=%.3fs update=%.3fs commit=%.3fs",
+        username,
+        commit_done - started,
+        db_opened - started,
+        query_done - db_opened,
+        password_done - query_done,
+        update_done - password_done,
+        commit_done - update_done,
+    )
     return raw_token
 
 
