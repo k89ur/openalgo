@@ -106,6 +106,22 @@ def verify_login_code(
     code_hash = _hash(normalized)
 
     with _require_db()() as db:
+        # Validate the recovery code first so a bad/used code is reported as
+        # such, rather than being confused with an expired browser challenge.
+        recovery = db.scalar(
+            select(RecoveryCode)
+            .where(
+                RecoveryCode.code_hash == code_hash,
+                RecoveryCode.used_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if recovery is None:
+            raise ValueError("Invalid recovery code.")
+
+        user_id = int(recovery.user_id)
+
+        # Prefer the exact challenge supplied by the browser.
         row = db.execute(
             select(
                 TotpLoginChallenge,
@@ -115,9 +131,33 @@ def verify_login_code(
                 User.display_name,
             )
             .join(User, User.id == TotpLoginChallenge.user_id)
-            .where(TotpLoginChallenge.challenge_hash == _hash(challenge))
+            .where(
+                TotpLoginChallenge.challenge_hash == _hash(challenge),
+                TotpLoginChallenge.user_id == user_id,
+            )
             .with_for_update()
         ).first()
+
+        # If the browser retained a stale challenge id, bind the recovery
+        # code to the newest still-valid challenge for the same user.
+        if row is None:
+            row = db.execute(
+                select(
+                    TotpLoginChallenge,
+                    User.id,
+                    User.username,
+                    User.email,
+                    User.display_name,
+                )
+                .join(User, User.id == TotpLoginChallenge.user_id)
+                .where(
+                    TotpLoginChallenge.user_id == user_id,
+                    TotpLoginChallenge.expires_at > now,
+                )
+                .order_by(TotpLoginChallenge.created_at.desc())
+                .limit(1)
+                .with_for_update()
+            ).first()
 
         if row is None:
             raise ValueError("Authentication challenge expired. Sign in again.")
@@ -134,36 +174,15 @@ def verify_login_code(
             db.commit()
             raise ValueError("Too many recovery attempts. Sign in again.")
 
-        if not _totp_enabled(db, int(login_challenge.user_id)):
+        if not _totp_enabled(db, user_id):
             db.delete(login_challenge)
             db.commit()
             raise ValueError("Authenticator setup is no longer enabled.")
-
-        recovery = db.scalar(
-            select(RecoveryCode)
-            .where(
-                RecoveryCode.user_id == int(login_challenge.user_id),
-                RecoveryCode.code_hash == code_hash,
-                RecoveryCode.used_at.is_(None),
-            )
-            .with_for_update()
-        )
-
-        if recovery is None:
-            login_challenge.attempts = int(login_challenge.attempts) + 1
-            if login_challenge.attempts >= RECOVERY_CODE_ATTEMPTS:
-                db.delete(login_challenge)
-            db.commit()
-            raise ValueError("Invalid recovery code.")
 
         recovery.used_at = now
         db.delete(login_challenge)
         db.commit()
 
-        # Use positional Row values explicitly. The SELECT contains an
-        # entity plus scalar User columns, so relying on row.id/row.username
-        # can raise an AttributeError after the code has already been consumed.
-        user_id = int(row[1])
         return user_id, {
             "id": user_id,
             "username": str(row[2] or ""),
