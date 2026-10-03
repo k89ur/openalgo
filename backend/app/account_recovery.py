@@ -180,10 +180,9 @@ def create_dev_token(identifier: str) -> str:
     now = datetime.now(timezone.utc)
     with _require_db()() as db:
         user = db.scalar(
-            select(User)
-            .where(
-                User.email == value,
+            select(User).where(
                 User.status == "active",
+                (User.email == value) | (User.username == value),
             )
         )
         if user is None:
