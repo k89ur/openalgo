@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import logging
 import hmac
@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from fyers_apiv3.FyersWebsocket import data_ws
 
 from app.providers.fyers import FyersMarketDataProvider
-from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service, totp_service
+from app import auth, broker_accounts, security_audit, diagnostics, oidc, passkey_service, totp_service, recovery_codes
 from app.broker_manager import BrokerManager
 from app.ma44_scanner import scanner as ma44_scanner
 
@@ -273,6 +273,41 @@ def auth_login_totp(
     request: Request,
     response: Response,
 ) -> dict[str, object]:
+    return _complete_totp_protected_login(
+        payload.challenge_id,
+        payload.code,
+        request,
+        response,
+        audit_event="totp_login",
+        verifier="totp",
+    )
+
+
+@app.post("/api/auth/login/recovery")
+def auth_login_recovery(
+    payload: TotpLoginPayload,
+    request: Request,
+    response: Response,
+) -> dict[str, object]:
+    return _complete_totp_protected_login(
+        payload.challenge_id,
+        payload.code,
+        request,
+        response,
+        audit_event="recovery_code_login",
+        verifier="recovery",
+    )
+
+
+def _complete_totp_protected_login(
+    challenge_id: str,
+    code: str,
+    request: Request,
+    response: Response,
+    *,
+    audit_event: str,
+    verifier: str,
+) -> dict[str, object]:
     now = time.monotonic()
     ip = request.client.host if request.client else "unknown"
     attempts, started = _LOGIN_ATTEMPTS.get(ip, (0, now))
@@ -282,10 +317,29 @@ def auth_login_totp(
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
     try:
-        user_id, user = totp_service.verify_login_challenge(
-            payload.challenge_id,
-            payload.code,
-        )
+        if verifier == "totp":
+            user_id, user = totp_service.verify_login_challenge(
+                challenge_id,
+                code,
+            )
+        else:
+            # Recovery-code verification binds the code to the user stored in
+            # the short-lived login challenge. It is single-use and does not
+            # reveal whether a particular recovery code exists.
+            challenge_user_id = totp_service.challenge_user_id(challenge_id)
+            if challenge_user_id is None:
+                raise ValueError("Authentication challenge expired. Sign in again.")
+            user_result = recovery_codes.verify_login_code(
+                challenge_id,
+                code,
+                challenge_user_id=challenge_user_id,
+                attempts=attempts,
+                now=datetime.now(timezone.utc),
+            )
+            if user_result is None:
+                raise ValueError("Invalid recovery code.")
+            user_id, user = user_result
+
         token = auth.create_session_for_user(
             user_id,
             ip_address=ip,
@@ -293,7 +347,7 @@ def auth_login_totp(
         )
     except ValueError as exc:
         _LOGIN_ATTEMPTS[ip] = (attempts + 1, started)
-        security_audit.record("totp_login", success=False)
+        security_audit.record(audit_event, success=False)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -309,7 +363,7 @@ def auth_login_totp(
         path="/",
     )
     security_audit.record(
-        "totp_login",
+        audit_event,
         username=str(user["username"]),
         success=True,
     )
@@ -406,6 +460,48 @@ def auth_me(request: Request) -> dict[str, object]:
     return user
 
 
+@app.get("/api/auth/recovery-codes")
+def recovery_codes_status(request: Request) -> dict[str, int]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        return recovery_codes.status(int(user["id"]))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+class RecoveryCodesGeneratePayload(BaseModel):
+    code: str
+
+
+@app.post("/api/auth/recovery-codes/generate")
+def recovery_codes_generate(
+    payload: RecoveryCodesGeneratePayload,
+    request: Request,
+) -> dict[str, object]:
+    user = _request_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    try:
+        codes = recovery_codes.generate(
+            int(user["id"]),
+            payload.code,
+            totp_service.verify_user_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    security_audit.record(
+        "recovery_codes_generate",
+        username=str(user["username"]),
+        success=True,
+    )
+    return {"generated": True, "codes": codes, "count": len(codes)}
+
+
 @app.get("/api/auth/totp")
 def totp_status(request: Request) -> dict[str, object]:
     user = _request_user(request)
@@ -452,6 +548,7 @@ def totp_disable(payload: TotpCodePayload, request: Request) -> dict[str, bool]:
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
         totp_service.disable(int(user["id"]), payload.code)
+        recovery_codes.mark_all_unused_used(int(user["id"]))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
