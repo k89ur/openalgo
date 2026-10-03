@@ -259,12 +259,12 @@ def auth_login(payload: AuthCredentials, request: Request, response: Response) -
 
 
 class TotpCodePayload(BaseModel):
-    code: str = Query(..., min_length=6, max_length=6)
+    code: str
 
 
 class TotpLoginPayload(BaseModel):
     challenge_id: str
-    code: str = Query(..., min_length=6, max_length=6)
+    code: str
 
 
 @app.post("/api/auth/login/totp")
