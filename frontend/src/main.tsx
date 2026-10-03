@@ -577,6 +577,12 @@ function DrawingIcon({ name }: { name: DrawingTool | "delete" | "clear" }) {
   return <svg {...common}><path d="M6 6l12 12M18 6L6 18" /><rect x="3.5" y="3.5" width="17" height="17" rx="2" /></svg>;
 }
 
+function initialPasswordResetToken(): string {
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const query = new URLSearchParams(window.location.search);
+  return hash.get("reset_token") || query.get("reset_token") || "";
+}
+
 function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -593,11 +599,11 @@ function App() {
   const [totpCode, setTotpCode] = useState("");
   const [totpUsingRecoveryCode, setTotpUsingRecoveryCode] = useState(false);
   const [passwordResetMode, setPasswordResetMode] = useState<"login" | "request" | "sent" | "reset">(
-    () => new URLSearchParams(window.location.search).get("reset_token") ? "reset" : "login",
+    () => initialPasswordResetToken() ? "reset" : "login",
   );
   const [passwordResetEmail, setPasswordResetEmail] = useState("");
   const [passwordResetToken, setPasswordResetToken] = useState(
-    () => new URLSearchParams(window.location.search).get("reset_token") || "",
+    () => initialPasswordResetToken(),
   );
   const [passwordResetPassword, setPasswordResetPassword] = useState("");
   const [passwordResetConfirmPassword, setPasswordResetConfirmPassword] = useState("");
