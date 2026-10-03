@@ -345,7 +345,7 @@ def passkey_register_options(request: Request) -> dict[str, object]:
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required.")
     try:
-        return passkey_service.registration_options(int(user["id"]))
+        return passkey_service.registration_options(int(user["id"]), request.headers.get("origin"))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -364,6 +364,7 @@ def passkey_register_verify(
         result = passkey_service.verify_registration(
             int(user["id"]),
             payload.credential,
+            request.headers.get("origin"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -380,7 +381,7 @@ def passkey_register_verify(
 @app.post("/api/auth/passkey/login/options")
 def passkey_login_options() -> dict[str, object]:
     try:
-        return passkey_service.authentication_options()
+        return passkey_service.authentication_options(request.headers.get("origin"))
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -400,7 +401,7 @@ def passkey_login_verify(
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
     try:
-        user_id, user = passkey_service.verify_authentication(payload.credential)
+        user_id, user = passkey_service.verify_authentication(payload.credential, request.headers.get("origin"))
         token = auth.create_session_for_user(
             user_id,
             ip_address=ip,
