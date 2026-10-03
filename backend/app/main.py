@@ -301,11 +301,13 @@ def oauth_callback(
 
 @app.post("/api/auth/logout")
 def auth_logout(request: Request, response: Response) -> dict[str, bool]:
-    user = _request_user(request)
+    # Logout must be a fast, single session-revocation operation. Do not call
+    # _request_user()/auth.get_user() here because get_user() also writes
+    # last_seen_at and commits a second database transaction before logout.
     auth.revoke(request.cookies.get(auth.SESSION_COOKIE))
-    security_audit.record("logout", username=str(user["username"]) if user else "", success=True)
-    # Match the session cookie attributes used by login/setup so browsers
-    # reliably remove the cookie on every supported deployment.
+    security_audit.record("logout", success=True)
+    # Match the session cookie attributes used by login so browsers reliably
+    # remove the cookie on every supported deployment.
     response.delete_cookie(
         auth.SESSION_COOKIE,
         path="/",
