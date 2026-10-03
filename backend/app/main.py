@@ -556,15 +556,18 @@ def password_reset_confirm(payload: PasswordResetConfirmPayload) -> dict[str, ob
     return {"reset": True}
 
 
-def _password_reset_dev_enabled() -> bool:
+def _password_reset_dev_enabled(request: Request) -> bool:
     if os.getenv("PIPSGOX_DEV_PASSWORD_RESET", "0").strip().lower() not in {"1", "true", "yes"}:
         return False
-    return PIPSGOX_WEB_URL.lower().startswith(("http://localhost:", "http://127.0.0.1:"))
+    host = (request.url.hostname or "").lower()
+    return host in {"localhost", "127.0.0.1", "::1"}
 
 
 @app.post("/api/auth/password-reset/dev-token")
-def password_reset_dev_token(payload: PasswordResetDevPayload) -> dict[str, str]:
-    if not _password_reset_dev_enabled():
+def password_reset_dev_token(
+    request: Request, payload: PasswordResetDevPayload
+) -> dict[str, str]:
+    if not _password_reset_dev_enabled(request):
         raise HTTPException(status_code=404, detail="Not found.")
     try:
         token = account_recovery.create_dev_token(payload.email)
