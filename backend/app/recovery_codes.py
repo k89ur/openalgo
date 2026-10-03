@@ -160,11 +160,15 @@ def verify_login_code(
         db.delete(login_challenge)
         db.commit()
 
-        return int(row.id), {
-            "id": int(row.id),
-            "username": str(row.username or ""),
-            "email": row.email,
-            "display_name": row.display_name,
+        # Use positional Row values explicitly. The SELECT contains an
+        # entity plus scalar User columns, so relying on row.id/row.username
+        # can raise an AttributeError after the code has already been consumed.
+        user_id = int(row[1])
+        return user_id, {
+            "id": user_id,
+            "username": str(row[2] or ""),
+            "email": row[3],
+            "display_name": row[4],
         }
 
 
