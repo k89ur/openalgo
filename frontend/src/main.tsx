@@ -2246,7 +2246,6 @@ json.dumps(_result)`;
     return (
       <main className="auth-screen">
         <form className="auth-card" onSubmit={totpChallengeId && !signingUp ? submitTotpLogin : submitAuth}>
-        <form className="auth-card" onSubmit={totpChallengeId && !signingUp ? submitTotpLogin : submitAuth}>
           <div className="auth-brand">PIPSGOX</div>
           <div className="auth-title">{signingUp ? "Create your PIPSGOX account" : "Sign in to PIPSGOX"}</div>
           <div className="auth-subtitle">
