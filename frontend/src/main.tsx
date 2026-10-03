@@ -587,6 +587,9 @@ function App() {
   const [authConfirmPassword, setAuthConfirmPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [totpChallengeId, setTotpChallengeId] = useState("");
+  const [totpChallengeExpiresAt, setTotpChallengeExpiresAt] = useState<number | null>(null);
+  const [totpCode, setTotpCode] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -633,16 +636,66 @@ function App() {
         );
       }
 
+      if (authMode === "login" && payload?.totp_required && payload?.challenge_id) {
+        setTotpChallengeId(String(payload.challenge_id));
+        setTotpChallengeExpiresAt(Number(payload.challenge_expires_at || 0) || null);
+        setTotpCode("");
+        setAuthPassword("");
+        return;
+      }
+
       setAuthenticated(true);
       setAppReady(false);
       setAuthPassword("");
       setAuthConfirmPassword("");
+      setTotpChallengeId("");
+      setTotpChallengeExpiresAt(null);
+      setTotpCode("");
     } catch (error) {
       setAuthError(
         error instanceof Error
           ? error.message
           : (authMode === "signup" ? "Could not create the PIPSGOX account." : "Authentication failed.")
       );
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const submitTotpLogin = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!totpChallengeId) {
+      setAuthError("Authentication challenge is missing. Sign in again.");
+      return;
+    }
+
+    const code = totpCode.replace(/\s+/g, "");
+    if (!/^\d{6}$/.test(code)) {
+      setAuthError("Enter the current 6-digit authenticator code.");
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const response = await apiFetch("/api/auth/login/totp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challenge_id: totpChallengeId, code }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(payload?.detail || "Authenticator verification failed."));
+      if (!payload?.authenticated) throw new Error("Authenticator verification did not establish a session.");
+
+      setAuthenticated(true);
+      setAppReady(false);
+      setAuthPassword("");
+      setAuthConfirmPassword("");
+      setTotpChallengeId("");
+      setTotpChallengeExpiresAt(null);
+      setTotpCode("");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Authenticator verification failed.");
     } finally {
       setAuthBusy(false);
     }
@@ -1979,7 +2032,13 @@ json.dumps(_result)`;
             <button
               type="button"
               className={authMode === "login" ? "active" : ""}
-              onClick={() => { setAuthMode("login"); setAuthError(""); }}
+              onClick={() => {
+                setAuthMode("login");
+                setAuthError("");
+                setTotpChallengeId("");
+                setTotpChallengeExpiresAt(null);
+                setTotpCode("");
+              }}
               disabled={authBusy}
             >
               Sign In
@@ -1987,52 +2046,103 @@ json.dumps(_result)`;
             <button
               type="button"
               className={authMode === "signup" ? "active" : ""}
-              onClick={() => { setAuthMode("signup"); setAuthError(""); }}
+              onClick={() => {
+                setAuthMode("signup");
+                setAuthError("");
+                setTotpChallengeId("");
+                setTotpChallengeExpiresAt(null);
+                setTotpCode("");
+              }}
               disabled={authBusy}
             >
               Create Account
             </button>
           </div>
 
-          <label>
-            Username
-            <input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={64} required />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={authPassword}
-              onChange={(e) => setAuthPassword(e.target.value)}
-              autoComplete={signingUp ? "new-password" : "current-password"}
-              minLength={12}
-              required
-            />
-          </label>
-          {signingUp && (
-            <label>
-              Confirm password
-              <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} autoComplete="new-password" minLength={12} required />
-            </label>
-          )}
-          {signingUp && <div className="auth-note">Use a strong password of at least 12 characters. Broker connection is optional and can be added later from Account.</div>}
-          {authError && <div className="auth-error">{authError}</div>}
-          <button className="auth-submit" type="submit" disabled={!authReady || authBusy}>
-            {authBusy
-              ? (signingUp ? "CREATING ACCOUNT..." : "SIGNING IN...")
-              : (signingUp ? "Create Account" : "Sign In")}
-          </button>
-          {!signingUp && (
-            <button
-              className="auth-passkey-button"
-              type="button"
-              disabled={!authReady || authBusy || !passkeySupported()}
-              onClick={() => void signInWithPasskey()}
-            >
-              <span>⌁</span>
-              {authBusy ? "AUTHENTICATING..." : "Sign in with Passkey"}
-              <em>RECOMMENDED</em>
-            </button>
+          {totpChallengeId && !signingUp ? (
+            <>
+              <div className="auth-totp-title">Two-step verification</div>
+              <div className="auth-totp-note">
+                Enter the 6-digit code from your authenticator app.
+                {totpChallengeExpiresAt
+                  ? ` Challenge expires in about ${Math.max(0, Math.ceil((totpChallengeExpiresAt * 1000 - Date.now()) / 60000))} minute(s).`
+                  : ""}
+              </div>
+              <label>
+                Authenticator code
+                <input
+                  type="text"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="000000"
+                  autoFocus
+                  required
+                />
+              </label>
+              {authError && <div className="auth-error">{authError}</div>}
+              <button className="auth-submit" type="button" disabled={authBusy} onClick={(event) => void submitTotpLogin(event as unknown as FormEvent)}>
+                {authBusy ? "VERIFYING..." : "Verify Code"}
+              </button>
+              <button
+                className="auth-secondary-button"
+                type="button"
+                disabled={authBusy}
+                onClick={() => {
+                  setTotpChallengeId("");
+                  setTotpChallengeExpiresAt(null);
+                  setTotpCode("");
+                  setAuthError("");
+                }}
+              >
+                Back to Sign In
+              </button>
+            </>
+          ) : (
+            <>
+              <label>
+                Username
+                <input value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} autoComplete="username" minLength={3} maxLength={64} required />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  autoComplete={signingUp ? "new-password" : "current-password"}
+                  minLength={12}
+                  required
+                />
+              </label>
+              {signingUp && (
+                <label>
+                  Confirm password
+                  <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} autoComplete="new-password" minLength={12} required />
+                </label>
+              )}
+              {signingUp && <div className="auth-note">Use a strong password of at least 12 characters. Broker connection is optional and can be added later from Account.</div>}
+              {authError && <div className="auth-error">{authError}</div>}
+              <button className="auth-submit" type="submit" disabled={!authReady || authBusy}>
+                {authBusy
+                  ? (signingUp ? "CREATING ACCOUNT..." : "SIGNING IN...")
+                  : (signingUp ? "Create Account" : "Sign In")}
+              </button>
+              {!signingUp && (
+                <button
+                  className="auth-passkey-button"
+                  type="button"
+                  disabled={!authReady || authBusy || !passkeySupported()}
+                  onClick={() => void signInWithPasskey()}
+                >
+                  <span>⌁</span>
+                  {authBusy ? "AUTHENTICATING..." : "Sign in with Passkey"}
+                  <em>RECOMMENDED</em>
+                </button>
+              )}
+            </>
           )}
         </form>
       </main>
