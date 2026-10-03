@@ -2083,7 +2083,7 @@ json.dumps(_result)`;
                 />
               </label>
               {authError && <div className="auth-error">{authError}</div>}
-              <button className="auth-submit" type="button" disabled={authBusy} onClick={(event) => void submitTotpLogin(event as unknown as FormEvent)}>
+              <button className="auth-submit" type="submit" disabled={authBusy}>
                 {authBusy ? "VERIFYING..." : "Verify Code"}
               </button>
               <button
