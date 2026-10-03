@@ -655,12 +655,27 @@ function App() {
   };
 
   const logout = async () => {
-    try { await apiFetch("/api/auth/logout", { method: "POST" }); } finally {
-      setAuthenticated(false);
-      setAuthPassword("");
-      setAuthConfirmPassword("");
-      setAuthError("");
+    setAuthBusy(true);
+    try {
+      const response = await apiFetch("/api/auth/logout", { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.detail || "Could not sign out.");
+      }
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not sign out.");
+      return;
+    } finally {
+      setAuthBusy(false);
     }
+
+    setAuthenticated(false);
+    setAppReady(false);
+    setBrokerAccounts([]);
+    setSelectedAccountId(null);
+    setAuthPassword("");
+    setAuthConfirmPassword("");
+    setAuthError("");
   };
 
   const disconnectAllBrokers = async () => {
