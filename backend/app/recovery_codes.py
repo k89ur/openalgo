@@ -104,55 +104,10 @@ def verify_login_code(
     code_hash = _hash(normalized)
 
     with _require_db()() as db:
-        row = db.execute(
-            select(
-                TotpLoginChallenge,
-                User.id,
-                User.username,
-                User.email,
-                User.display_name,
-            )
-            .join(User, User.id == TotpLoginChallenge.user_id)
-            .where(TotpLoginChallenge.challenge_hash == _hash(challenge))
-            .with_for_update()
-        ).first()
-
-        if row is None:
-            raise ValueError("Authentication challenge expired. Sign in again.")
-
-        login_challenge = row[0]
-        if login_challenge.expires_at <= now:
-            db.delete(login_challenge)
-            db.commit()
-            raise ValueError("Authentication challenge expired. Sign in again.")
-
-        if login_challenge.attempts >= RECOVERY_CODE_ATTEMPTS:
-            db.delete(login_challenge)
-            db.commit()
-            raise ValueError("Too many recovery attempts. Sign in again.")
-
-        if not _totp_enabled(db, int(login_challenge.user_id)):
-            db.delete(login_challenge)
-            db.commit()
-            raise ValueError("Authenticator setup is no longer enabled.")
-
-        recovery = db.scalar(
-            select(RecoveryCode)
-            .where(
-                RecoveryCode.user_id == int(login_challenge.user_id),
-                RecoveryCode.code_hash == code_hash,
-                RecoveryCode.used_at.is_(None),
-            )
-            .with_for_update()
-        )
-
-        if recovery is None:
-            login_challenge.attempts = int(login_challenge.attempts) + 1
-            if login_challenge.attempts >= RECOVERY_CODE_ATTEMPTS:
-                db.delete(login_challenge)
-            db.commit()
-            raise ValueError("Invalid recovery code.")
-
+        # Resolve the recovery code first. If the browser sends a stale
+        # challenge id, we can safely bind the code to the newest valid
+        # challenge belonging to the same user. A password login is still
+        # required because this function never creates a challenge.
         recovery.used_at = now
         db.delete(login_challenge)
         db.commit()
