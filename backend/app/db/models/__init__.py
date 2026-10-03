@@ -6,10 +6,12 @@ from .email_verification import EmailVerificationToken
 from .passkey import Passkey
 from .passkey_challenge import PasskeyChallenge
 from .password_credential import PasswordCredential
+from .password_reset_token import PasswordResetToken
 from .recovery_code import RecoveryCode
 from .session import Session
 from .totp_credential import TotpCredential
 from .totp_login_challenge import TotpLoginChallenge
 from .user import User
 
-__all__ = ["OAuthAccount", "OAuthState", "EmailVerificationToken", "PasswordCredential", "RecoveryCode", "Passkey", "PasskeyChallenge", "Session", "TotpCredential", "TotpLoginChallenge", "User"]
+__all__ = [
+    "PasswordResetToken","OAuthAccount", "OAuthState", "EmailVerificationToken", "PasswordCredential", "RecoveryCode", "Passkey", "PasskeyChallenge", "Session", "TotpCredential", "TotpLoginChallenge", "User"]
