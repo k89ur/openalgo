@@ -6,6 +6,8 @@ import "./styles.css";
 import { DevConsole } from "./DevConsole";
 import { BrokerConnections } from "./BrokerConnections";
 import { StatusCenter } from "./StatusCenter";
+import { SecuritySettings } from "./SecuritySettings";
+import { loginWithPasskey, passkeySupported } from "./webauthn";
 
 type WatchItem = { symbol: string; price: string; change: string; apiSymbol?: string };
 export type ChartTheme = "pipsgox" | "classic" | "light";
@@ -646,6 +648,23 @@ function App() {
     }
   };
 
+  const signInWithPasskey = async () => {
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const payload = await loginWithPasskey();
+      if (!payload?.authenticated) throw new Error("Passkey sign-in did not establish a session.");
+      setAuthenticated(true);
+      setAppReady(false);
+      setAuthPassword("");
+      setAuthConfirmPassword("");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Passkey sign-in failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
   const logout = async () => {
     setAuthBusy(true);
     setAuthError("");
@@ -891,6 +910,7 @@ function App() {
   const [dark, setDark] = useState(true);
   const [panel, setPanel] = useState<"indicators" | "pipscript" | "settings" | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
@@ -2002,6 +2022,18 @@ json.dumps(_result)`;
               ? (signingUp ? "CREATING ACCOUNT..." : "SIGNING IN...")
               : (signingUp ? "Create Account" : "Sign In")}
           </button>
+          {!signingUp && (
+            <button
+              className="auth-passkey-button"
+              type="button"
+              disabled={!authReady || authBusy || !passkeySupported()}
+              onClick={() => void signInWithPasskey()}
+            >
+              <span>⌁</span>
+              {authBusy ? "AUTHENTICATING..." : "Sign in with Passkey"}
+              <em>RECOMMENDED</em>
+            </button>
+          )}
         </form>
       </main>
     );
@@ -2016,6 +2048,7 @@ json.dumps(_result)`;
         <div className="menu-center">PIPSGOX WEB TERMINAL</div>
         <div className="menu-right">
           <button onClick={() => setAccountOpen(true)}>Account</button>
+          <button onClick={() => setSecurityOpen(true)}>Security</button>
           <button onClick={() => { setOrderMessage(""); setOrderOpen(true); }}>Trade</button>
           <button onClick={() => void loadAccountFunds()}>{accountFundsLoading ? "Funds..." : "Funds"}</button>
           <button onClick={() => void loadPositions()}>{positionsLoading ? "Positions..." : "Positions"}</button>
@@ -2474,6 +2507,10 @@ json.dumps(_result)`;
             <StatusCenter accountId={selectedAccountId} embedded onClose={() => setStatusOpen(false)} />
           </section>
         </div>
+      )}
+
+      {securityOpen && (
+        <SecuritySettings onClose={() => setSecurityOpen(false)} />
       )}
 
       {accountOpen && (
