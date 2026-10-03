@@ -69,7 +69,7 @@ def _codespace_forwarded_url(port: int) -> str:
     ).strip()
     if codespace_name and forwarding_domain:
         return f"https://{codespace_name}-{port}.{forwarding_domain}"
-    return f"http://127.0.0.1:{port}"
+    # Use localhost for local WebAuthn development. WebAuthn RP IDs are\n    # domain identifiers; localhost is the supported local-development name.\n    return f"http://localhost:{port}"
 
 
 PIPSGOX_WEB_URL = os.getenv(
