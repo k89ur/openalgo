@@ -1,6 +1,6 @@
 """Create password reset token storage.
 
-Revision ID: 0011_create_password_reset_tokens
+Revision ID: 0011_password_reset_tokens
 Revises: 0010_create_email_verification
 Create Date: 2026-10-04
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "0011_create_password_reset_tokens"
+revision: str = "0011_password_reset_tokens"
 down_revision: Union[str, Sequence[str], None] = "0010_create_email_verification"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
