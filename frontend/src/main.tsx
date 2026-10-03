@@ -2066,6 +2066,7 @@ json.dumps(_result)`;
                 setTotpChallengeId("");
                 setTotpChallengeExpiresAt(null);
                 setTotpCode("");
+                setTotpUsingRecoveryCode(false);
               }}
               disabled={authBusy}
             >
